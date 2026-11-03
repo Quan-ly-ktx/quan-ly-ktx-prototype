@@ -142,6 +142,7 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         onDeleteRoom,
         onUpdateBedStatus,
         onRoomsChange,
+        onTenantsChange,
         onInvoicesChange,
         onConfirmPayment,
       }}

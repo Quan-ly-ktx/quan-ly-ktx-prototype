@@ -41,13 +41,15 @@ export type {
 
 // Base Envelope Responses
 export type SingleResponse<T> = {
-  httpStatus: number | string;
+  httpStatus?: number | string;
+  status?: string;
   message: string;
   data: T;
 };
 
 export type SuccessResponse = {
-  httpStatus: number | string;
+  httpStatus?: number | string;
+  status?: string;
   message: string;
 };
 

@@ -11,7 +11,7 @@ import {
 import { money } from "../../../utils/formatters.ts";
 import { person, TECHNICIANS } from "../../../services/mock/mockData.ts";
 import type { Priority, Ticket, QuickKind } from "../../../types/index.ts";
-
+export type { QuickKind };
 const inputCls =
   "focus-ring h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500";
 const primary =

@@ -1,6 +1,7 @@
 import type { DormService } from "../dormService.ts";
 import type {
   RoomRecord,
+  BedStatus,
   TenantRecord,
   Invoice,
   Ticket,

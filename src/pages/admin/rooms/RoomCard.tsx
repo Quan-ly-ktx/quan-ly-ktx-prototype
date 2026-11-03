@@ -82,7 +82,7 @@ export function RoomCard({
                     ? "border-brand-100 bg-brand-50 text-brand-700"
                     : "border-dashed border-slate-300 bg-white text-slate-500 hover:border-brand-300 hover:text-brand-700"
               }`}
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 if (!isOccupied && !isMaint && onQuickOnboard) {
                   onQuickOnboard(room.code, b.bedCode);

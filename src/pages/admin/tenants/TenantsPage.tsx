@@ -11,9 +11,20 @@ import { rentalSlots, initialRooms } from "../../../services/mock/mockData.ts";
 import type { TenantRecord } from "../../../types/tenant.ts";
 import { isSlotAvailable, slotKey } from "../../../utils/roomCalculations.ts";
 
-const emptyTenantForm = {
+const emptyTenantForm: {
+  name: string;
+  gender: "Nam" | "Nữ";
+  phone: string;
+  cccd: string;
+  email: string;
+  address: string;
+  slot: string;
+  start: string;
+  end: string;
+  deposit: string;
+} = {
   name: "",
-  gender: "Nam" as const,
+  gender: "Nam",
   phone: "",
   cccd: "",
   email: "",
