@@ -190,11 +190,7 @@ export function RoomsPage({
 
     try {
       if (onUpdateBedStatus) {
-        const bedOverride = currentOverrides[bedCode];
-        const bedId =
-          bedOverride && typeof bedOverride === "object" && "id" in bedOverride && typeof bedOverride.id === "string"
-            ? bedOverride.id
-            : bedCode;
+        const bedId = room.bedOverrides?.[bedCode]?.id || bedCode;
         await onUpdateBedStatus(bedId, newStatus);
       } else {
         const updatedRooms = rooms.map((r) =>

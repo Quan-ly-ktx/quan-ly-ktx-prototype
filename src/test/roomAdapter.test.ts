@@ -118,13 +118,15 @@ test("roomAdapter converts RoomDetailResponse to RoomRecord with beds and bedOve
   assert.equal(room.amenities[0].name, "Máy lạnh");
   assert.equal(room.amenities[0].quantity, 1);
 
-  // bedOverrides: G02 has MAINTENANCE and price 1600000
+  // bedOverrides: G02 has id b2, MAINTENANCE and price 1600000
   assert.ok(room.bedOverrides);
   assert.deepEqual(room.bedOverrides["G02"], {
+    id: "b2",
     status: "MAINTENANCE",
     price: 1600000,
   });
-  // G01 occupied is handled by tenant records, but if overridden or status present
+  // G01 has id b1 and status OCCUPIED
+  assert.equal(room.bedOverrides["G01"]?.id, "b1");
   assert.equal(room.bedOverrides["G01"]?.status, "OCCUPIED");
 });
 

@@ -23,7 +23,7 @@ export type RoomRecord = {
   total: number;
   basePrice: number;
   amenities: AmenityItem[];
-  bedOverrides?: Record<string, { status?: BedStatus; price?: number }>;
+  bedOverrides?: Record<string, { id?: string; status?: BedStatus; price?: number }>;
   deletedAt?: string | null;
 };
 

@@ -39,9 +39,10 @@ export const authService = {
   async logout(): Promise<void> {
     try {
       if (tokenStorage.getAccessToken()) {
+        const refreshToken = tokenStorage.getRefreshToken();
         await httpClient.post<SuccessResponse | Record<string, unknown>>(
           "/auth/logout",
-          {},
+          refreshToken ? { refreshToken } : undefined,
         );
       }
     } finally {

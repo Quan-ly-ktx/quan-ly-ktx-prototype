@@ -197,3 +197,23 @@ test("httpClient does not refresh when request itself is auth endpoint (avoid in
 
   assert.equal(refreshCallCount, 0, "Should not call refresh-token for /api/v1/auth/login 401");
 });
+
+test("httpClient normalizes slashes between base URL and endpoint", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  let calledUrl = "";
+  globalThis.fetch = async (input: string | URL | Request) => {
+    calledUrl = input.toString();
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  await httpClient.get("/test-slash");
+  assert.ok(!calledUrl.includes("//test-slash"));
+  assert.ok(calledUrl.endsWith("/test-slash"));
+});

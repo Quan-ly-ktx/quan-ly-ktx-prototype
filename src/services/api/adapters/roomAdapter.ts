@@ -145,19 +145,17 @@ export function toFrontendRoomRecord(
   };
 
   if ("beds" in res && Array.isArray(res.beds)) {
-    const bedOverrides: Record<string, { status?: BedStatus; price?: number }> = {};
+    const bedOverrides: Record<string, { id?: string; status?: BedStatus; price?: number }> = {};
     for (const bed of res.beds) {
-      // Record override if status is not default AVAILABLE or price differs from basePrice
       const status = toFrontendBedStatus(bed.status);
       const isCustomStatus = status !== "AVAILABLE";
       const isCustomPrice = typeof bed.price === "number" && bed.price !== res.basePrice;
 
-      if (isCustomStatus || isCustomPrice) {
-        bedOverrides[bed.bedCode] = {
-          ...(isCustomStatus ? { status } : {}),
-          ...(isCustomPrice ? { price: bed.price } : {}),
-        };
-      }
+      bedOverrides[bed.bedCode] = {
+        id: bed.id,
+        ...(isCustomStatus ? { status } : {}),
+        ...(isCustomPrice ? { price: bed.price } : {}),
+      };
     }
     if (Object.keys(bedOverrides).length > 0) {
       roomRecord.bedOverrides = bedOverrides;

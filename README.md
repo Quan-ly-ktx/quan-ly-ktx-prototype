@@ -35,23 +35,23 @@ Khi `VITE_USE_MOCK=false`, các phân hệ sau giao tiếp 100% với Spring Boo
 1. **Xác thực & Quản trị Phiên (Auth & Session Lifecycle)**:
    - Đăng nhập JWT (`POST /api/v1/auth/login`).
    - Đăng xuất & thu hồi token (`POST /api/v1/auth/logout`).
-   - Tự động làm mới phiên làm việc (`POST /api/v1/auth/refresh`).
+   - Tự động làm mới phiên làm việc (`POST /api/v1/auth/refresh-token`).
    - Đồng bộ hồ sơ tài khoản hiện tại (`GET /api/v1/users/me`).
    - Đổi mật khẩu (`POST /api/v1/auth/change-password`).
    - Quy trình khôi phục mật khẩu qua mã OTP (`POST /api/v1/auth/forgot-password`, `POST /api/v1/auth/verify-forgot-password-otp`, `POST /api/v1/auth/reset-password`).
 2. **Sơ Đồ Ma Trận Phòng & Giường (Room Matrix & Layout)**:
-   - Tải danh sách phòng & ma trận giường thời gian thực (`GET /api/v1/rooms`).
-   - Thêm phòng mới (`POST /api/v1/rooms`).
-   - Cập nhật thông tin phòng & đơn giá (`PUT /api/v1/rooms/{id}`).
-   - Đưa phòng vào kho lưu trữ (`DELETE /api/v1/rooms/{id}`).
+   - Tải danh sách phòng & ma trận giường thời gian thực (`GET /api/v1/admin/rooms/matrix`).
+   - Thêm phòng mới (`POST /api/v1/admin/rooms`).
+   - Cập nhật thông tin phòng & đơn giá (`PUT /api/v1/admin/rooms/{id}`).
+   - Đưa phòng vào kho lưu trữ (`DELETE /api/v1/admin/rooms/{id}`).
 3. **Trạng Thái Vận Hành Giường (Bed Maintenance & Status Lifecycle)**:
-   - Bật/tắt bảo trì giường ngủ tức thì (`PATCH /api/v1/rooms/beds/{bedId}/status`).
+   - Bật/tắt bảo trì giường ngủ tức thì (`PATCH /api/v1/admin/beds/{id}/status`).
 4. **Quản Lý Tài Khoản Nhân Viên Kỹ Thuật (Technician Accounts)**:
-   - Danh sách tài khoản kỹ thuật viên có phân trang & tìm kiếm (`GET /api/v1/technicians`).
-   - Tạo mới tài khoản kỹ thuật viên (`POST /api/v1/technicians`).
-   - Cập nhật thông tin cá nhân kỹ thuật viên (`PUT /api/v1/technicians/{id}`).
-   - Khóa / Kích hoạt lại tài khoản (`PATCH /api/v1/technicians/{id}/status`).
-   - Cấp lại mật khẩu mặc định (`POST /api/v1/technicians/{id}/reset-password`).
+   - Danh sách tài khoản kỹ thuật viên có phân trang & tìm kiếm (`GET /api/v1/users/technicians`).
+   - Tạo mới tài khoản kỹ thuật viên (`POST /api/v1/users/technicians`).
+   - Lấy chi tiết kỹ thuật viên (`GET /api/v1/users/technicians/{id}`).
+   - Cập nhật thông tin cá nhân kỹ thuật viên (`PUT /api/v1/users/technicians/{id}`).
+   - Khóa / Kích hoạt lại tài khoản (`PATCH /api/v1/users/technicians/{id}/status`).
 
 ### 🟡 Phân Hệ Dự Phòng Mock / Fallback (Hybrid Mode)
 Các phân hệ nghiệp vụ sau duy trì cơ chế Fallback mượt mà bằng Mock Data cục bộ trong khi chờ Backend hoàn thiện các API tương ứng:

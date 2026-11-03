@@ -144,16 +144,18 @@ test("authService.logout clears tokens and calls logout endpoint", async (t) => 
   });
 
   let capturedUrl = "";
-  globalThis.fetch = async (input: string | URL | Request) => {
+  let capturedBody: unknown;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
     capturedUrl = input.toString();
+    capturedBody = init?.body ? JSON.parse(init.body as string) : undefined;
     return new Response(JSON.stringify({ status: "SUCCESS", message: "Logged out" }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   };
-
   await authService.logout();
   assert.ok(capturedUrl.includes("/api/v1/auth/logout"));
+  assert.deepEqual(capturedBody, { refreshToken: "valid_refresh" });
   assert.equal(tokenStorage.getAccessToken(), null);
   assert.equal(tokenStorage.getRefreshToken(), null);
 });

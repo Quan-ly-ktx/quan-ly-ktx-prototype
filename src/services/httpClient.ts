@@ -46,7 +46,8 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 
   try {
-    const refreshUrl = `${env.API_BASE_URL}/auth/refresh-token`;
+    const normalizedBase = env.API_BASE_URL.replace(/\/+$/, "");
+    const refreshUrl = `${normalizedBase}/auth/refresh-token`;
     const response = await fetch(refreshUrl, {
       method: "POST",
       headers: {
@@ -95,10 +96,11 @@ export async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const { params, headers, skipAuth, ...customConfig } = options;
+  const normalizedBase = env.API_BASE_URL.replace(/\/+$/, "");
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = new URL(
-    endpoint.startsWith("http") ? endpoint : `${env.API_BASE_URL}${endpoint}`,
+    endpoint.startsWith("http") ? endpoint : `${normalizedBase}${normalizedEndpoint}`,
   );
-
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined) {

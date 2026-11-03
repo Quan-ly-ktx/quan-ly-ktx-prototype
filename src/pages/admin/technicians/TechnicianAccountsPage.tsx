@@ -60,7 +60,7 @@ export function TechnicianAccountsPage({ showToast }: Toast) {
         fullName: form.name.trim(),
         email: form.user.trim(),
         password: form.password,
-        phone: form.phone.trim() || "0900000000",
+        phone: form.phone.trim() || ("09" + Date.now().toString().slice(-8)),
       });
 
       setStaff((prev) => [
