@@ -1,6 +1,5 @@
 import { httpClient } from "./httpClient.ts";
 import { tokenStorage } from "./api/tokenStorage.ts";
-import { env } from "../config/env.ts";
 import type {
   LoginRequest,
   AuthResponse,

@@ -4,7 +4,6 @@ import { Button, Icon, Modal } from "../../components/common/index.ts";
 import { resolveRole } from "../../utils/authUtils.ts";
 import type { Role, LoginRequest } from "../../types/auth.ts";
 import { authService } from "../../services/authService.ts";
-import { toFrontendRole } from "../../services/api/adapters/authAdapter.ts";
 import { ApiError } from "../../services/httpClient.ts";
 import { env } from "../../config/env.ts";
 
@@ -47,46 +46,41 @@ export function LoginPage({
       return;
     }
 
+    if (env.USE_MOCK) {
+      // Mock Mode / Offline Fallback validation before setting submitting
+      const role = resolveRole(email);
+      if (!role) {
+        setError(
+          "Tài khoản Gmail không hợp lệ. Hãy dùng manager@gmail.com, student@gmail.com hoặc technician@gmail.com.",
+        );
+        return;
+      }
+
+      setSubmitting(true);
+      window.setTimeout(() => {
+        setSubmitting(false);
+        onLogin(role);
+      }, 650);
+      return;
+    }
+
+    // Real Backend Authentication
     setSubmitting(true);
-
     try {
-      if (!env.USE_MOCK) {
-        // Real Backend Authentication
-        try {
-          const authRes = await authService.login({
-            identifier: email,
-            password,
-          });
-          const role = toFrontendRole(authRes.user.role);
-          onLogin(role);
-        } catch (err: unknown) {
-          if (err instanceof ApiError) {
-            setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
-          } else if (err instanceof Error) {
-            setError(err.message);
-          } else {
-            setError("Đăng nhập thất bại. Vui lòng thử lại.");
-          }
-          return;
-        }
+      await onLogin({
+        identifier: email,
+        password,
+      });
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+      } else if (err instanceof Error) {
+        setError(err.message);
       } else {
-        // Mock Mode / Offline Fallback
-        const role = resolveRole(email);
-        if (!role) {
-          setError(
-            "Tài khoản Gmail không hợp lệ. Hãy dùng manager@gmail.com, student@gmail.com hoặc technician@gmail.com.",
-          );
-          return;
-        }
-
-        window.setTimeout(() => {
-          onLogin(role);
-        }, 650);
+        setError("Đăng nhập thất bại. Vui lòng thử lại.");
       }
     } finally {
-      if (!env.USE_MOCK) {
-        setSubmitting(false);
-      }
+      setSubmitting(false);
     }
   };
 
