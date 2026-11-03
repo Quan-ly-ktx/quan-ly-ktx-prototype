@@ -11,6 +11,7 @@ import {
   getRoomOccupancy,
   isSlotAvailable,
   slotKey,
+  resolveRole,
 } from "./domain.ts";
 import type { Invoice, RoomRecord, TenantRecord, Ticket } from "./data.ts";
 
@@ -187,4 +188,12 @@ test("BR-01: unified price and per-bed maintenance in getRoomOccupancy", () => {
   assert.equal(occupancy.beds[2].status, "AVAILABLE");
   // All beds have unified room basePrice
   assert.ok(occupancy.beds.every((b) => b.price === 1400000));
+});
+
+test("resolveRole parses email domain and prefixes correctly", () => {
+  assert.equal(resolveRole("student@gmail.com"), "student");
+  assert.equal(resolveRole("tech@gmail.com"), "technician");
+  assert.equal(resolveRole("manager@gmail.com"), "manager");
+  assert.equal(resolveRole("admin@gmail.com"), "manager");
+  assert.equal(resolveRole("invalid@other.com"), null);
 });
