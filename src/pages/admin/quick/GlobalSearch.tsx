@@ -22,8 +22,10 @@ type Hit = {
 
 export function GlobalSearch({
   onNavigate,
+  invoices = initialInvoices,
 }: {
   onNavigate: (label: string) => void;
+  invoices?: Invoice[];
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -69,7 +71,7 @@ export function GlobalSearch({
         sub: "Xem sơ đồ giường",
         nav: "Phòng & giường",
       })),
-      ...initialInvoices.map((i) => ({
+      ...invoices.map((i) => ({
         group: "Hóa đơn",
         icon: "invoice" as IconName,
         title: i.id,

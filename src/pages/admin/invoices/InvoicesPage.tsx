@@ -19,10 +19,12 @@ const penaltyOf = (i: Invoice) => (i.late ? i.late * 5000 : 0);
 export function InvoicesPage({
   records,
   onRecordsChange,
+  onConfirmPayment,
   showToast,
 }: Toast & {
   records: Invoice[];
   onRecordsChange: (records: Invoice[]) => void;
+  onConfirmPayment?: (invoiceId: string, manager: string) => Promise<Invoice>;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Tất cả trạng thái");
@@ -40,20 +42,24 @@ export function InvoicesPage({
     .filter((invoice) => invoice.status === "Đã thu")
     .reduce((total, invoice) => total + (invoice.payment?.amount ?? 0), 0);
 
-  const confirmCash = () => {
+  const confirmCash = async () => {
     if (!cashInvoice) return;
     try {
-      const paid = confirmCashPayment(
-        cashInvoice,
-        "Thu Lan",
-        new Date().toLocaleString("vi-VN"),
-      );
-      onRecordsChange(
-        records.map((invoice) => (invoice.id === paid.id ? paid : invoice)),
-      );
+      if (onConfirmPayment) {
+        await onConfirmPayment(cashInvoice.id, "Thu Lan");
+      } else {
+        const paid = confirmCashPayment(
+          cashInvoice,
+          "Thu Lan",
+          new Date().toLocaleString("vi-VN"),
+        );
+        onRecordsChange(
+          records.map((invoice) => (invoice.id === paid.id ? paid : invoice)),
+        );
+      }
       setCashInvoice(null);
       setSelected(null);
-      showToast(`Đã xác nhận ${paid.id} thanh toán tiền mặt`);
+      showToast(`Đã xác nhận ${cashInvoice.id} thanh toán tiền mặt`);
     } catch (error) {
       showToast(
         error instanceof Error

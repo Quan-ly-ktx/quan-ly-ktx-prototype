@@ -33,6 +33,7 @@ function AppContent() {
     onInvoicesChange,
     onCreateTicket,
     onUpdateTicket,
+    onConfirmPayment,
   } = useDormData();
 
   const [activeNav, setActiveNav] = useState("Bảng điều khiển");
@@ -90,6 +91,7 @@ function AppContent() {
         onNavigate={handleNav}
         onLogout={logout}
         showToast={showToast}
+        invoices={invoices}
       >
         <div className="mx-auto max-w-[1280px]">
           {activeNav === "Phòng & giường" ? (
@@ -117,6 +119,7 @@ function AppContent() {
             <InvoicesPage
               records={invoices}
               onRecordsChange={onInvoicesChange}
+              onConfirmPayment={onConfirmPayment}
               showToast={showToast}
             />
           ) : activeNav === "Tài chính" ? (
@@ -175,4 +178,3 @@ export default function App() {
     </ToastProvider>
   );
 }
-export { App };

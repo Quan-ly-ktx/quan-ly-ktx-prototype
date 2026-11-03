@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Icon } from "../../../components/common/index.ts";
 import { GlobalSearch } from "../quick/GlobalSearch.tsx";
+import type { Invoice } from "../../../types/index.ts";
 import type { IconName } from "../../../types/shared.ts";
 
 const alerts = [
@@ -25,11 +26,13 @@ export function AdminHeader({
   onNavigate,
   onLogout,
   onOpenPassword,
+  invoices,
 }: {
   onOpenSidebar: () => void;
   onNavigate: (label: string) => void;
   onLogout: () => void;
   onOpenPassword: () => void;
+  invoices?: Invoice[];
 }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -44,7 +47,7 @@ export function AdminHeader({
         <Icon name="menu" />
       </Button>
 
-      <GlobalSearch onNavigate={onNavigate} />
+      <GlobalSearch onNavigate={onNavigate} invoices={invoices} />
 
       <div className="ml-auto flex items-center gap-1 sm:gap-2">
         <div className="relative">

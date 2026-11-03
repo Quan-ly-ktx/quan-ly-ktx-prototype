@@ -2,18 +2,21 @@ import { useState, type ReactNode } from "react";
 import { AdminSidebar } from "./AdminSidebar.tsx";
 import { AdminHeader } from "./AdminHeader.tsx";
 import { ChangePasswordModal } from "../../../components/common/index.ts";
+import type { Invoice } from "../../../types/index.ts";
 
 export function AdminShell({
   activeNav,
   onNavigate,
   onLogout,
   showToast,
+  invoices,
   children,
 }: {
   activeNav: string;
   onNavigate: (label: string) => void;
   onLogout: () => void;
   showToast: (msg: string) => void;
+  invoices?: Invoice[];
   children: ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -47,6 +50,7 @@ export function AdminShell({
           }}
           onLogout={onLogout}
           onOpenPassword={() => setPasswordOpen(true)}
+          invoices={invoices}
         />
 
         <main className="mx-auto max-w-[1280px] px-4 py-6 md:px-6 lg:py-8">

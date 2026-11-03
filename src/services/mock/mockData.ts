@@ -6,6 +6,8 @@ import type {
   RentalSlot,
   Invoice,
 } from "../../types/index.ts";
+import { money } from "../../utils/formatters.ts";
+export { money };
 
 export const TECHNICIANS = ["Võ Văn Thịnh", "Lâm Quốc Huy"];
 export const CURRENT_TECH = "Võ Văn Thịnh";
@@ -96,7 +98,6 @@ export const initialTickets: Ticket[] = [
   },
 ];
 
-export const money = (value: number) => `${value.toLocaleString("vi-VN")} đ`;
 
 export const people: Person[] = [
   { name: "Nguyễn Hoàng Nam", gender: "Nam", phone: "0987 214 506", cccd: "079203001187", email: "student@gmail.com", address: "Quận Bình Thạnh, TP.HCM" },
