@@ -2,7 +2,11 @@ import { useState } from "react";
 import type React from "react";
 import { Button, Icon, Modal } from "../../components/common/index.ts";
 import { resolveRole } from "../../utils/authUtils.ts";
-import type { Role } from "../../types/auth.ts";
+import type { Role, LoginRequest } from "../../types/auth.ts";
+import { authService } from "../../services/authService.ts";
+import { toFrontendRole } from "../../services/api/adapters/authAdapter.ts";
+import { ApiError } from "../../services/httpClient.ts";
+import { env } from "../../config/env.ts";
 
 const demoAccounts: { role: Role; label: string; email: string }[] = [
   { role: "manager", label: "Quản lý", email: "manager@gmail.com" },
@@ -10,35 +14,174 @@ const demoAccounts: { role: Role; label: string; email: string }[] = [
   { role: "technician", label: "Kỹ thuật viên", email: "technician@gmail.com" },
 ];
 
-export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
+export function LoginPage({
+  onLogin,
+}: {
+  onLogin: (roleOrCredentials: Role | LoginRequest) => void;
+}) {
   const [email, setEmail] = useState("manager@gmail.com");
   const [password, setPassword] = useState("SecurePassword123!");
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Forgot Password modal state
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotStep, setForgotStep] = useState(1);
+  const [forgotEmail, setForgotEmail] = useState("admin@ktxhub.vn");
+  const [forgotOtp, setForgotOtp] = useState("246810");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("NewPassword123!");
+  const [confirmPassword, setConfirmPassword] = useState("NewPassword123!");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState("");
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const role = resolveRole(email);
-    if (!role) {
-      setError(
-        "Tài khoản Gmail không hợp lệ. Hãy dùng manager@gmail.com, student@gmail.com hoặc technician@gmail.com.",
-      );
-      return;
-    }
+    setError("");
+
     if (password.length < 6) {
       setError("Mật khẩu phải chứa ít nhất 6 ký tự.");
       return;
     }
-    setError("");
+
     setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
-      onLogin(role);
-    }, 650);
+
+    try {
+      if (!env.USE_MOCK) {
+        // Real Backend Authentication
+        try {
+          const authRes = await authService.login({
+            identifier: email,
+            password,
+          });
+          const role = toFrontendRole(authRes.user.role);
+          onLogin(role);
+        } catch (err: unknown) {
+          if (err instanceof ApiError) {
+            setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+          } else if (err instanceof Error) {
+            setError(err.message);
+          } else {
+            setError("Đăng nhập thất bại. Vui lòng thử lại.");
+          }
+          return;
+        }
+      } else {
+        // Mock Mode / Offline Fallback
+        const role = resolveRole(email);
+        if (!role) {
+          setError(
+            "Tài khoản Gmail không hợp lệ. Hãy dùng manager@gmail.com, student@gmail.com hoặc technician@gmail.com.",
+          );
+          return;
+        }
+
+        window.setTimeout(() => {
+          onLogin(role);
+        }, 650);
+      }
+    } finally {
+      if (!env.USE_MOCK) {
+        setSubmitting(false);
+      }
+    }
+  };
+
+  const handleForgotStep = async () => {
+    setForgotError("");
+    setForgotSuccess("");
+
+    if (forgotStep === 1) {
+      if (!forgotEmail) {
+        setForgotError("Vui lòng nhập email hợp lệ.");
+        return;
+      }
+      setForgotLoading(true);
+      try {
+        if (!env.USE_MOCK) {
+          await authService.forgotPassword({ email: forgotEmail });
+        }
+        setForgotStep(2);
+      } catch (err: unknown) {
+        if (err instanceof ApiError) {
+          setForgotError(err.message || "Gửi mã OTP thất bại.");
+        } else if (err instanceof Error) {
+          setForgotError(err.message);
+        } else {
+          setForgotError("Có lỗi xảy ra khi gửi mã OTP.");
+        }
+      } finally {
+        setForgotLoading(false);
+      }
+    } else if (forgotStep === 2) {
+      if (!forgotOtp || forgotOtp.length < 6) {
+        setForgotError("Mã xác thực OTP gồm 6 chữ số.");
+        return;
+      }
+      setForgotLoading(true);
+      try {
+        if (!env.USE_MOCK) {
+          const res = await authService.verifyForgotPasswordOtp({
+            email: forgotEmail,
+            otp: forgotOtp,
+          });
+          setResetToken(res.resetToken);
+        } else {
+          setResetToken("mock_reset_token");
+        }
+        setForgotStep(3);
+      } catch (err: unknown) {
+        if (err instanceof ApiError) {
+          setForgotError(err.message || "Mã OTP không hợp lệ.");
+        } else if (err instanceof Error) {
+          setForgotError(err.message);
+        } else {
+          setForgotError("Mã xác thực không hợp lệ hoặc đã hết hạn.");
+        }
+      } finally {
+        setForgotLoading(false);
+      }
+    } else if (forgotStep === 3) {
+      if (newPassword.length < 6) {
+        setForgotError("Mật khẩu mới phải chứa ít nhất 6 ký tự.");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setForgotError("Xác nhận mật khẩu không trùng khớp.");
+        return;
+      }
+      setForgotLoading(true);
+      try {
+        if (!env.USE_MOCK) {
+          await authService.resetPassword({
+            email: forgotEmail,
+            resetToken,
+            newPassword,
+            confirmPassword,
+          });
+        }
+        setForgotSuccess("Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay.");
+        window.setTimeout(() => {
+          setForgotOpen(false);
+          setForgotStep(1);
+          setForgotError("");
+          setForgotSuccess("");
+        }, 1200);
+      } catch (err: unknown) {
+        if (err instanceof ApiError) {
+          setForgotError(err.message || "Đặt lại mật khẩu thất bại.");
+        } else if (err instanceof Error) {
+          setForgotError(err.message);
+        } else {
+          setForgotError("Không thể đặt lại mật khẩu. Vui lòng thử lại.");
+        }
+      } finally {
+        setForgotLoading(false);
+      }
+    }
   };
 
   return (
@@ -183,7 +326,11 @@ export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
               </label>
               <Button
                 className="text-xs font-semibold text-brand-600 hover:text-brand-700"
-                onClick={() => setForgotOpen(true)}
+                onClick={() => {
+                  setForgotError("");
+                  setForgotSuccess("");
+                  setForgotOpen(true);
+                }}
               >
                 Quên mật khẩu?
               </Button>
@@ -247,6 +394,8 @@ export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
           onClose={() => {
             setForgotOpen(false);
             setForgotStep(1);
+            setForgotError("");
+            setForgotSuccess("");
           }}
         >
           <div className="p-6">
@@ -260,6 +409,26 @@ export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
                 />
               ))}
             </div>
+
+            {forgotError && (
+              <div
+                className="mb-4 flex gap-2.5 rounded-sm border border-danger-200 bg-danger-50 p-3 text-xs text-danger-600"
+                role="alert"
+              >
+                <Icon name="alert" className="mt-0.5 size-4 shrink-0" />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess && (
+              <div
+                className="mb-4 flex gap-2.5 rounded-sm border border-success-200 bg-success-50 p-3 text-xs text-success-600"
+                role="status"
+              >
+                <span>{forgotSuccess}</span>
+              </div>
+            )}
+
             {forgotStep === 1 && (
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
@@ -267,7 +436,11 @@ export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
                 </span>
                 <input
                   className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 text-sm outline-none focus:border-brand-500"
-                  defaultValue="admin@ktxhub.vn"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  disabled={forgotLoading}
+                  placeholder="admin@ktxhub.vn"
+                  type="email"
                 />
                 <span className="mt-2 block text-xs text-slate-500">
                   Mã OTP 6 số sẽ được gửi đến email này.
@@ -282,7 +455,9 @@ export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
                   </span>
                   <input
                     className="focus-ring h-11 w-full rounded-sm border border-slate-200 px-3 text-center font-mono text-xl tracking-[0.45em] outline-none focus:border-brand-500"
-                    defaultValue="246810"
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value)}
+                    disabled={forgotLoading}
                     inputMode="numeric"
                     maxLength={6}
                   />
@@ -300,7 +475,21 @@ export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
                   </span>
                   <input
                     className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 text-sm outline-none focus:border-brand-500"
-                    defaultValue="NewPassword123!"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={forgotLoading}
+                    type="password"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Xác nhận mật khẩu mới
+                  </span>
+                  <input
+                    className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 text-sm outline-none focus:border-brand-500"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={forgotLoading}
                     type="password"
                   />
                 </label>
@@ -310,20 +499,19 @@ export function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
               </div>
             )}
             <Button
-              className="mt-6 flex h-10 w-full items-center justify-center rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-              onClick={() => {
-                if (forgotStep < 3) setForgotStep(forgotStep + 1);
-                else {
-                  setForgotOpen(false);
-                  setForgotStep(1);
-                }
-              }}
+              className="mt-6 flex h-10 w-full items-center justify-center rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px] disabled:opacity-75"
+              disabled={forgotLoading}
+              onClick={handleForgotStep}
             >
-              {forgotStep === 1
-                ? "Gửi mã OTP"
-                : forgotStep === 2
-                  ? "Xác minh mã"
-                  : "Đặt lại mật khẩu"}
+              {forgotLoading ? (
+                <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              ) : forgotStep === 1 ? (
+                "Gửi mã OTP"
+              ) : forgotStep === 2 ? (
+                "Xác minh mã"
+              ) : (
+                "Đặt lại mật khẩu"
+              )}
             </Button>
           </div>
         </Modal>
