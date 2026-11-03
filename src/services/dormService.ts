@@ -10,6 +10,10 @@ import { apiDormService } from "./api/apiDormService.ts";
 
 export interface DormService {
   getRooms(): Promise<RoomRecord[]>;
+  createRoom(room: RoomRecord): Promise<RoomRecord>;
+  updateRoom(id: string, room: RoomRecord): Promise<RoomRecord>;
+  deleteRoom(id: string): Promise<void>;
+  updateBedStatus(bedId: string, status: BedStatus): Promise<void>;
   getTenants(): Promise<TenantRecord[]>;
   getInvoices(): Promise<Invoice[]>;
   getTickets(): Promise<Ticket[]>;

@@ -29,6 +29,10 @@ function AppContent() {
     invoices,
     tickets,
     onRoomsChange,
+    onCreateRoom,
+    onUpdateRoom,
+    onDeleteRoom,
+    onUpdateBedStatus,
     onTenantsChange,
     onInvoicesChange,
     onCreateTicket,
@@ -98,6 +102,10 @@ function AppContent() {
             <RoomsPage
               rooms={rooms}
               onRoomsChange={onRoomsChange}
+              onCreateRoom={onCreateRoom}
+              onUpdateRoom={onUpdateRoom}
+              onDeleteRoom={onDeleteRoom}
+              onUpdateBedStatus={onUpdateBedStatus}
               tenants={tenants}
               onQuickOnboard={(roomCode, bedCode) => {
                 setActiveNav("Người thuê");

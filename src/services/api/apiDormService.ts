@@ -4,14 +4,60 @@ import type {
   TenantRecord,
   Invoice,
   Ticket,
+  BedStatus,
 } from "../../types/index.ts";
 import { httpClient } from "../httpClient.ts";
-import type { ApiResponse } from "../../types/api/endpoints.ts";
+import type {
+  ApiResponse,
+  SingleResponse,
+  RoomDetailResponse,
+  UpdateBedStatusRequest,
+} from "../../types/api/endpoints.ts";
+import {
+  toFrontendRoomRecord,
+  toBackendCreateRoomRequest,
+  toBackendUpdateRoomRequest,
+  toBackendBedStatus,
+} from "./adapters/roomAdapter.ts";
 
 class ApiDormServiceImpl implements DormService {
   async getRooms(): Promise<RoomRecord[]> {
-    const res = await httpClient.get<ApiResponse<RoomRecord[]> | RoomRecord[]>("/rooms");
-    return Array.isArray(res) ? res : res.data;
+    const res = await httpClient.get<SingleResponse<RoomDetailResponse[]> | RoomDetailResponse[]>(
+      "/admin/rooms/matrix",
+    );
+    const details = Array.isArray(res) ? res : res.data;
+    return details.map(toFrontendRoomRecord);
+  }
+
+  async createRoom(room: RoomRecord): Promise<RoomRecord> {
+    const payload = toBackendCreateRoomRequest(room);
+    const res = await httpClient.post<SingleResponse<RoomDetailResponse> | RoomDetailResponse>(
+      "/admin/rooms",
+      payload,
+    );
+    const detail = res && typeof res === "object" && "data" in res ? res.data : (res as RoomDetailResponse);
+    return toFrontendRoomRecord(detail);
+  }
+
+  async updateRoom(id: string, room: RoomRecord): Promise<RoomRecord> {
+    const payload = toBackendUpdateRoomRequest(room);
+    const res = await httpClient.put<SingleResponse<RoomDetailResponse> | RoomDetailResponse>(
+      `/admin/rooms/${id}`,
+      payload,
+    );
+    const detail = res && typeof res === "object" && "data" in res ? res.data : (res as RoomDetailResponse);
+    return toFrontendRoomRecord(detail);
+  }
+
+  async deleteRoom(id: string): Promise<void> {
+    await httpClient.delete<void>(`/admin/rooms/${id}`);
+  }
+
+  async updateBedStatus(bedId: string, status: BedStatus): Promise<void> {
+    const payload: UpdateBedStatusRequest = {
+      status: toBackendBedStatus(status),
+    };
+    await httpClient.patch<void>(`/admin/beds/${bedId}/status`, payload);
   }
 
   async getTenants(): Promise<TenantRecord[]> {

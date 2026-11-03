@@ -48,6 +48,100 @@ class MockDormServiceImpl implements DormService {
     return [...this.rooms];
   }
 
+  async createRoom(room: RoomRecord): Promise<RoomRecord> {
+    const created: RoomRecord = {
+      ...room,
+      id: room.id || `RM-${Date.now().toString().slice(-4)}`,
+    };
+    this.rooms = [created, ...this.rooms];
+    saveStorage(STORAGE_KEYS.ROOMS, this.rooms);
+    return created;
+  }
+
+  async updateRoom(id: string, room: RoomRecord): Promise<RoomRecord> {
+    const idx = this.rooms.findIndex((r) => r.id === id);
+    const updated: RoomRecord = {
+      ...(idx !== -1 ? this.rooms[idx] : {}),
+      ...room,
+      id,
+    };
+    if (idx !== -1) {
+      this.rooms = this.rooms.map((r) => (r.id === id ? updated : r));
+    } else {
+      this.rooms = [updated, ...this.rooms];
+    }
+    saveStorage(STORAGE_KEYS.ROOMS, this.rooms);
+    return updated;
+  }
+
+  async deleteRoom(id: string): Promise<void> {
+    this.rooms = this.rooms.map((r) =>
+      r.id === id ? { ...r, deletedAt: new Date().toISOString() } : r,
+    );
+    saveStorage(STORAGE_KEYS.ROOMS, this.rooms);
+  }
+
+  async updateBedStatus(bedId: string, status: BedStatus): Promise<void> {
+    let matched = false;
+    this.rooms = this.rooms.map((r) => {
+      const currentOverrides = r.bedOverrides ?? {};
+      // Check if bedId is a bedCode or slotKey or exists in overrides
+      if (currentOverrides[bedId]) {
+        matched = true;
+        return {
+          ...r,
+          bedOverrides: {
+            ...currentOverrides,
+            [bedId]: {
+              ...currentOverrides[bedId],
+              status,
+            },
+          },
+        };
+      }
+      for (const [code, override] of Object.entries(currentOverrides)) {
+        const hasBedId = override && typeof override === "object" && "id" in override && override.id === bedId;
+        if (hasBedId || code === bedId) {
+          return {
+            ...r,
+            bedOverrides: {
+              ...currentOverrides,
+              [code]: {
+                ...override,
+                status,
+              },
+            },
+          };
+        }
+      }
+      return r;
+    });
+    if (!matched) {
+      // If bedId is like "G01" or slotKey or raw ID, try matching across all rooms
+      for (const r of this.rooms) {
+        const currentOverrides = r.bedOverrides ?? {};
+        if (bedId in currentOverrides || bedId.startsWith("G0")) {
+          this.rooms = this.rooms.map((room) =>
+            room.id === r.id
+              ? {
+                  ...room,
+                  bedOverrides: {
+                    ...(room.bedOverrides ?? {}),
+                    [bedId]: {
+                      ...(room.bedOverrides?.[bedId] ?? {}),
+                      status,
+                    },
+                  },
+                }
+              : room,
+          );
+          break;
+        }
+      }
+    }
+    saveStorage(STORAGE_KEYS.ROOMS, this.rooms);
+  }
+
   async getTenants(): Promise<TenantRecord[]> {
     return [...this.tenants];
   }

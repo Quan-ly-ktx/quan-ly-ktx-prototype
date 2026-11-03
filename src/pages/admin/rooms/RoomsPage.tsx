@@ -8,7 +8,8 @@ import { DeleteRoomModal } from "./DeleteRoomModal.tsx";
 import { RoomDetailDrawer } from "./RoomDetailDrawer.tsx";
 import { RoomMatrixView } from "./RoomMatrixView.tsx";
 import { RoomTableView } from "./RoomTableView.tsx";
-import type { RoomRecord, TenantRecord } from "../../../types/index.ts";
+import type { RoomRecord, TenantRecord, BedStatus } from "../../../types/index.ts";
+import { ApiError } from "../../../services/httpClient.ts";
 import {
   canDeleteRoom,
   canToggleBedMaintenance,
@@ -18,12 +19,20 @@ import {
 export function RoomsPage({
   rooms,
   onRoomsChange,
+  onCreateRoom,
+  onUpdateRoom,
+  onDeleteRoom,
+  onUpdateBedStatus,
   tenants,
   onQuickOnboard,
   showToast,
 }: {
   rooms: RoomRecord[];
   onRoomsChange: (next: RoomRecord[]) => void;
+  onCreateRoom?: (room: RoomRecord) => Promise<RoomRecord>;
+  onUpdateRoom?: (id: string, room: RoomRecord) => Promise<RoomRecord>;
+  onDeleteRoom?: (id: string) => Promise<void>;
+  onUpdateBedStatus?: (bedId: string, status: BedStatus) => Promise<void>;
   tenants: TenantRecord[];
   onQuickOnboard?: (roomCode: string, bedCode: string) => void;
   showToast: (message: string) => void;
@@ -98,38 +107,66 @@ export function RoomsPage({
     setAddEditOpen(true);
   };
 
-  const handleSaveRoom = (savedRoom: RoomRecord, isEdit: boolean) => {
-    if (isEdit) {
-      const updated = rooms.map((r) => (r.id === savedRoom.id ? savedRoom : r));
-      onRoomsChange(updated);
-      showToast(`Đã cập nhật cấu hình phòng ${savedRoom.code}`);
-    } else {
-      onRoomsChange([savedRoom, ...rooms]);
-      showToast(
-        `Đã tạo phòng ${savedRoom.code} và tự động sinh ${savedRoom.total} vị trí giường`,
-      );
+  const handleSaveRoom = async (savedRoom: RoomRecord, isEdit: boolean) => {
+    try {
+      if (isEdit) {
+        if (onUpdateRoom) {
+          await onUpdateRoom(savedRoom.id, savedRoom);
+        } else {
+          const updated = rooms.map((r) => (r.id === savedRoom.id ? savedRoom : r));
+          onRoomsChange(updated);
+        }
+        showToast(`Đã cập nhật cấu hình phòng ${savedRoom.code}`);
+      } else {
+        if (onCreateRoom) {
+          await onCreateRoom(savedRoom);
+        } else {
+          onRoomsChange([savedRoom, ...rooms]);
+        }
+        showToast(
+          `Đã tạo phòng ${savedRoom.code} và tự động sinh ${savedRoom.total} vị trí giường`,
+        );
+      }
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        showToast(err.message);
+      } else {
+        showToast(isEdit ? "Cập nhật phòng thất bại" : "Tạo phòng thất bại");
+      }
     }
   };
 
-  const handleConfirmArchive = (roomToArchive: RoomRecord) => {
+  const handleConfirmArchive = async (roomToArchive: RoomRecord) => {
     if (!canDeleteRoom(roomToArchive.code, tenants)) {
       showToast("Phòng đang có khách ở nên không thể đưa vào lưu trữ");
       return;
     }
-    const updated = rooms.map((r) =>
-      r.id === roomToArchive.id
-        ? { ...r, deletedAt: new Date().toISOString() }
-        : r,
-    );
-    onRoomsChange(updated);
-    showToast(`Đã đưa phòng ${roomToArchive.code} vào lưu trữ`);
-    setDeleteRoom(null);
-    if (selectedRoom?.id === roomToArchive.id) {
-      setSelectedRoom(null);
+    try {
+      if (onDeleteRoom) {
+        await onDeleteRoom(roomToArchive.id);
+      } else {
+        const updated = rooms.map((r) =>
+          r.id === roomToArchive.id
+            ? { ...r, deletedAt: new Date().toISOString() }
+            : r,
+        );
+        onRoomsChange(updated);
+      }
+      showToast(`Đã đưa phòng ${roomToArchive.code} vào lưu trữ`);
+      setDeleteRoom(null);
+      if (selectedRoom?.id === roomToArchive.id) {
+        setSelectedRoom(null);
+      }
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        showToast(err.message);
+      } else {
+        showToast("Lưu trữ phòng thất bại");
+      }
     }
   };
 
-  const handleToggleBedMaintenance = (
+  const handleToggleBedMaintenance = async (
     room: RoomRecord,
     bedCode: string,
     newStatus: "AVAILABLE" | "MAINTENANCE",
@@ -151,16 +188,32 @@ export function RoomsPage({
       },
     };
 
-    const updatedRooms = rooms.map((r) =>
-      r.id === room.id ? { ...r, bedOverrides: nextOverrides } : r,
-    );
-
-    onRoomsChange(updatedRooms);
-    showToast(
-      newStatus === "MAINTENANCE"
-        ? `Đã chuyển giường ${room.code}-${bedCode} sang trạng thái Bảo trì`
-        : `Đã mở lại giường ${room.code}-${bedCode} sẵn sàng đón khách`,
-    );
+    try {
+      if (onUpdateBedStatus) {
+        const bedOverride = currentOverrides[bedCode];
+        const bedId =
+          bedOverride && typeof bedOverride === "object" && "id" in bedOverride && typeof bedOverride.id === "string"
+            ? bedOverride.id
+            : bedCode;
+        await onUpdateBedStatus(bedId, newStatus);
+      } else {
+        const updatedRooms = rooms.map((r) =>
+          r.id === room.id ? { ...r, bedOverrides: nextOverrides } : r,
+        );
+        onRoomsChange(updatedRooms);
+      }
+      showToast(
+        newStatus === "MAINTENANCE"
+          ? `Đã chuyển giường ${room.code}-${bedCode} sang trạng thái Bảo trì`
+          : `Đã mở lại giường ${room.code}-${bedCode} sẵn sàng đón khách`,
+      );
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        showToast(err.message);
+      } else {
+        showToast("Cập nhật trạng thái giường thất bại");
+      }
+    }
   };
 
   return (

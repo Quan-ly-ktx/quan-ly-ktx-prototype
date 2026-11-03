@@ -21,3 +21,34 @@ test("mockDormService provides seed data and handles ticket creation", async () 
   });
   assert.ok(newTicket.id.startsWith("SC-"));
 });
+
+test("mockDormService handles room CRUD and bed status update", async () => {
+  const initialRooms = await mockDormService.getRooms();
+  const created = await mockDormService.createRoom({
+    id: "rm-mock-test",
+    code: "P.999",
+    floor: 9,
+    type: "4 giường",
+    gender: "Nam",
+    total: 4,
+    basePrice: 1500000,
+    amenities: [],
+  });
+  assert.equal(created.code, "P.999");
+
+  const afterCreate = await mockDormService.getRooms();
+  assert.equal(afterCreate.length, initialRooms.length + 1);
+
+  const updated = await mockDormService.updateRoom(created.id, {
+    ...created,
+    basePrice: 1700000,
+  });
+  assert.equal(updated.basePrice, 1700000);
+
+  await mockDormService.updateBedStatus("G01", "MAINTENANCE");
+
+  await mockDormService.deleteRoom(created.id);
+  const afterDelete = await mockDormService.getRooms();
+  const deletedRoom = afterDelete.find((r) => r.id === created.id);
+  assert.ok(deletedRoom?.deletedAt);
+});

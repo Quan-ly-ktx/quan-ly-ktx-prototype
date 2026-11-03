@@ -4,6 +4,7 @@ import type {
   TenantRecord,
   Invoice,
   Ticket,
+  BedStatus,
 } from "../types/index.ts";
 import { dormService } from "../services/dormService.ts";
 import {
@@ -22,6 +23,10 @@ export type DormDataContextType = {
   reload: () => Promise<void>;
   onCreateTicket: (ticket: Omit<Ticket, "id">) => Promise<Ticket>;
   onUpdateTicket: (id: string, patch: Partial<Ticket>) => Promise<Ticket>;
+  onCreateRoom: (room: RoomRecord) => Promise<RoomRecord>;
+  onUpdateRoom: (id: string, room: RoomRecord) => Promise<RoomRecord>;
+  onDeleteRoom: (id: string) => Promise<void>;
+  onUpdateBedStatus: (bedId: string, status: BedStatus) => Promise<void>;
   onRoomsChange: (rooms: RoomRecord[]) => Promise<void>;
   onTenantsChange: (tenants: TenantRecord[]) => Promise<void>;
   onInvoicesChange: (invoices: Invoice[]) => Promise<void>;
@@ -72,6 +77,33 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     setTickets((prev) => prev.map((t) => (t.id === id ? updated : t)));
     return updated;
   };
+  const onCreateRoom = async (roomData: RoomRecord): Promise<RoomRecord> => {
+    const created = await dormService.createRoom(roomData);
+    setRooms((prev) => [created, ...prev]);
+    return created;
+  };
+
+  const onUpdateRoom = async (id: string, roomData: RoomRecord): Promise<RoomRecord> => {
+    const updated = await dormService.updateRoom(id, roomData);
+    setRooms((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    return updated;
+  };
+
+  const onDeleteRoom = async (id: string): Promise<void> => {
+    await dormService.deleteRoom(id);
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, deletedAt: new Date().toISOString() } : r,
+      ),
+    );
+  };
+
+  const onUpdateBedStatus = async (bedId: string, status: BedStatus): Promise<void> => {
+    await dormService.updateBedStatus(bedId, status);
+    // Refresh rooms or update local state
+    const refreshed = await dormService.getRooms();
+    setRooms(refreshed);
+  };
 
   const onRoomsChange = async (newRooms: RoomRecord[]): Promise<void> => {
     setRooms(newRooms);
@@ -105,8 +137,11 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         reload,
         onCreateTicket,
         onUpdateTicket,
+        onCreateRoom,
+        onUpdateRoom,
+        onDeleteRoom,
+        onUpdateBedStatus,
         onRoomsChange,
-        onTenantsChange,
         onInvoicesChange,
         onConfirmPayment,
       }}
