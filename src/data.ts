@@ -1,30 +1,5 @@
-export type Role = "manager" | "student" | "technician";
-
-export type TicketStatus = "Mới giao" | "Đang xử lý" | "Hoàn thành";
-
-export type Priority = "Khẩn cấp" | "Cao" | "Bình thường";
-export const PRIORITIES: Priority[] = ["Khẩn cấp", "Cao", "Bình thường"];
-export const priorityRank: Record<Priority, number> = { "Khẩn cấp": 0, Cao: 1, "Bình thường": 2 };
-
-export type Ticket = {
-  id: string;
-  room: string;
-  title: string;
-  description: string;
-  category: string;
-  priority: Priority;
-  bed?: string;
-  status: TicketStatus;
-  reporter: string;
-  phone: string;
-  createdAt: string;
-  deadline: string;
-  hasPhoto: boolean;
-  assignee?: string;
-  resolution?: string;
-  cost?: number;
-};
-
+export * from "./types/index.ts";
+import type { Ticket } from "./types/index.ts";
 export const TECHNICIANS = ["Võ Văn Thịnh", "Lâm Quốc Huy"];
 export const CURRENT_TECH = "Võ Văn Thịnh";
 
@@ -113,14 +88,6 @@ export const initialTickets: Ticket[] = [
 
 export const money = (value: number) => `${value.toLocaleString("vi-VN")} đ`;
 
-export type Person = {
-  name: string;
-  gender: "Nam" | "Nữ";
-  phone: string;
-  cccd: string;
-  email: string;
-  address: string;
-};
 
 export const people: Person[] = [
   { name: "Nguyễn Hoàng Nam", gender: "Nam", phone: "0987 214 506", cccd: "079203001187", email: "student@gmail.com", address: "Quận Bình Thạnh, TP.HCM" },
@@ -151,22 +118,6 @@ export const people: Person[] = [
 export const person = (name: string): Person =>
   people.find((p) => p.name === name) ?? { name, gender: "Nam", phone: "—", cccd: "—", email: "—", address: "—" };
 
-export type TenantRecord = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  gender: "Nam" | "Nữ";
-  cccd: string;
-  address: string;
-  room: string;
-  bed: string;
-  start: string;
-  end: string;
-  monthlyRent: number;
-  deposit: number;
-  status: "Đang thuê" | "Sắp hết HĐ" | "Đã trả phòng";
-};
 
 export const initialTenants: TenantRecord[] = [
   { id: "NT-0187", name: "Nguyễn Hoàng Nam", email: "student@gmail.com", phone: "0987 214 506", gender: "Nam", cccd: "079203001187", address: "Quận Bình Thạnh, TP.HCM", room: "P.302", bed: "G02", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
@@ -176,34 +127,6 @@ export const initialTenants: TenantRecord[] = [
   { id: "NT-0191", name: "Phạm Ngọc Linh", email: "phamngoclinh@gmail.com", phone: "0968 220 155", gender: "Nữ", cccd: "079203119972", address: "Quận 5, TP.HCM", room: "P.301", bed: "G05", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
 ];
 
-export type RoomType = "4 giường" | "6 giường" | "8 giường";
-export type RoomGender = "Nam" | "Nữ";
-export type BedStatus = "AVAILABLE" | "OCCUPIED" | "MAINTENANCE";
-
-export interface AmenityItem {
-  name: string;
-  quantity: number;
-}
-
-export interface BedRecord {
-  bedCode: string;
-  slotKey: string;
-  price: number;
-  status: BedStatus;
-}
-
-export interface RoomRecord {
-  id: string;
-  code: string;
-  floor: number;
-  type: RoomType;
-  gender: RoomGender;
-  total: number;
-  basePrice: number;
-  amenities: AmenityItem[];
-  bedOverrides?: Record<string, { status?: BedStatus; price?: number }>;
-  deletedAt?: string | null;
-}
 
 export const initialRooms: RoomRecord[] = [
   // TẦNG 1
@@ -385,13 +308,6 @@ export const initialRooms: RoomRecord[] = [
   },
 ];
 
-export type RentalSlot = {
-  room: string;
-  bed: string;
-  floor: number;
-  monthlyRent: number;
-  status: "Sẵn sàng" | "Bảo trì";
-};
 
 export const rentalSlots: RentalSlot[] = initialRooms.flatMap((room) =>
   Array.from({ length: room.total }, (_, i) => {
@@ -406,31 +322,6 @@ export const rentalSlots: RentalSlot[] = initialRooms.flatMap((room) =>
   }),
 );
 
-export type PaymentRecord = {
-  amount: number;
-  method: "Trực tuyến" | "Tiền mặt";
-  paidAt: string;
-  confirmedBy: string;
-};
-
-export type InvoiceStatus = "Đã thu" | "Nợ" | "Chờ xác nhận";
-export type PaymentProof = {
-  fileName: string;
-  submittedAt: string;
-};
-export type Invoice = {
-  id: string;
-  tenant: string;
-  room: string;
-  bed: string;
-  amount: number;
-  due: string;
-  status: InvoiceStatus;
-  payment?: PaymentRecord;
-  proof?: PaymentProof;
-  late?: number;
-  kind?: string;
-};
 
 export const initialInvoices: Invoice[] = [
   { id: "HD-2610-0001", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1200000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1200000, method: "Trực tuyến", paidAt: "03/10/2026 09:15", confirmedBy: "Hệ thống VietQR" } },

@@ -1,47 +1,7 @@
 import { PRIORITIES, type Priority } from "./data";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
-export type IconName =
-  | "activity"
-  | "alert"
-  | "bell"
-  | "bed"
-  | "bolt"
-  | "building"
-  | "calendar"
-  | "chevron"
-  | "clipboard"
-  | "close"
-  | "contract"
-  | "dashboard"
-  | "droplet"
-  | "file"
-  | "grid"
-  | "invoice"
-  | "menu"
-  | "more"
-  | "receipt"
-  | "report"
-  | "search"
-  | "settings"
-  | "students"
-  | "tools"
-  | "trend"
-  | "userPlus"
-  | "wallet"
-  | "camera"
-  | "check"
-  | "copy"
-  | "home"
-  | "logout"
-  | "phone"
-  | "qr"
-  | "refresh"
-  | "user"
-  | "clock"
-  | "send"
-  | "image"
-  | "play";
+export type { IconName } from "./types/shared.ts";
 
 const iconPaths: Record<IconName, ReactNode> = {
   camera: (
