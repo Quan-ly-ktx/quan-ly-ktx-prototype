@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Icon } from "../../../components/common/index.ts";
-import { money, person, initialInvoices } from "../../../data.ts";
+import { money } from "../../../utils/formatters.ts";
+import { person, initialInvoices } from "../../../services/mock/mockData.ts";
+import type { Invoice } from "../../../types/invoice.ts";
 import type { IconName } from "../../../types/shared.ts";
 
 const tenantList = [

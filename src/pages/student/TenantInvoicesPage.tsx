@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { Button, Icon } from "../../components/common/index.ts";
-import { money } from "../../data.ts";
+import { money } from "../../utils/formatters.ts";
 import {
   BANK,
   Card,

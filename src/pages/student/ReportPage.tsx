@@ -1,7 +1,7 @@
 import { useContext, useState } from "react";
 import type React from "react";
 import { Button, Icon, PriorityPicker, PriorityTag } from "../../components/common/index.ts";
-import type { Priority, Ticket } from "../../data.ts";
+import type { Priority, Ticket } from "../../types/incident.ts";
 import { TenantCtx, ticketTone } from "./studentConstants.tsx";
 
 const categories = ["Điện", "Nước", "Điều hòa", "Nội thất", "Khác"];

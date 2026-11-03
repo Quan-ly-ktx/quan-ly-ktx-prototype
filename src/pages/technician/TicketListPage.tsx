@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Icon, PriorityTag } from "../../components/common/index.ts";
-import { PRIORITIES, priorityRank, type Priority, type Ticket, type TicketStatus } from "../../data.ts";
+import { PRIORITIES, priorityRank, type Priority, type Ticket, type TicketStatus } from "../../types/incident.ts";
 import { filters, prioBar, prioChip, statusStyle, where } from "./technicianConstants.ts";
 
 export function TicketListPage({

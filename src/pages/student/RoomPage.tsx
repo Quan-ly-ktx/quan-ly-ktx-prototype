@@ -1,6 +1,7 @@
 import { useContext } from "react";
 import { Button, Icon } from "../../components/common/index.ts";
-import { money, type Ticket } from "../../data.ts";
+import { money } from "../../utils/formatters.ts";
+import type { Ticket } from "../../types/incident.ts";
 import {
   Card,
   TenantCtx,

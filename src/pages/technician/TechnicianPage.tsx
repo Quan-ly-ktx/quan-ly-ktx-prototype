@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Icon } from "../../components/common/index.ts";
-import type { Ticket } from "../../data.ts";
+import type { Ticket } from "../../types/incident.ts";
 import {
   initialNotices,
   type Notice,

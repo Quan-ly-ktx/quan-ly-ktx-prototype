@@ -8,8 +8,10 @@ import {
   Select,
   QrCode,
 } from "../../../components/common/index.ts";
-import { money, person, type Invoice } from "../../../data.ts";
-import { confirmCashPayment, totalInvoiceDue } from "../../../domain.ts";
+import { money } from "../../../utils/formatters.ts";
+import { person } from "../../../services/mock/mockData.ts";
+import type { Invoice } from "../../../types/invoice.ts";
+import { confirmCashPayment, totalInvoiceDue } from "../../../utils/invoiceCalculations.ts";
 import { card, th, rowCls, Badge, SearchBox, Stat, type Toast } from "../common.tsx";
 
 const invTone = (s: Invoice["status"]) =>

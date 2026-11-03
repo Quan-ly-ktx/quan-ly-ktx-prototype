@@ -3,21 +3,37 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 
-const rootDir = path.resolve(import.meta.dirname, "..");
+const rootDir = path.resolve(import.meta.dirname, "../..");
 const indexCss = fs.readFileSync(path.join(rootDir, "src/index.css"), "utf-8");
 const appTsx = fs.readFileSync(path.join(rootDir, "src/App.tsx"), "utf-8");
-const sharedTsx = fs.readFileSync(path.join(rootDir, "src/shared.tsx"), "utf-8");
-const adminTsx = fs.readFileSync(path.join(rootDir, "src/admin.tsx"), "utf-8");
-const studentTsx = fs.readFileSync(path.join(rootDir, "src/student.tsx"), "utf-8");
-const technicianTsx = fs.readFileSync(path.join(rootDir, "src/technician.tsx"), "utf-8");
-const quickTsx = fs.readFileSync(path.join(rootDir, "src/quick.tsx"), "utf-8");
-const roomsTsx = fs.readFileSync(path.join(rootDir, "src/rooms.tsx"), "utf-8");
+const buttonTsx = fs.readFileSync(
+  path.join(rootDir, "src/components/common/Button.tsx"),
+  "utf-8",
+);
+const adminCommonTsx = fs.readFileSync(
+  path.join(rootDir, "src/pages/admin/common.tsx"),
+  "utf-8",
+);
 
-const allSourceCode = [indexCss, appTsx, sharedTsx, adminTsx, studentTsx, technicianTsx, quickTsx, roomsTsx].join("\n");
+function getAllFiles(dirPath: string, arrayOfFiles: string[] = []): string[] {
+  const files = fs.readdirSync(dirPath);
+  files.forEach((file) => {
+    const fullPath = path.join(dirPath, file);
+    if (fs.statSync(fullPath).isDirectory()) {
+      arrayOfFiles = getAllFiles(fullPath, arrayOfFiles);
+    } else if (/\.(tsx|ts|css)$/.test(file) && !file.includes(".test.")) {
+      arrayOfFiles.push(fullPath);
+    }
+  });
+  return arrayOfFiles;
+}
+
+const allSourceFiles = getAllFiles(path.join(rootDir, "src"));
+const allSourceCode = allSourceFiles
+  .map((file) => fs.readFileSync(file, "utf-8"))
+  .join("\n");
 
 test("DESIGN.md Color Tokens: index.css defines exact design colors", () => {
-  // Primary: #FFFFFF, Secondary: #F8F8F8, Tertiary: #007BFF, Neutral: #212529
-  // Surface/Success: #28A745, Accent/Warning: #FFC107, Danger: #DC3545, Muted: #6C757D
   assert.match(indexCss, /#007BFF/i, "Corporate blue #007BFF must be defined in index.css");
   assert.match(indexCss, /#212529/i, "Neutral off-black #212529 must be defined in index.css");
   assert.match(indexCss, /#F8F8F8/i, "Secondary #F8F8F8 must be defined in index.css");
@@ -40,7 +56,6 @@ test("DESIGN.md Shapes & Radii: base corner radius is 4px (sm: 4px, md: 8px, lg:
 });
 
 test("DESIGN.md Do's & Don'ts: No pure black (#000000) in theme or CSS", () => {
-  // Check that pure black #000000 or #000 is not used as color token
   assert.ok(!indexCss.includes("#000000"), "Pure black #000000 must not be used");
 });
 
@@ -62,7 +77,7 @@ test("DESIGN.md Do's & Don'ts: No AI copywriting clichés in UI", () => {
 });
 
 test("DESIGN.md Components: Button has tactile active press (active:translate-y-[1px])", () => {
-  assert.match(sharedTsx, /active:translate-y-\[1px\]/, "Shared Button must include tactile active press");
+  assert.match(buttonTsx, /active:translate-y-\[1px\]/, "Common Button must include tactile active press");
 });
 
 test("DESIGN.md Layout: Container has 1280px max-width containment", () => {
@@ -70,7 +85,7 @@ test("DESIGN.md Layout: Container has 1280px max-width containment", () => {
 });
 
 test("DESIGN.md Components: Admin card base style uses rounded-sm (4px radius)", () => {
-  assert.match(adminTsx, /const card = "rounded-sm border border-slate-200 bg-white shadow-xs"/, "Admin card must use rounded-sm");
+  assert.match(adminCommonTsx, /const card = "rounded-sm border border-slate-200 bg-white shadow-xs"/, "Admin card must use rounded-sm");
 });
 
 test("DESIGN.md Components: Status labels use rectangular rounded-sm (no bloated pills)", () => {

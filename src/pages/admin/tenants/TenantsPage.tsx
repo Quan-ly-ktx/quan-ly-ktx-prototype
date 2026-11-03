@@ -6,13 +6,10 @@ import {
   PageHeader,
   Select,
 } from "../../../components/common/index.ts";
-import {
-  money,
-  rentalSlots,
-  initialRooms,
-  type TenantRecord,
-} from "../../../data.ts";
-import { isSlotAvailable, slotKey } from "../../../domain.ts";
+import { money } from "../../../utils/formatters.ts";
+import { rentalSlots, initialRooms } from "../../../services/mock/mockData.ts";
+import type { TenantRecord } from "../../../types/tenant.ts";
+import { isSlotAvailable, slotKey } from "../../../utils/roomCalculations.ts";
 
 const emptyTenantForm = {
   name: "",

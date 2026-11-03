@@ -1,6 +1,7 @@
 import { PageHeader } from "../../../components/common/index.ts";
-import { money, type Invoice, type Ticket } from "../../../data.ts";
-import { calculateFinancialSummary } from "../../../domain.ts";
+import { money } from "../../../utils/formatters.ts";
+import type { Invoice, Ticket } from "../../../types/index.ts";
+import { calculateFinancialSummary } from "../../../utils/financialCalculations.ts";
 import { card, th, rowCls, Stat } from "../common.tsx";
 
 export function FinancialPage({

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Button, Drawer } from "../../../components/common/index.ts";
-import { money, person, type Invoice } from "../../../data.ts";
+import { money } from "../../../utils/formatters.ts";
+import { person } from "../../../services/mock/mockData.ts";
+import type { Invoice } from "../../../types/invoice.ts";
 import { card, th, rowCls, Badge, type Toast } from "../common.tsx";
 
 const floors = [

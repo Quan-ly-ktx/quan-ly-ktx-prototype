@@ -8,14 +8,9 @@ import {
   ViolationFields,
   QrCode,
 } from "../../../components/common/index.ts";
-import {
-  money,
-  person,
-  TECHNICIANS,
-  type Priority,
-  type Ticket,
-  type QuickKind,
-} from "../../../data.ts";
+import { money } from "../../../utils/formatters.ts";
+import { person, TECHNICIANS } from "../../../services/mock/mockData.ts";
+import type { Priority, Ticket, QuickKind } from "../../../types/index.ts";
 
 const inputCls =
   "focus-ring h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500";

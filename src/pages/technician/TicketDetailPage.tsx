@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Icon, PriorityTag } from "../../components/common/index.ts";
-import { money } from "../../data.ts";
+import { money } from "../../utils/formatters.ts";
 import type { Ticket } from "../../types/index.ts";
 import { statusStyle, where } from "./technicianConstants.ts";
 

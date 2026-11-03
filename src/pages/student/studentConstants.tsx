@@ -1,5 +1,6 @@
 import { createContext, type ReactNode } from "react";
-import { person, type TicketStatus } from "../../data.ts";
+import { person } from "../../services/mock/mockData.ts";
+import type { TicketStatus } from "../../types/incident.ts";
 
 export type Page = "room" | "invoices" | "vehicles" | "report";
 export type RequestKind = "extend" | "transfer" | "checkout";

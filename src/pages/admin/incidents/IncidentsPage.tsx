@@ -8,7 +8,9 @@ import {
   PriorityTag,
   ViolationFields,
 } from "../../../components/common/index.ts";
-import { money, TECHNICIANS, type Priority, type Ticket } from "../../../data.ts";
+import { money } from "../../../utils/formatters.ts";
+import { TECHNICIANS } from "../../../services/mock/mockData.ts";
+import type { Priority, Ticket } from "../../../types/index.ts";
 import { card, th, rowCls, inputCls, Badge, type Toast } from "../common.tsx";
 
 type Violation = {

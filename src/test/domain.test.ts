@@ -12,8 +12,8 @@ import {
   isSlotAvailable,
   slotKey,
   resolveRole,
-} from "./domain.ts";
-import type { Invoice, RoomRecord, TenantRecord, Ticket } from "./data.ts";
+} from "../utils/index.ts";
+import type { Invoice, RoomRecord, TenantRecord, Ticket } from "../types/index.ts";
 
 const tenant = {
   id: "NT-1",
@@ -159,7 +159,6 @@ test("FR-01 / FR-02: getRoomOccupancy correctly flags newly created vacant room 
 });
 
 test("BR-01 Invariant: canToggleBedMaintenance prevents maintenance on occupied beds", () => {
-  // tenant is in P.101, G01
   assert.equal(canToggleBedMaintenance("P.101", "G01", [tenant]), false);
   assert.equal(canToggleBedMaintenance("P.101", "G02", [tenant]), true);
   assert.equal(canToggleBedMaintenance("P.201", "G01", [tenant]), true);
@@ -186,7 +185,6 @@ test("BR-01: unified price and per-bed maintenance in getRoomOccupancy", () => {
   assert.equal(occupancy.beds[0].status, "MAINTENANCE");
   assert.equal(occupancy.beds[1].status, "MAINTENANCE");
   assert.equal(occupancy.beds[2].status, "AVAILABLE");
-  // All beds have unified room basePrice
   assert.ok(occupancy.beds.every((b) => b.price === 1400000));
 });
 

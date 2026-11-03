@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Button, Drawer, Icon, PageHeader } from "../../../components/common/index.ts";
-import { money, person, type TenantRecord } from "../../../data.ts";
+import { money } from "../../../utils/formatters.ts";
+import { person } from "../../../services/mock/mockData.ts";
+import type { TenantRecord } from "../../../types/tenant.ts";
 import { card, th, rowCls, Badge, type Toast } from "../common.tsx";
 
 type Contract = {
