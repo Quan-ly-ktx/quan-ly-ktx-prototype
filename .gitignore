@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production build
+dist/
+build/
+
+# Cache & Environment
+.cache/
+.env*
+!.env.example
+.vite/
+vite.config.*.timestamp-*
+*.tsbuildinfo
+*-debug.log*
+logs/
+*.log
+
+# Temporary & Cache files
+.tmp/
+.tmp-*
+.figaro/
+.claude-replay.*
+.DS_Store
+Thumbs.db
+*.local
+
+# IDEs & Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Platform state
+/.plugins/
+/.opencode-skills/
