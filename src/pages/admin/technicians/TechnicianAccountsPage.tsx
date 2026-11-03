@@ -1,20 +1,47 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button, Drawer, PageHeader } from "../../../components/common/index.ts";
 import { card, th, rowCls, inputCls, Badge, type Toast } from "../common.tsx";
+import { technicianService } from "../../../services/technicianService.ts";
+import { ApiError } from "../../../services/httpClient.ts";
 
-type TechnicianAccount = { name: string; user: string; active: boolean };
+type TechnicianAccount = {
+  id?: string;
+  name: string;
+  user: string;
+  active: boolean;
+  phone?: string;
+};
 
 export function TechnicianAccountsPage({ showToast }: Toast) {
-  const [staff, setStaff] = useState<TechnicianAccount[]>([
-    { name: "Võ Văn Thịnh", user: "thinh.vv@ktxhub.vn", active: true },
-    { name: "Lâm Quốc Huy", user: "huy.lq@ktxhub.vn", active: false },
-  ]);
-  const [form, setForm] = useState({ name: "", user: "", password: "" });
+  const [staff, setStaff] = useState<TechnicianAccount[]>([]);
+  const [form, setForm] = useState({ name: "", user: "", password: "", phone: "" });
   const [showPw, setShowPw] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
   const cur = staff.find((s) => s.user === sel) ?? null;
 
-  const add = () => {
+  const loadTechnicians = useCallback(async () => {
+    try {
+      const res = await technicianService.getTechnicians();
+      const items = Array.isArray(res) ? res : res.items || [];
+      setStaff(
+        items.map((t) => ({
+          id: t.id,
+          name: t.fullName,
+          user: t.email || t.username || t.phone,
+          active: t.active,
+          phone: t.phone,
+        })),
+      );
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Không thể tải danh sách kỹ thuật viên";
+      showToast(msg);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    loadTechnicians();
+  }, [loadTechnicians]);
+  const add = async () => {
     if (!form.name.trim() || !form.user.trim()) {
       showToast("Vui lòng nhập họ tên và email");
       return;
@@ -27,11 +54,32 @@ export function TechnicianAccountsPage({ showToast }: Toast) {
       showToast("Mật khẩu khởi tạo cần tối thiểu 6 ký tự");
       return;
     }
-    const { password: _pw, ...profile } = form;
-    setStaff([...staff, { ...profile, active: true }]);
-    setForm({ name: "", user: "", password: "" });
-    setShowPw(false);
-    showToast("Đã tạo tài khoản kỹ thuật viên");
+
+    try {
+      const created = await technicianService.createTechnician({
+        fullName: form.name.trim(),
+        email: form.user.trim(),
+        password: form.password,
+        phone: form.phone.trim() || "0900000000",
+      });
+
+      setStaff((prev) => [
+        ...prev,
+        {
+          id: created.id,
+          name: created.fullName,
+          user: created.email || form.user.trim(),
+          active: created.active,
+          phone: created.phone,
+        },
+      ]);
+      setForm({ name: "", user: "", password: "", phone: "" });
+      setShowPw(false);
+      showToast("Đã tạo tài khoản kỹ thuật viên");
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Lỗi khi tạo tài khoản kỹ thuật viên";
+      showToast(msg);
+    }
   };
 
   return (
@@ -169,17 +217,28 @@ export function TechnicianAccountsPage({ showToast }: Toast) {
                   ? "border border-danger-200 text-danger-600 hover:bg-danger-50"
                   : "bg-brand-500 text-white hover:bg-brand-600"
               }`}
-              onClick={() => {
-                setStaff(
-                  staff.map((x) =>
-                    x.user === cur.user ? { ...x, active: !x.active } : x,
-                  ),
-                );
-                showToast(
-                  cur.active
-                    ? `Đã khóa tài khoản ${cur.user}`
-                    : `Đã mở khóa ${cur.user}`,
-                );
+              onClick={async () => {
+                const targetId = cur.id || cur.user;
+                const nextActive = !cur.active;
+                try {
+                  await technicianService.toggleStatus(targetId, nextActive);
+                  setStaff((prev) =>
+                    prev.map((x) =>
+                      x.user === cur.user ? { ...x, active: nextActive } : x,
+                    ),
+                  );
+                  showToast(
+                    cur.active
+                      ? `Đã khóa tài khoản ${cur.user}`
+                      : `Đã mở khóa ${cur.user}`,
+                  );
+                } catch (err) {
+                  const msg =
+                    err instanceof ApiError
+                      ? err.message
+                      : "Không thể thay đổi trạng thái tài khoản";
+                  showToast(msg);
+                }
               }}
             >
               {cur.active ? "Khóa tài khoản" : "Mở khóa tài khoản"}
