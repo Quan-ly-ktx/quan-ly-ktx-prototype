@@ -18,11 +18,11 @@ export function TicketDetailPage({
   const [note, setNote] = useState("");
   const [cost, setCost] = useState("");
   const [afterPhoto, setAfterPhoto] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const steps = ["Tiếp nhận", "Kiểm tra", "Hoàn thành"];
   const stepIndex =
     ticket.status === "Mới giao" ? 0 : ticket.status === "Đang xử lý" ? 1 : 3;
-  const ready = note.trim().length >= 10 && afterPhoto;
 
   return (
     <article className="flex flex-1 flex-col pb-28">
@@ -154,15 +154,31 @@ export function TicketDetailPage({
         </div>
 
         {ticket.status === "Đang xử lý" && (
+          <div className="flex items-center gap-2.5 rounded-sm border border-brand-200 bg-brand-50 p-3 text-xs text-brand-900">
+            <Icon name="tools" className="size-4 shrink-0 text-brand-600" />
+            <span>
+              <b>Đã tiếp nhận:</b> Phiếu đang trong quá trình xử lý. Sau khi hoàn thành kiểm tra sửa chữa, hãy nhập kết quả và chi phí phụ tùng bên dưới.
+            </span>
+          </div>
+        )}
+        {ticket.status === "Đang xử lý" && (
           <form
             className="space-y-4 rounded-sm border border-slate-200 bg-white p-4 shadow-xs"
             onSubmit={(event) => {
               event.preventDefault();
-              if (ready)
-                onComplete({
-                  resolution: note.trim(),
-                  cost: Number(cost) || 0,
-                });
+              setErrorMsg("");
+              if (!afterPhoto) {
+                setErrorMsg("Vui lòng chụp ảnh nghiệm thu sau khi sửa chữa.");
+                return;
+              }
+              if (note.trim().length < 5) {
+                setErrorMsg("Vui lòng nhập mô tả kết quả xử lý (tối thiểu 5 ký tự).");
+                return;
+              }
+              onComplete({
+                resolution: note.trim(),
+                cost: Number(cost) || 0,
+              });
             }}
           >
             <div>
@@ -228,19 +244,18 @@ export function TicketDetailPage({
               </Button>
             </div>
 
+            {errorMsg && (
+              <div className="rounded-sm border border-danger-200 bg-danger-50 p-2.5 text-xs text-danger-700">
+                {errorMsg}
+              </div>
+            )}
             <button
-              className="focus-ring flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-sm bg-success-500 text-sm font-semibold text-white hover:bg-success-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:bg-slate-300"
-              disabled={!ready}
+              className="focus-ring flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-sm bg-success-500 text-sm font-semibold text-white hover:bg-success-600 active:translate-y-[1px]"
               type="submit"
             >
               <Icon name="check" className="size-5" />
               Xác nhận đã xử lý xong
             </button>
-            {!ready && (
-              <p className="text-center text-xs text-slate-500">
-                Cần nhập kết quả (≥10 ký tự) và chụp ảnh sau khi sửa.
-              </p>
-            )}
           </form>
         )}
 

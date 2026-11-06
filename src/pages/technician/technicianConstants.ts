@@ -79,6 +79,7 @@ export const initialNotices: Notice[] = [
 ];
 
 export const statusStyle: Record<TicketStatus, string> = {
+  "Chưa phân công": "status-label-slate",
   "Mới giao": "status-label-brand",
   "Đang xử lý": "status-label-warning",
   "Hoàn thành": "status-label-success",
@@ -88,5 +89,4 @@ export type Profile = {
   name: string;
   phone: string;
   email: string;
-  skill: string;
 };

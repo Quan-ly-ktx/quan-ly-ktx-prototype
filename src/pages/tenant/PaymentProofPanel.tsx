@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button, Icon, QrCode } from "../../components/common/index.ts";
-import { BANK, type TenantInvoice } from "./studentConstants.tsx";
+import { BANK, type TenantInvoice } from "./tenantConstants.tsx";
 
 export function PaymentProofPanel({
   inv,

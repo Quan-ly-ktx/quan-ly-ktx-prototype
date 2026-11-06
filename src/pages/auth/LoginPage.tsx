@@ -9,7 +9,7 @@ import { env } from "../../config/env.ts";
 
 const demoAccounts: { role: Role; label: string; email: string }[] = [
   { role: "manager", label: "Quản lý", email: "manager@gmail.com" },
-  { role: "student", label: "Người thuê", email: "student@gmail.com" },
+  { role: "tenant", label: "Người thuê", email: "tenant@gmail.com" },
   { role: "technician", label: "Kỹ thuật viên", email: "technician@gmail.com" },
 ];
 
@@ -51,7 +51,7 @@ export function LoginPage({
       const role = resolveRole(email);
       if (!role) {
         setError(
-          "Tài khoản Gmail không hợp lệ. Hãy dùng manager@gmail.com, student@gmail.com hoặc technician@gmail.com.",
+          "Tài khoản Gmail không hợp lệ. Hãy dùng manager@gmail.com, tenant@gmail.com hoặc technician@gmail.com.",
         );
         return;
       }
@@ -269,7 +269,7 @@ export function LoginPage({
               </span>
               <span className="relative block">
                 <Icon
-                  name="students"
+                  name="tenants"
                   className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
                 />
                 <input

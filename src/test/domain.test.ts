@@ -13,7 +13,7 @@ import {
   slotKey,
   resolveRole,
 } from "../utils/index.ts";
-import type { Invoice, RoomRecord, TenantRecord, Ticket } from "../types/index.ts";
+import type { Invoice, RoomRecord, TenantRecord, Ticket, FacilityExpense } from "../types/index.ts";
 
 const tenant = {
   id: "NT-1",
@@ -49,7 +49,7 @@ test("cash confirmation records amount, method, timestamp and manager", () => {
     late: 2,
   };
   const paid = confirmCashPayment(invoice, "Thu Lan", "06/10/2026 10:00");
-  assert.equal(paid.payment?.amount, 1010000);
+  assert.equal(paid.payment?.amount, 1000000);
   assert.equal(paid.payment?.method, "Tiền mặt");
   assert.equal(paid.payment?.confirmedBy, "Thu Lan");
   assert.throws(() => confirmCashPayment(paid, "Thu Lan", "06/10/2026 10:01"));
@@ -86,11 +86,20 @@ test("financial summary uses unique received payments and repair costs", () => {
     hasPhoto: false,
     cost: 200000,
   } satisfies Ticket;
-  const summary = calculateFinancialSummary([paid, paid], [repair, repair]);
+  const expense: FacilityExpense = {
+    id: "EXP-1",
+    category: "Điện EVN",
+    title: "Tiền điện tổng tháng 10",
+    amount: 300000,
+    expenseDate: "20/10/2026",
+  };
+  const summary = calculateFinancialSummary([paid, paid], [repair, repair], [expense, expense]);
   assert.deepEqual(summary, {
     collectedRevenue: 1000000,
     repairExpenses: 200000,
-    profit: 800000,
+    facilityTotal: 300000,
+    profit: 500000,
+    netProfit: 500000,
   });
 });
 
@@ -189,7 +198,8 @@ test("BR-01: unified price and per-bed maintenance in getRoomOccupancy", () => {
 });
 
 test("resolveRole parses email domain and prefixes correctly", () => {
-  assert.equal(resolveRole("student@gmail.com"), "student");
+  assert.equal(resolveRole("tenant@gmail.com"), "tenant");
+  assert.equal(resolveRole("student@gmail.com"), "tenant");
   assert.equal(resolveRole("tech@gmail.com"), "technician");
   assert.equal(resolveRole("manager@gmail.com"), "manager");
   assert.equal(resolveRole("admin@gmail.com"), "manager");

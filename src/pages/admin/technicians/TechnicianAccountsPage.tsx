@@ -243,15 +243,6 @@ export function TechnicianAccountsPage({ showToast }: Toast) {
             >
               {cur.active ? "Khóa tài khoản" : "Mở khóa tài khoản"}
             </Button>
-            <Button
-              label="Đặt lại mật khẩu"
-              className="h-10 rounded-sm border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={() =>
-                showToast(`Đã gửi liên kết đặt lại mật khẩu cho ${cur.user}`)
-              }
-            >
-              Đặt lại mật khẩu
-            </Button>
           </div>
         </Drawer>
       )}

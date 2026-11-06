@@ -70,7 +70,6 @@ export function SettingsTab({
               ["Họ và tên", "name", "text"],
               ["Số điện thoại", "phone", "tel"],
               ["Email đăng nhập", "email", "email"],
-              ["Chuyên môn", "skill", "text"],
             ] as const
           ).map(([label, key, type]) => (
             <label className="block" key={key}>
@@ -113,7 +112,7 @@ export function SettingsTab({
     {
       icon: "user" as const,
       label: "Thông tin cá nhân",
-      hint: "Họ tên, số điện thoại, chuyên môn",
+      hint: "Họ tên, số điện thoại",
       action: () => {
         setDraft(profile);
         setEditing(true);
@@ -147,11 +146,6 @@ export function SettingsTab({
             </div>
             <div className="truncate font-mono text-xs text-slate-500">
               {profile.email}
-            </div>
-            <div className="mt-1 flex gap-1.5 text-xs font-semibold">
-              <span className="rounded-sm bg-brand-50 px-2 py-0.5 font-mono text-[11px] text-brand-700">
-                {profile.skill}
-              </span>
             </div>
           </div>
         </div>

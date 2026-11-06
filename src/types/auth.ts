@@ -1,6 +1,6 @@
-export type Role = "manager" | "student" | "technician";
+export type Role = "manager" | "tenant" | "technician";
 
-export const ROLES: Role[] = ["manager", "student", "technician"];
+export const ROLES: Role[] = ["manager", "tenant", "technician"];
 
 export type Person = {
   name: string;

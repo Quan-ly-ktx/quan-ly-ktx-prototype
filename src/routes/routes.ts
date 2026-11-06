@@ -23,7 +23,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "VẬN HÀNH",
     items: [
-      { label: "Người thuê", icon: "students" },
+      { label: "Người thuê", icon: "tenants" },
       { label: "Phương tiện", icon: "clipboard" },
       { label: "Hợp đồng", icon: "contract" },
       { label: "Hóa đơn", icon: "invoice", badge: "12" },
@@ -42,6 +42,7 @@ export function getRouteByRole(role: Role | "admin"): string {
     case "manager":
     case "admin":
       return "Bảng điều khiển";
+    case "tenant":
     case "student":
       return "portal";
     case "technician":

@@ -11,6 +11,7 @@ import {
 import { money } from "../../../utils/formatters.ts";
 import { person, TECHNICIANS } from "../../../services/mock/mockData.ts";
 import type { Priority, Ticket, QuickKind } from "../../../types/index.ts";
+import { technicianService } from "../../../services/technicianService.ts";
 export type { QuickKind };
 const inputCls =
   "focus-ring h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500";
@@ -62,9 +63,9 @@ function Success({
   );
 }
 
-const techInfo: Record<string, { skill: string; load: number }> = {
-  "Võ Văn Thịnh": { skill: "Điện nước", load: 3 },
-  "Lâm Quốc Huy": { skill: "Điều hòa · Nội thất", load: 1 },
+const techInfo: Record<string, { load: number }> = {
+  "Võ Văn Thịnh": { load: 3 },
+  "Lâm Quốc Huy": { load: 1 },
 };
 
 function DispatchBody({
@@ -73,14 +74,29 @@ function DispatchBody({
   onClose,
 }: {
   tickets: Ticket[];
-  onAssign: (id: string, tech?: string, priority?: Priority) => void;
+  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => void;
   onClose: () => void;
 }) {
   const open = tickets.filter((t) => t.status !== "Hoàn thành");
   const [ticketId, setTicketId] = useState(
     open.find((t) => !t.assignee)?.id ?? open[0]?.id ?? "",
   );
-  const [tech, setTech] = useState(TECHNICIANS[1]);
+  const [tech, setTech] = useState(TECHNICIANS[0]);
+  const [activeTechs, setActiveTechs] = useState<string[]>([]);
+
+  useEffect(() => {
+    technicianService
+      .getTechnicians({ active: true })
+      .then((res) => {
+        const items = Array.isArray(res) ? res : res.items || [];
+        const names = items.filter((t) => t.active).map((t) => t.fullName);
+        setActiveTechs(names.length > 0 ? names : [TECHNICIANS[0]]);
+        if (names.length > 0) setTech(names[0]);
+      })
+      .catch(() => {
+        setActiveTechs([TECHNICIANS[0]]);
+      });
+  }, []);
   const [done, setDone] = useState(false);
   const [prio, setPrio] = useState<Priority | null>(null);
   const cur = open.find((t) => t.id === ticketId);
@@ -142,7 +158,7 @@ function DispatchBody({
           Chọn kỹ thuật viên
         </h3>
         <div className="grid grid-cols-2 gap-2">
-          {TECHNICIANS.map((n) => (
+          {activeTechs.map((n) => (
             <Button
               key={n}
               label={n}
@@ -154,7 +170,7 @@ function DispatchBody({
               onClick={() => setTech(n)}
             >
               <span className="block text-sm font-semibold text-slate-900">{n}</span>
-              <span className="block text-xs text-slate-500">{techInfo[n]?.skill}</span>
+              <span className="block text-xs text-slate-500">Kỹ thuật viên</span>
               <span className="mt-2 block text-xs font-medium text-brand-700">
                 {techInfo[n]?.load} việc đang làm
               </span>
@@ -240,7 +256,7 @@ function ReceiptBody({ onClose }: { onClose: () => void }) {
           {[
             "Tiền phòng tháng 11",
             "Tiền cọc giữ chỗ",
-            "Phí phạt trễ hạn",
+            "Khoản thu khác",
             "Phí dịch vụ giặt ủi",
           ].map((o) => (
             <option key={o}>{o}</option>
@@ -414,7 +430,7 @@ export function QuickModals({
 }: {
   kind: QuickKind;
   tickets: Ticket[];
-  onAssign: (id: string, tech?: string, priority?: Priority) => void;
+  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => void;
   onClose: () => void;
 }) {
   return (

@@ -22,6 +22,7 @@ export type IconName =
   | "search"
   | "settings"
   | "students"
+  | "tenants"
   | "tools"
   | "trend"
   | "userPlus"

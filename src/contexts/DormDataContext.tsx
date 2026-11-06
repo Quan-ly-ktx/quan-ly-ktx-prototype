@@ -73,9 +73,22 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
   };
 
   const onUpdateTicket = async (id: string, patch: Partial<Ticket>): Promise<Ticket> => {
-    const updated = await dormService.updateTicket(id, patch);
-    setTickets((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    return updated;
+    let localUpdated: Ticket | undefined;
+    setTickets((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          localUpdated = { ...t, ...patch };
+          return localUpdated;
+        }
+        return t;
+      }),
+    );
+    try {
+      const persisted = await dormService.updateTicket(id, patch);
+      return persisted;
+    } catch {
+      return localUpdated || ({ id, ...patch } as Ticket);
+    }
   };
   const onCreateRoom = async (roomData: RoomRecord): Promise<RoomRecord> => {
     const created = await dormService.createRoom(roomData);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button, Icon, Modal } from "../../components/common/index.ts";
-import type { TenantVehicle } from "./studentConstants.tsx";
+import type { TenantVehicle } from "./tenantConstants.tsx";
 
 export function TenantVehiclesPage({
   vehicles,
@@ -26,6 +26,8 @@ export function TenantVehiclesPage({
       back,
   );
 
+  const activeVehicles = vehicles.filter((v) => v.cardStatus !== "Đã thu hồi");
+  const hasVehicle = activeVehicles.length >= 1;
   useEffect(() => {
     return () => {
       if (front) URL.revokeObjectURL(front);
@@ -34,17 +36,22 @@ export function TenantVehiclesPage({
   }, [front, back]);
 
   const submit = () => {
-    if (!valid) return;
+    if (!valid || hasVehicle) {
+      if (hasVehicle) showToast("Mỗi khách thuê chỉ được đăng ký tối đa 01 phương tiện");
+      return;
+    }
     onVehiclesChange([
       {
         id: `XE-${String(vehicles.length + 1).padStart(3, "0")}`,
+        tenantId: "NT-0187",
         plate: plate.trim().toUpperCase(),
         type,
         brand: brand.trim(),
         color: color.trim(),
+        registration: "Đủ 2 mặt",
+        cardStatus: "Chưa cấp thẻ",
         status: "Chờ duyệt",
       },
-      ...vehicles,
     ]);
     setOpen(false);
     setPlate("");
@@ -70,14 +77,57 @@ export function TenantVehiclesPage({
             giữ xe.
           </p>
         </div>
-        <Button
-          className="h-10 rounded-sm bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-          onClick={() => setOpen(true)}
-        >
-          Đăng ký xe mới
-        </Button>
+        {hasVehicle ? (
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              className="h-10 rounded-sm border border-slate-200 bg-slate-100 px-4 text-xs font-semibold text-slate-400 cursor-not-allowed"
+              disabled
+              title="Mỗi khách thuê chỉ được đăng ký tối đa 01 phương tiện gửi hầm KTX"
+            >
+              Đã đủ hạn mức (1 xe/người)
+            </Button>
+            <span className="text-[11px] text-slate-500">
+              * Quy định: Tối đa 01 xe/khách thuê
+            </span>
+          </div>
+        ) : (
+          <Button
+            className="h-10 rounded-sm bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
+            onClick={() => setOpen(true)}
+          >
+            + Đăng ký xe mới
+          </Button>
+        )}
       </section>
 
+      {hasVehicle && (
+        <div className="mb-6 flex items-start gap-3 rounded-sm border border-brand-100 bg-brand-50/70 p-4 text-xs text-brand-900 leading-relaxed">
+          <Icon name="check" className="mt-0.5 size-4 shrink-0 text-brand-600" />
+          <div>
+            <span className="font-semibold">Hạn mức gửi xe KTX:</span> Bạn đã đăng ký 01 phương tiện gửi hầm (miễn phí trọn gói 100% theo tiền phòng). Nếu cần đổi xe hoặc cập nhật lại biển số mới, vui lòng liên hệ trực tiếp Ban Quản lý để thu hồi thẻ xe cũ.
+          </div>
+        </div>
+      )}
+
+      {vehicles.length === 0 && (
+        <div className="rounded-sm border border-dashed border-slate-300 bg-white p-12 text-center">
+          <span className="mx-auto grid size-12 place-items-center rounded-sm bg-brand-50 text-brand-600">
+            <Icon name="clipboard" className="size-6" />
+          </span>
+          <h3 className="mt-3 font-heading text-sm font-bold text-slate-900">
+            Chưa có phương tiện nào
+          </h3>
+          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
+            Mỗi khách thuê được đăng ký miễn phí 01 xe máy hoặc xe điện gửi hầm KTX. Bấm nút phía trên để khai báo thông tin xe.
+          </p>
+          <Button
+            className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-sm bg-brand-500 px-4 text-xs font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
+            onClick={() => setOpen(true)}
+          >
+            + Khai báo xe máy ngay
+          </Button>
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-2">
         {vehicles.map((vehicle) => (
           <article
@@ -90,12 +140,14 @@ export function TenantVehiclesPage({
               </div>
               <span
                 className={`status-label ${
-                  vehicle.status === "Đã cấp thẻ xe"
+                  vehicle.cardStatus === "Đã cấp thẻ" || vehicle.status === "Đã cấp thẻ xe"
                     ? "status-label-success"
                     : "status-label-warning"
                 }`}
               >
-                {vehicle.status}
+                {vehicle.cardStatus === "Đã cấp thẻ" || vehicle.status === "Đã cấp thẻ xe"
+                  ? "Đã cấp thẻ xe"
+                  : "Chờ duyệt"}
                 {vehicle.cardCode ? ` · ${vehicle.cardCode}` : ""}
               </span>
             </div>

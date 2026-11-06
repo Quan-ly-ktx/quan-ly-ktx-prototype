@@ -109,7 +109,7 @@ export function AuthProvider({
           ? "Quản lý KTX"
           : roleOrCredentials === "technician"
             ? "Kỹ thuật viên"
-            : "Sinh viên",
+            : "Người thuê",
       email: `${roleOrCredentials}@ktxhub.vn`,
       role: roleOrCredentials,
     });

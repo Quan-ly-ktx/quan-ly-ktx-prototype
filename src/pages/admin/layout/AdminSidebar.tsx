@@ -12,7 +12,7 @@ export const navGroups = [
   {
     label: "VẬN HÀNH",
     items: [
-      { label: "Người thuê", icon: "students" as IconName },
+      { label: "Người thuê", icon: "tenants" as IconName },
       { label: "Phương tiện", icon: "clipboard" as IconName },
       { label: "Hợp đồng", icon: "contract" as IconName },
       { label: "Hóa đơn", icon: "invoice" as IconName, badge: "12" },

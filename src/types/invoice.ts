@@ -39,3 +39,17 @@ export type TenantInvoice = {
   service: number;
   proof?: { name: string; time: string };
 };
+
+export type FacilityExpenseCategory = "Điện EVN" | "Nước" | "Internet" | "Khác";
+
+export type FacilityExpense = {
+  id: string;
+  category: FacilityExpenseCategory;
+  title: string;
+  amount: number;
+  expenseDate: string;
+  invoiceCode?: string;
+  receiptImage?: string;
+  note?: string;
+  createdAt?: string;
+};

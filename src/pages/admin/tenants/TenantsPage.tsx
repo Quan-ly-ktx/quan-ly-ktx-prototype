@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   Icon,
@@ -9,6 +9,7 @@ import {
 import { money } from "../../../utils/formatters.ts";
 import { rentalSlots, initialRooms } from "../../../services/mock/mockData.ts";
 import type { TenantRecord } from "../../../types/tenant.ts";
+import type { Invoice } from "../../../types/index.ts";
 import { isSlotAvailable, slotKey } from "../../../utils/roomCalculations.ts";
 
 const emptyTenantForm: {
@@ -38,23 +39,58 @@ const emptyTenantForm: {
 export function TenantsPage({
   tenants,
   onTenantsChange,
+  invoices = [],
+  initialSlot = null,
+  onClearInitialSlot,
   showToast,
 }: {
   tenants: TenantRecord[];
   onTenantsChange: (tenants: TenantRecord[]) => void;
+  invoices?: Invoice[];
+  initialSlot?: { roomCode: string; bedCode: string } | null;
+  onClearInitialSlot?: () => void;
   showToast: (message: string) => void;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<TenantRecord | null>(null);
   const [profileTab, setProfileTab] = useState("Thông tin cá nhân");
   const [query, setQuery] = useState("");
+  const [roomFilter, setRoomFilter] = useState("Tất cả phòng");
+  const [statusFilter, setStatusFilter] = useState("Tất cả trạng thái");
   const [form, setForm] = useState(emptyTenantForm);
+  const [createdAccountModal, setCreatedAccountModal] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    roomBed: string;
+    initialPassword: string;
+  } | null>(null);
 
-  const filtered = tenants.filter((tenant) =>
-    `${tenant.cccd} ${tenant.email} ${tenant.name} ${tenant.phone} ${tenant.room} ${tenant.bed}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  useEffect(() => {
+    if (initialSlot) {
+      const room = initialRooms.find((r) => r.code === initialSlot.roomCode);
+      const gender = room?.gender ?? "Nam";
+      setForm({
+        ...emptyTenantForm,
+        gender,
+        slot: slotKey(initialSlot.roomCode, initialSlot.bedCode),
+      });
+      setAddOpen(true);
+      onClearInitialSlot?.();
+    }
+  }, [initialSlot, onClearInitialSlot]);
+
+  const filtered = tenants.filter((tenant) => {
+    if (roomFilter !== "Tất cả phòng" && tenant.room !== roomFilter) return false;
+    if (statusFilter !== "Tất cả trạng thái" && tenant.status !== statusFilter) return false;
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      return `${tenant.cccd} ${tenant.email} ${tenant.name} ${tenant.phone} ${tenant.room} ${tenant.bed}`
+        .toLowerCase()
+        .includes(q);
+    }
+    return true;
+  });
 
   const availableSlots = rentalSlots.filter((slot) => {
     if (slot.status !== "Sẵn sàng") return false;
@@ -110,9 +146,17 @@ export function TenantsPage({
       deposit: Number(form.deposit) || chosenSlot.monthlyRent,
       status: "Đang thuê",
     };
+    const initialPassword = "Password123@";
     onTenantsChange([tenant, ...tenants]);
     setForm(emptyTenantForm);
     setAddOpen(false);
+    setCreatedAccountModal({
+      name: tenant.name,
+      email: tenant.email,
+      phone: tenant.phone,
+      roomBed: `${tenant.room} · ${tenant.bed}`,
+      initialPassword,
+    });
     showToast(
       `Đã tạo hồ sơ và gán ${tenant.room}-${tenant.bed} cho ${tenant.name}`,
     );
@@ -125,30 +169,20 @@ export function TenantsPage({
         title="Hồ sơ người thuê"
         description="Quản lý thông tin định danh, vị trí thuê và hợp đồng của người đang thuê."
         actions={
-          <>
-            <Button
-              className="flex h-10 items-center gap-2 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={() =>
-                showToast(`Đã xuất ${tenants.length} hồ sơ người thuê`)
-              }
-            >
-              <Icon name="report" className="size-4" /> Xuất Excel
-            </Button>
-            <Button
-              className="flex h-10 items-center gap-2 rounded-sm bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-              onClick={() => {
-                setForm({
-                  ...emptyTenantForm,
-                  slot: availableSlots[0]
-                    ? slotKey(availableSlots[0].room, availableSlots[0].bed)
-                    : "",
-                });
-                setAddOpen(true);
-              }}
-            >
-              <Icon name="userPlus" className="size-4" /> Thêm người thuê
-            </Button>
-          </>
+          <Button
+            className="flex h-10 items-center gap-2 rounded-sm bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
+            onClick={() => {
+              setForm({
+                ...emptyTenantForm,
+                slot: availableSlots[0]
+                  ? slotKey(availableSlots[0].room, availableSlots[0].bed)
+                  : "",
+              });
+              setAddOpen(true);
+            }}
+          >
+            <Icon name="userPlus" className="size-4" /> Thêm người thuê
+          </Button>
         }
       />
       <section className="mb-4 rounded-sm border border-slate-200 bg-white p-3.5 shadow-xs">
@@ -168,23 +202,23 @@ export function TenantsPage({
           </label>
           <Select
             label="Phòng"
-            value="Tất cả phòng"
+            value={roomFilter}
             options={[
               "Tất cả phòng",
-              ...Array.from(new Set(tenants.map((tenant) => tenant.room))),
+              ...Array.from(new Set(tenants.map((tenant) => tenant.room))).sort(),
             ]}
-            onChange={() => undefined}
+            onChange={(val) => setRoomFilter(val)}
           />
           <Select
             label="Trạng thái"
-            value="Tất cả trạng thái"
+            value={statusFilter}
             options={[
               "Tất cả trạng thái",
               "Đang thuê",
               "Sắp hết HĐ",
               "Đã trả phòng",
             ]}
-            onChange={() => undefined}
+            onChange={(val) => setStatusFilter(val)}
           />
         </div>
       </section>
@@ -501,22 +535,63 @@ export function TenantsPage({
               </dl>
             )}
             {profileTab === "Hợp đồng & Cọc" && (
-              <div className="grid gap-3 rounded-sm border border-brand-200 bg-brand-50 p-4 sm:grid-cols-3">
-                {[
-                  ["Phòng / Vị trí", `${selected.room} · ${selected.bed}`],
-                  ["Giá thuê", money(selected.monthlyRent)],
-                  ["Tiền cọc", money(selected.deposit)],
-                  ["Ngày bắt đầu", selected.start],
-                  ["Ngày kết thúc", selected.end],
-                  ["Thời hạn", "1 năm"],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <div className="text-xs text-brand-700">{label}</div>
-                    <div className="mt-1 font-mono text-sm font-bold text-slate-900">
-                      {value}
+              <div className="space-y-4">
+                <div className="grid gap-3 rounded-sm border border-brand-200 bg-brand-50 p-4 sm:grid-cols-3">
+                  {[
+                    ["Phòng / Vị trí", `${selected.room} · ${selected.bed}`],
+                    ["Giá thuê", money(selected.monthlyRent)],
+                    ["Tiền cọc", money(selected.deposit)],
+                    ["Ngày bắt đầu", selected.start],
+                    ["Ngày kết thúc", selected.end],
+                    ["Thời hạn", "1 năm"],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <div className="text-xs text-brand-700">{label}</div>
+                      <div className="mt-1 font-mono text-sm font-bold text-slate-900">
+                        {value}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                {(() => {
+                  const myInvoices = invoices.filter((i) => i.tenant === selected.name);
+                  const unpaidInvoice = myInvoices.find((i) => i.status === "Nợ");
+                  const pendingInvoice = myInvoices.find((i) => i.status === "Chờ xác nhận");
+
+                  const detailDesc = unpaidInvoice
+                    ? `Đang nợ hóa đơn: ${money(unpaidInvoice.amount)} (Hạn nộp: ${unpaidInvoice.due})`
+                    : pendingInvoice
+                      ? `Hóa đơn ${money(pendingInvoice.amount)} đang chờ xác nhận biên lai`
+                      : myInvoices.length > 0
+                        ? "Đã hoàn thành thanh toán mọi kỳ hóa đơn"
+                        : "Không có hóa đơn nợ đọng";
+
+                  const badgeLabel = unpaidInvoice
+                    ? "Còn nợ tiền phòng"
+                    : pendingInvoice
+                      ? "Chờ xác nhận"
+                      : "Đã đóng đủ";
+
+                  return (
+                    <div className="rounded-sm border border-slate-200 bg-slate-50 p-3.5 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs text-slate-500">Tình trạng công nợ hiện thời</div>
+                        <div className="font-medium text-xs text-slate-800 mt-0.5">{detailDesc}</div>
+                      </div>
+                      <span
+                        className={`status-label ${
+                          unpaidInvoice
+                            ? "bg-danger-50 text-danger-700 border border-danger-200"
+                            : pendingInvoice
+                              ? "status-label-warning"
+                              : "status-label-success"
+                        }`}
+                      >
+                        {badgeLabel}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {profileTab === "Kỷ luật & Vi phạm" && (
@@ -534,6 +609,70 @@ export function TenantsPage({
                 </div>
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+      {createdAccountModal && (
+        <Modal
+          title="Cấp tài khoản khách thuê mới"
+          description="Hồ sơ đã được lưu và tài khoản đăng nhập Cổng thông tin di động đã được cấp phát."
+          onClose={() => setCreatedAccountModal(null)}
+        >
+          <div className="space-y-4 p-6">
+            <div className="rounded-sm border border-success-200 bg-success-50 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-success-800">
+                <Icon name="check" className="size-4" />
+                Cấp tài khoản thành công cho {createdAccountModal.name}
+              </div>
+              <p className="mt-1 text-xs text-success-700">
+                Vị trí giường: <b>{createdAccountModal.roomBed}</b>. Gửi thông tin đăng nhập này cho khách thuê để đăng nhập trên di động.
+              </p>
+            </div>
+
+            <div className="rounded-sm border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Tên đăng nhập (Email):</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {createdAccountModal.email}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Số điện thoại:</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {createdAccountModal.phone}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Mật khẩu ban đầu:</span>
+                <span className="rounded-sm border border-brand-200 bg-brand-50 px-2.5 py-0.5 font-mono text-xs font-bold text-brand-700">
+                  {createdAccountModal.initialPassword}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500">
+              * Khách thuê được khuyến nghị đổi mật khẩu cá nhân sau lần đăng nhập đầu tiên.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                className="flex items-center gap-1.5 h-10 rounded-sm border border-slate-200 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => {
+                  const content = `[KTX Hub] Thông tin tài khoản của ${createdAccountModal.name}:\n- Tên đăng nhập: ${createdAccountModal.email}\n- Mật khẩu: ${createdAccountModal.initialPassword}\n- Vị trí: ${createdAccountModal.roomBed}\nVui lòng đăng nhập trên điện thoại để xem thẻ phòng và thanh toán hóa đơn.`;
+                  navigator.clipboard?.writeText(content);
+                  showToast("Đã sao chép thông tin tài khoản vào Clipboard!");
+                }}
+              >
+                <Icon name="copy" className="size-3.5" />
+                Sao chép gửi khách
+              </Button>
+              <Button
+                className="h-10 rounded-sm bg-brand-500 px-5 text-sm font-semibold text-white hover:bg-brand-600"
+                onClick={() => setCreatedAccountModal(null)}
+              >
+                Hoàn tất
+              </Button>
+            </div>
           </div>
         </Modal>
       )}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Icon, Modal } from "../../components/common/index.ts";
-import { requestConfig, type RequestKind } from "./studentConstants.tsx";
+import { requestConfig, type RequestKind } from "./tenantConstants.tsx";
 
 export function RequestModal({
   kind,

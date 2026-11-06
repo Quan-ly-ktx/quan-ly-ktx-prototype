@@ -1,7 +1,7 @@
 import type { Invoice } from "../types/index.ts";
 
 export function totalInvoiceDue(invoice: Invoice): number {
-  return invoice.amount + (invoice.late ? invoice.late * 5000 : 0);
+  return invoice.amount;
 }
 
 export function confirmCashPayment(

@@ -16,7 +16,6 @@ import { card, th, rowCls, Badge, SearchBox, Stat, type Toast } from "../common.
 
 const invTone = (s: Invoice["status"]) =>
   s === "Đã thu" ? "success" : s === "Chờ xác nhận" ? "warning" : "danger";
-const penaltyOf = (i: Invoice) => (i.late ? i.late * 5000 : 0);
 
 export function InvoicesPage({
   records,
@@ -76,7 +75,7 @@ export function InvoicesPage({
       <PageHeader
         eyebrow="Hóa đơn"
         title="Hóa đơn tiền phòng & dịch vụ"
-        description="Hóa đơn phát hành hằng tháng, hạn thanh toán ngày 05; phạt 5.000 đ/ngày kể từ ngày 06."
+        description="Hóa đơn phát hành tự động hằng tháng vào ngày 25, hạn thanh toán cố định ngày 05."
         actions={
           <>
             <Button
@@ -111,11 +110,11 @@ export function InvoicesPage({
         <Stat
           icon="alert"
           tone="danger"
-          label="Nợ quá hạn (gồm phí phạt)"
+          label="Nợ quá hạn"
           value={money(
             records
               .filter((i) => i.status === "Nợ" && i.late)
-              .reduce((t, i) => t + totalInvoiceDue(i), 0),
+              .reduce((t, i) => t + i.amount, 0),
           )}
           hint={`${records.filter((i) => i.status === "Nợ" && i.late).length} hóa đơn`}
         />
@@ -235,12 +234,6 @@ export function InvoicesPage({
               ["Email", person(selected.tenant).email],
               ["Khoản thu", selected.kind ?? "Tiền phòng tháng 10"],
               ["Số tiền", money(selected.amount)],
-              [
-                "Phí phạt trễ hạn",
-                selected.late
-                  ? `${money(penaltyOf(selected))} (${selected.late} ngày)`
-                  : "—",
-              ],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-4 px-4 py-4">
                 <dt className="text-slate-500">{k}</dt>
@@ -252,7 +245,7 @@ export function InvoicesPage({
                 Tổng cần thanh toán
               </dt>
               <dd className="font-heading text-lg font-bold text-brand-700">
-                {money(selected.amount + penaltyOf(selected))}
+                {money(selected.amount)}
               </dd>
             </div>
           </dl>
@@ -361,13 +354,6 @@ export function InvoicesPage({
                 Xác nhận thanh toán tiền mặt
               </Button>
             )}
-            <Button
-              label="Gửi nhắc"
-              className="h-10 rounded-sm border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={() => showToast(`Đã gửi hóa đơn tới ${selected.tenant}`)}
-            >
-              Gửi hóa đơn qua Zalo / Email
-            </Button>
           </div>
         </Drawer>
       )}

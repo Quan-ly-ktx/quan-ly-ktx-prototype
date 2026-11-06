@@ -35,9 +35,9 @@ test("src/types exports all core domain interfaces and constants", () => {
   assert.ok(Types !== undefined, "Types module must be resolvable");
   assert.ok(Array.isArray(Types.ROLES), "ROLES must be exported as an array");
   assert.ok(Array.isArray(Types.PRIORITIES), "PRIORITIES must be exported as an array");
-  const role: Role = "student";
+  const role: Role = "tenant";
   const priority: Priority = "Khẩn cấp";
-  assert.equal(role, "student");
+  assert.equal(role, "tenant");
   assert.equal(priority, "Khẩn cấp");
 });
 

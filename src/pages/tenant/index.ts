@@ -1,4 +1,4 @@
-export * from "./studentConstants.tsx";
+export * from "./tenantConstants.tsx";
 export * from "./RoomPage.tsx";
 export * from "./ReportPage.tsx";
 export * from "./TenantVehiclesPage.tsx";
@@ -6,3 +6,4 @@ export * from "./PaymentProofPanel.tsx";
 export * from "./TenantInvoicesPage.tsx";
 export * from "./RequestModal.tsx";
 export * from "./TenantPortalPage.tsx";
+export * from "./NotificationsDrawer.tsx";

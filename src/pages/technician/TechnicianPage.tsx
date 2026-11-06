@@ -30,7 +30,6 @@ export function TechnicianApp({
     name: "Võ Văn Thịnh",
     phone: "0908 112 245",
     email: "technician@gmail.com",
-    skill: "Điện nước",
   });
 
   const initials = profile.name
@@ -54,8 +53,8 @@ export function TechnicianApp({
           <TicketDetailPage
             key={selected.id}
             onBack={() => setSelectedId(null)}
-            onComplete={(patch) => {
-              onUpdate(selected.id, { ...patch, status: "Hoàn thành" });
+            onComplete={async (patch) => {
+              await onUpdate(selected.id, { ...patch, status: "Hoàn thành" });
               showToast(
                 `Đã hoàn thành ${selected.id}, thông báo gửi quản lý và người thuê`,
               );
@@ -63,7 +62,7 @@ export function TechnicianApp({
             }}
             onStart={() => {
               onUpdate(selected.id, { status: "Đang xử lý" });
-              showToast(`Đã nhận ${selected.id}`);
+              showToast(`Đã nhận việc ${selected.id} - Bắt đầu xử lý`);
             }}
             ticket={selected}
           />

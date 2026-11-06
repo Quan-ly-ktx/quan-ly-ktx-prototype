@@ -1,16 +1,23 @@
 import { useState } from "react";
 import { AccountMenu, Button, Icon, type IconName } from "../../components/common/index.ts";
 import type { Ticket } from "../../types/incident.ts";
+import type { Invoice } from "../../types/invoice.ts";
 import {
   DEMO_TENANT,
   demoInvoices,
   initialTenantVehicles,
+  initialTenantNotifications,
+  initialPersonalViolations,
   TenantCtx,
   type Page,
   type RequestKind,
   type TenantInfo,
   type TenantInvoice,
-} from "./studentConstants.tsx";
+  type TenantVehicle,
+  type TenantNotification,
+  type PersonalViolation,
+} from "./tenantConstants.tsx";
+import { NotificationsDrawer } from "./NotificationsDrawer.tsx";
 import { RoomPage } from "./RoomPage.tsx";
 import { TenantInvoicesPage } from "./TenantInvoicesPage.tsx";
 import { TenantVehiclesPage } from "./TenantVehiclesPage.tsx";
@@ -19,26 +26,99 @@ import { RequestModal } from "./RequestModal.tsx";
 
 export function TenantPortal({
   tickets,
+  invoices: externalInvoices,
+  onInvoicesChange,
+  vehicles: externalVehicles,
+  onVehiclesChange,
   onCreateTicket,
   onLogout,
   showToast,
 }: {
   tickets: Ticket[];
+  invoices?: Invoice[];
+  onInvoicesChange?: (invoices: Invoice[]) => void;
+  vehicles?: TenantVehicle[];
+  onVehiclesChange?: (vehicles: TenantVehicle[]) => void;
   onCreateTicket: (ticket: Ticket) => void;
   onLogout: () => void;
   showToast: (message: string) => void;
 }) {
   const TENANT: TenantInfo = DEMO_TENANT;
   const [proofSubmitted, setProofSubmitted] = useState<string[]>([]);
-  const invoices: TenantInvoice[] = demoInvoices.map((i) =>
-    proofSubmitted.includes(i.id) ? { ...i, status: "Chờ xác nhận" } : i,
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<TenantNotification[]>(initialTenantNotifications);
+  const [violations, setViolations] = useState<PersonalViolation[]>(initialPersonalViolations);
+  const unreadNoticesCount = notifications.filter((n) => !n.read).length;
+  const myDormInvoices = externalInvoices?.filter(
+    (inv) => inv.tenant === TENANT.name || inv.tenant === "Nguyễn Hoàng Nam",
   );
-  const [vehicles, setVehicles] = useState(initialTenantVehicles);
+  const invoices: TenantInvoice[] =
+    myDormInvoices && myDormInvoices.length > 0
+      ? myDormInvoices.map((inv) => {
+          const isPending =
+            inv.status === "Chờ xác nhận" || proofSubmitted.includes(inv.id);
+          const status =
+            inv.status === "Đã thu"
+              ? ("Đã thanh toán" as const)
+              : isPending
+                ? ("Chờ xác nhận" as const)
+                : ("Chưa thanh toán" as const);
+          return {
+            id: inv.id,
+            title:
+              inv.kind ??
+              `Tiền phòng ${inv.due.split("/")[1] ? `tháng ${inv.due.split("/")[1]}/${inv.due.split("/")[2]}` : ""}`,
+            items: [[inv.kind ?? "Tiền phòng trọn gói", inv.amount]],
+            amount: inv.amount,
+            due: inv.due,
+            status,
+            paidAt: inv.payment?.paidAt ?? "",
+          };
+        })
+      : demoInvoices.map((i) =>
+          proofSubmitted.includes(i.id)
+            ? { ...i, status: "Chờ xác nhận" as const }
+            : i,
+        );
+  const [internalVehicles, setInternalVehicles] = useState<TenantVehicle[]>(initialTenantVehicles);
+  const allVehicles = externalVehicles ?? internalVehicles;
+  const myVehicles = allVehicles.filter(
+    (v) => v.tenantId === TENANT.id || v.tenantId === "NT-0187" || !v.tenantId,
+  );
+
+  const handleUpdateVehicles = (nextMyVehicles: TenantVehicle[]) => {
+    if (onVehiclesChange && externalVehicles) {
+      const otherVehicles = externalVehicles.filter(
+        (v) => v.tenantId !== TENANT.id && v.tenantId !== "NT-0187" && v.tenantId,
+      );
+      onVehiclesChange([...nextMyVehicles, ...otherVehicles]);
+    } else {
+      setInternalVehicles(nextMyVehicles);
+    }
+  };
   const pendingDeposit = false;
   const submitProof = (id: string) => {
     setProofSubmitted((submitted) =>
       submitted.includes(id) ? submitted : [...submitted, id],
     );
+    if (onInvoicesChange && externalInvoices) {
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} ${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+      onInvoicesChange(
+        externalInvoices.map((inv) =>
+          inv.id === id
+            ? {
+                ...inv,
+                status: "Chờ xác nhận",
+                proof: {
+                  fileName: "bien-lai-chuyen-khoan.png",
+                  submittedAt: timeStr,
+                },
+              }
+            : inv,
+        ),
+      );
+    }
     showToast("Đã gửi minh chứng cho Quản lý");
   };
   const [page, setPage] = useState<Page>("room");
@@ -160,14 +240,16 @@ export function TenantPortal({
             </div>
             <div className="flex items-center gap-2">
               <Button
-                label="Thông báo"
+                label="Thông báo và Kỷ luật"
                 className="relative grid size-9 place-items-center rounded-sm text-slate-600 hover:bg-slate-100"
-                onClick={() =>
-                  showToast("Hợp đồng của bạn có hiệu lực đến 01/09/2027")
-                }
+                onClick={() => setNotificationsOpen(true)}
               >
                 <Icon name="bell" className="size-4" />
-                <span className="absolute right-2 top-2 size-2 rounded-full bg-danger-500 ring-2 ring-white" />
+                {unreadNoticesCount > 0 && (
+                  <span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-danger-500 font-mono text-[10px] font-bold text-white ring-2 ring-white">
+                    {unreadNoticesCount}
+                  </span>
+                )}
               </Button>
               <div className="mx-1 h-7 w-px bg-slate-200" />
               <AccountMenu
@@ -183,7 +265,7 @@ export function TenantPortal({
           <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-8 sm:py-8 lg:pb-8">
             {page === "room" && (
               <RoomPage
-                vehicles={vehicles}
+                vehicles={myVehicles}
                 myTickets={myTickets}
                 onReport={() => setPage("report")}
                 onVehicles={() => setPage("vehicles")}
@@ -201,8 +283,8 @@ export function TenantPortal({
             )}
             {page === "vehicles" && (
               <TenantVehiclesPage
-                vehicles={vehicles}
-                onVehiclesChange={setVehicles}
+                vehicles={myVehicles}
+                onVehiclesChange={handleUpdateVehicles}
                 showToast={showToast}
               />
             )}
@@ -254,6 +336,16 @@ export function TenantPortal({
             }}
           />
         )}
+        <NotificationsDrawer
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          notifications={notifications}
+          violations={violations}
+          onMarkAllRead={() => {
+            setNotifications(notifications.map((n) => ({ ...n, read: true })));
+            showToast("Đã đánh dấu tất cả thông báo là đã đọc");
+          }}
+        />
       </div>
     </TenantCtx.Provider>
   );

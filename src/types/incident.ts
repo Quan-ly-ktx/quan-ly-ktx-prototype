@@ -8,7 +8,7 @@ export const priorityRank: Record<Priority, number> = {
   "Bình thường": 2,
 };
 
-export type TicketStatus = "Mới giao" | "Đang xử lý" | "Hoàn thành";
+export type TicketStatus = "Chưa phân công" | "Mới giao" | "Đang xử lý" | "Hoàn thành";
 
 export type Ticket = {
   id: string;

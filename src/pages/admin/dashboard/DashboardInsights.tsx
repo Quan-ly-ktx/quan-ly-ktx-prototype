@@ -13,7 +13,6 @@ const floors = [
   { f: "Tầng 5", used: 22, total: 40 },
 ];
 
-const penaltyOf = (i: Invoice) => (i.late ? i.late * 5000 : 0);
 
 export function DashboardInsights({
   records,
@@ -76,7 +75,7 @@ export function DashboardInsights({
                   <th className={th}>Phòng</th>
                   <th className={th}>Hóa đơn</th>
                   <th className={`${th} text-right`}>Tiền nợ</th>
-                  <th className={`${th} text-right`}>Phí phạt</th>
+                  <th className={th}>Hạn nộp</th>
                 </tr>
               </thead>
               <tbody>
@@ -103,8 +102,8 @@ export function DashboardInsights({
                     <td className="px-6 py-4 text-right text-sm font-semibold text-slate-900">
                       {money(d.amount)}
                     </td>
-                    <td className="px-6 py-4 text-right text-sm text-danger-600">
-                      {penaltyOf(d) ? money(penaltyOf(d)) : "—"}
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {d.due}{d.late ? ` (trễ ${d.late} ngày)` : ""}
                     </td>
                   </tr>
                 ))}
@@ -127,8 +126,8 @@ export function DashboardInsights({
             {[
               ["Phòng / Giường", `${debtor.room} · ${debtor.bed}`],
               ["Khoản thu", debtor.kind ?? "Tiền phòng tháng 10"],
+              ["Hạn thanh toán", debtor.due],
               ["Số tiền", money(debtor.amount)],
-              ["Phí phạt", penaltyOf(debtor) ? money(penaltyOf(debtor)) : "—"],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-4 px-4 py-4">
                 <dt className="text-slate-500">{k}</dt>
@@ -138,7 +137,7 @@ export function DashboardInsights({
             <div className="flex justify-between gap-4 bg-slate-50 px-4 py-4">
               <dt className="font-semibold text-slate-700">Tổng nợ</dt>
               <dd className="font-heading text-lg font-bold text-danger-600">
-                {money(debtor.amount + penaltyOf(debtor))}
+                {money(debtor.amount)}
               </dd>
             </div>
           </dl>

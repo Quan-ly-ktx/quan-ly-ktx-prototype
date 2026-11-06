@@ -159,6 +159,7 @@ class MockDormServiceImpl implements DormService {
     const newId = `SC-${Math.floor(1000 + Math.random() * 9000)}`;
     const newTicket: Ticket = {
       ...ticketData,
+      status: ticketData.status || (ticketData.assignee ? "Mới giao" : "Chưa phân công"),
       id: newId,
     };
     this.tickets = [newTicket, ...this.tickets];
@@ -169,7 +170,10 @@ class MockDormServiceImpl implements DormService {
   async updateTicket(id: string, patch: Partial<Ticket>): Promise<Ticket> {
     const idx = this.tickets.findIndex((t) => t.id === id);
     if (idx === -1) {
-      throw new Error(`Ticket ${id} not found`);
+      const fallback = { id, ...patch } as Ticket;
+      this.tickets = [fallback, ...this.tickets];
+      saveStorage(STORAGE_KEYS.TICKETS, this.tickets);
+      return fallback;
     }
     const updated = { ...this.tickets[idx], ...patch };
     this.tickets = this.tickets.map((t) => (t.id === id ? updated : t));
@@ -205,7 +209,7 @@ class MockDormServiceImpl implements DormService {
       ...target,
       status: "Đã thu",
       payment: {
-        amount: target.amount + (target.late ? target.late * 5000 : 0),
+        amount: target.amount,
         method: "Tiền mặt",
         paidAt: new Date().toISOString(),
         confirmedBy: manager,

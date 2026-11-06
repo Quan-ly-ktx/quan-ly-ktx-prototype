@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import type React from "react";
 import { Button, Icon, PriorityPicker, PriorityTag } from "../../components/common/index.ts";
 import type { Priority, Ticket } from "../../types/incident.ts";
-import { TenantCtx, ticketTone } from "./studentConstants.tsx";
+import { TenantCtx, ticketTone } from "./tenantConstants.tsx";
 
 const categories = ["Điện", "Nước", "Điều hòa", "Nội thất", "Khác"];
 
@@ -36,7 +36,7 @@ export function ReportPage({
       category,
       priority,
       bed: TENANT.bed,
-      status: "Mới giao",
+      status: "Chưa phân công",
       reporter: TENANT.name,
       phone: TENANT.phone,
       createdAt: "Vừa xong",

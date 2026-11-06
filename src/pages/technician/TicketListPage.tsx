@@ -175,7 +175,8 @@ export function TicketListPage({
                         className="flex h-10 w-full items-center justify-center gap-2 rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
                         onClick={() => {
                           onUpdateTicket(ticket.id, { status: "Đang xử lý" });
-                          showToast(`Đã nhận ${ticket.id}`);
+                          onSelectTicket(ticket.id);
+                          showToast(`Đã nhận ${ticket.id} và bắt đầu xử lý`);
                         }}
                       >
                         <Icon name="play" className="size-4" />

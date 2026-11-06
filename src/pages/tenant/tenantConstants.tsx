@@ -1,6 +1,8 @@
 import { createContext, type ReactNode } from "react";
 import { person } from "../../services/mock/mockData.ts";
 import type { TicketStatus } from "../../types/incident.ts";
+import type { TenantVehicle } from "../../types/tenant.ts";
+export type { TenantVehicle };
 
 export type Page = "room" | "invoices" | "vehicles" | "report";
 export type RequestKind = "extend" | "transfer" | "checkout";
@@ -45,16 +47,62 @@ export const BANK = {
   account: "0987654321",
   holder: "CONG TY KTX HUB",
 };
-
-export type TenantVehicle = {
+export type TenantNotification = {
   id: string;
-  plate: string;
-  type: "Xe tay ga" | "Xe số" | "Xe máy điện" | "Xe côn tay";
-  brand: string;
-  color: string;
-  status: "Chờ duyệt" | "Đã cấp thẻ xe";
-  cardCode?: string;
+  title: string;
+  body: string;
+  time: string;
+  read: boolean;
+  type: "maintenance" | "billing" | "contract" | "general";
 };
+
+export type PersonalViolation = {
+  id: string;
+  type: "Về muộn" | "Gây ồn" | "Vệ sinh" | "Khách ngoài" | "Hút thuốc / cháy nổ" | "Khác";
+  date: string;
+  level: "Nhắc nhở" | "Cảnh cáo" | "Phạt tiền";
+  fine?: number;
+  note: string;
+};
+
+export const initialTenantNotifications: TenantNotification[] = [
+  {
+    id: "NOTI-01",
+    title: "Phát hành hóa đơn tiền phòng tháng 11/2026",
+    body: "Hóa đơn tiền phòng kỳ tháng 11 (1.500.000 đ) đã được phát hành tự động. Hạn thanh toán cố định là ngày 05/11/2026.",
+    time: "25/10/2026 00:00",
+    read: false,
+    type: "billing",
+  },
+  {
+    id: "NOTI-02",
+    title: "Lịch bảo trì hệ thống cấp nước tầng 3",
+    body: "Ban Quản lý thông báo bảo trì van nước tổng tầng 3 từ 13:30 đến 15:30 ngày Chủ Nhật 26/10/2026.",
+    time: "24/10/2026 09:00",
+    read: false,
+    type: "maintenance",
+  },
+  {
+    id: "NOTI-03",
+    title: "Thông báo hiệu lực hợp đồng lưu trú",
+    body: "Hợp đồng HD-2026-0187 của bạn có hiệu lực đến ngày 01/09/2027 (còn 312 ngày cư trú).",
+    time: "01/09/2026 08:00",
+    read: true,
+    type: "contract",
+  },
+];
+
+export const initialPersonalViolations: PersonalViolation[] = [
+  {
+    id: "KL-0219",
+    type: "Về muộn",
+    date: "12/09/2026",
+    level: "Nhắc nhở",
+    note: "Về phòng lúc 23:45, bảo vệ đã nhắc nhở quy định giờ giới nghiêm 23:30.",
+  },
+];
+
+
 
 export const initialTenantVehicles: TenantVehicle[] = [
   {
@@ -63,6 +111,7 @@ export const initialTenantVehicles: TenantVehicle[] = [
     type: "Xe tay ga",
     brand: "Honda Air Blade 150cc",
     color: "Xanh xám đen",
+    cardStatus: "Đã cấp thẻ",
     status: "Đã cấp thẻ xe",
     cardCode: "THE-0187",
   },
@@ -105,7 +154,8 @@ export const demoInvoices: TenantInvoice[] = [
 ];
 
 export const ticketTone: Record<TicketStatus, { label: string; cls: string }> = {
-  "Mới giao": { label: "Đã tiếp nhận", cls: "status-label-brand" },
+  "Chưa phân công": { label: "Chờ tiếp nhận", cls: "status-label-slate" },
+  "Mới giao": { label: "Đã giao thợ", cls: "status-label-brand" },
   "Đang xử lý": { label: "Đang sửa chữa", cls: "status-label-warning" },
   "Hoàn thành": { label: "Đã hoàn thành", cls: "status-label-success" },
 };

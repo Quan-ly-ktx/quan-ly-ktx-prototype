@@ -14,9 +14,9 @@ export function toFrontendRole(backendRole: string): Role {
       return "technician";
     case "TENANT":
     case "STUDENT":
-      return "student";
+      return "tenant";
     default:
-      return "student";
+      return "tenant";
   }
 }
 
@@ -26,6 +26,7 @@ export function toBackendRole(frontendRole: Role): BackendUserRole {
       return "MANAGER";
     case "technician":
       return "TECHNICIAN";
+    case "tenant":
     case "student":
       return "TENANT";
     default:

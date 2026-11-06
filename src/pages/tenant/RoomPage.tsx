@@ -1,5 +1,5 @@
-import { useContext } from "react";
-import { Button, Icon } from "../../components/common/index.ts";
+import { useContext, useState } from "react";
+import { Button, Icon, Modal } from "../../components/common/index.ts";
 import { money } from "../../utils/formatters.ts";
 import type { Ticket } from "../../types/incident.ts";
 import {
@@ -8,7 +8,7 @@ import {
   roommates,
   type RequestKind,
   type TenantVehicle,
-} from "./studentConstants.tsx";
+} from "./tenantConstants.tsx";
 
 export function RoomPage({
   vehicles,
@@ -28,10 +28,42 @@ export function RoomPage({
   onPay: () => void;
 }) {
   const TENANT = useContext(TenantCtx);
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const contractDocuments = [
+    {
+      id: "DOC-001",
+      name: "hop-dong-thue-HD-2026-0187.pdf",
+      category: "Hợp đồng gốc (Bản scan PDF)",
+      type: "pdf" as const,
+      url: "/hop-dong-noi-quy-ktx.pdf",
+      size: "284 KB",
+      date: "01/09/2026",
+    },
+    {
+      id: "DOC-002",
+      name: "anh-chup-hop-dong-trang-1.jpg",
+      category: "Ảnh chụp hợp đồng giấy · Trang 1",
+      type: "image" as const,
+      url: "https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&w=800&q=80",
+      size: "1.2 MB",
+      date: "01/09/2026",
+    },
+    {
+      id: "DOC-003",
+      name: "anh-chup-hop-dong-trang-2.jpg",
+      category: "Ảnh chụp hợp đồng giấy · Trang 2 (Có chữ ký)",
+      type: "image" as const,
+      url: "https://images.unsplash.com/photo-1554415707-9e49fe832847?auto=format&fit=crop&w=800&q=80",
+      size: "1.4 MB",
+      date: "01/09/2026",
+    },
+  ];
+
   const openTickets = myTickets.filter(
     (ticket) => ticket.status !== "Hoàn thành",
   );
-
   return (
     <>
       <section className="mb-8">
@@ -195,45 +227,6 @@ export function RoomPage({
 
         <div className="space-y-6">
           <Card>
-            <div className="flex items-start justify-between gap-3">
-              <span className="icon-box icon-box-brand">
-                <Icon name="clipboard" />
-              </span>
-              <span
-                className={`status-label ${
-                  vehicles[0]?.status === "Đã cấp thẻ xe"
-                    ? "status-label-success"
-                    : "status-label-warning"
-                }`}
-              >
-                {vehicles[0]?.status ?? "Chưa đăng ký"}
-              </span>
-            </div>
-            <h2 className="mt-4 font-heading text-lg font-bold text-slate-900">
-              Phương tiện của tôi
-            </h2>
-            {vehicles[0] ? (
-              <>
-                <div className="mt-3 font-mono text-xl font-bold text-slate-950">
-                  {vehicles[0].plate}
-                </div>
-                <p className="mt-1 text-sm text-slate-500">
-                  {vehicles[0].brand} · {vehicles[0].color}
-                </p>
-              </>
-            ) : (
-              <p className="mt-2 text-sm text-slate-500">
-                Chưa có phương tiện được khai báo.
-              </p>
-            )}
-            <Button
-              className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={onVehicles}
-            >
-              Quản lý phương tiện <Icon name="chevron" className="size-4" />
-            </Button>
-          </Card>
-          <Card>
             <div className="mb-5 flex items-center justify-between">
               <h2 className="font-heading text-lg font-bold text-slate-900">
                 Hợp đồng
@@ -250,10 +243,6 @@ export function RoomPage({
                 </span>
               )}
             </div>
-            <span className="mb-4 inline-flex items-center gap-1.5 rounded-sm bg-brand-50 px-2.5 py-1 font-mono text-xs font-medium text-brand-700">
-              <Icon name="clock" className="size-3.5" />
-              Thời hạn: 1 Năm (Mặc định)
-            </span>
             <dl className="space-y-4 text-sm">
               {[
                 ["Mã hợp đồng", TENANT.contract, true],
@@ -274,46 +263,17 @@ export function RoomPage({
                   </dd>
                 </div>
               ))}
-              <div className="flex items-center justify-between gap-4">
-                <dt className="text-slate-500">
-                  Tiền cọc {money(TENANT.deposit)}
-                </dt>
-                <dd>
-                  {pendingDeposit ? (
-                    <span className="status-label status-label-warning">
-                      Chờ thanh toán cọc
-                    </span>
-                  ) : (
-                    <span className="status-label status-label-success">
-                      Đã nộp tiền
-                    </span>
-                  )}
-                </dd>
-              </div>
             </dl>
-            {!pendingDeposit && (
-              <Button
-                className="mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-                onClick={() => onRequest("extend")}
-              >
-                <Icon name="refresh" className="size-4" />
-                Gửi yêu cầu gia hạn
-              </Button>
-            )}
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button
-                className="h-10 rounded-sm border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-                onClick={() => onRequest("transfer")}
-              >
-                Chuyển phòng
-              </Button>
-              <Button
-                className="h-10 rounded-sm border border-danger-200 text-sm font-semibold text-danger-600 hover:bg-danger-50 active:translate-y-[1px]"
-                onClick={() => onRequest("checkout")}
-              >
-                Trả phòng
-              </Button>
-            </div>
+            <Button
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-sm border border-brand-200 bg-brand-50/50 py-2.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 active:translate-y-[1px]"
+              onClick={() => setDocsOpen(true)}
+            >
+              <Icon name="file" className="size-3.5" />
+              Xem tài liệu hợp đồng đã ký ({contractDocuments.length} tệp)
+            </Button>
+            <p className="mt-4 text-xs text-slate-500 leading-relaxed rounded-sm border border-slate-200 bg-slate-50 p-3">
+              * Khi có nhu cầu gia hạn hoặc trả phòng, vui lòng liên hệ trực tiếp Ban Quản lý KTX trước 15 ngày để tiến hành kiểm tra phòng và ký kết văn bản.
+            </p>
           </Card>
 
           <Card>
@@ -346,32 +306,107 @@ export function RoomPage({
             </dl>
           </Card>
 
-          <Card>
-            <div className="flex items-center gap-3">
-              <span className="icon-box icon-box-warning">
-                <Icon name="tools" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-slate-800">
-                  Sự cố của phòng
-                </div>
-                <div className="text-xs text-slate-500">
-                  {openTickets.length
-                    ? `${openTickets.length} phiếu đang xử lý`
-                    : "Không có phiếu đang mở"}
-                </div>
-              </div>
-            </div>
-            <Button
-              className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-sm border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={onReport}
-            >
-              Báo hỏng vật tư
-              <Icon name="chevron" className="size-4" />
-            </Button>
-          </Card>
         </div>
       </div>
+      {docsOpen && (
+        <Modal
+          wide
+          title="Tài liệu & Minh chứng hợp đồng"
+          description={`Mã hợp đồng: ${TENANT.contract} · Ký kết ngày 01/09/2026`}
+          onClose={() => setDocsOpen(false)}
+        >
+          <div className="space-y-4 p-6">
+            <p className="text-xs text-slate-500">
+              Danh sách các bản scan tài liệu và ảnh chụp hợp đồng giấy đã ký lưu trữ trên hệ thống:
+            </p>
+
+            <div className="space-y-3">
+              {contractDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between gap-3 rounded-sm border border-slate-200 bg-slate-50 p-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-sm bg-brand-50 text-brand-700 border border-brand-100">
+                      <Icon name="file" className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-900">
+                        {doc.name}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
+                        <span className="rounded-sm bg-white px-1.5 py-0.5 border border-slate-200 font-medium text-slate-700">
+                          {doc.category}
+                        </span>
+                        <span>{doc.size}</span>
+                        <span>· {doc.date}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      className="h-8 rounded-sm border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 active:translate-y-[1px]"
+                      onClick={() => {
+                        if (doc.type === "image") {
+                          setPreviewImage(doc.url);
+                        } else {
+                          window.open(doc.url, "_blank", "noopener,noreferrer");
+                        }
+                      }}
+                    >
+                      {doc.type === "image" ? "Xem ảnh" : "Mở tệp PDF"}
+                    </Button>
+                    <a
+                      href={doc.url}
+                      download={doc.name}
+                      className="grid size-8 place-items-center rounded-sm border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                      title="Tải tệp xuống"
+                    >
+                      <Icon name="file" className="size-3.5" />
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <Button
+                className="h-9 rounded-sm bg-slate-900 px-4 text-xs font-semibold text-white hover:bg-slate-800"
+                onClick={() => setDocsOpen(false)}
+              >
+                Đóng
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {previewImage && (
+        <Modal
+          title="Xem ảnh tài liệu hợp đồng"
+          description="Ảnh chụp trang hợp đồng giấy lưu trữ"
+          onClose={() => setPreviewImage(null)}
+        >
+          <div className="p-4 space-y-3">
+            <div className="overflow-hidden rounded-sm border border-slate-200 bg-slate-950">
+              <img
+                src={previewImage}
+                alt="Minh chứng hợp đồng"
+                className="max-h-[70vh] w-full object-contain"
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button
+                className="h-9 rounded-sm border border-slate-200 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setPreviewImage(null)}
+              >
+                Đóng ảnh
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

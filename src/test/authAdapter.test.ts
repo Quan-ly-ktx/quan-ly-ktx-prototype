@@ -10,11 +10,11 @@ import type { UserProfileResponse } from "../types/auth.ts";
 test("authAdapter converts role between backend and frontend correctly", () => {
   assert.equal(toFrontendRole("MANAGER"), "manager");
   assert.equal(toFrontendRole("TECHNICIAN"), "technician");
-  assert.equal(toFrontendRole("TENANT"), "student");
+  assert.equal(toFrontendRole("TENANT"), "tenant");
 
   assert.equal(toBackendRole("manager"), "MANAGER");
   assert.equal(toBackendRole("technician"), "TECHNICIAN");
-  assert.equal(toBackendRole("student"), "TENANT");
+  assert.equal(toBackendRole("tenant"), "TENANT");
 });
 
 test("authAdapter converts UserProfileResponse to UserProfile correctly", () => {
@@ -41,26 +41,26 @@ test("authAdapter converts UserProfileResponse to UserProfile correctly", () => 
   const tenantProfile: UserProfileResponse = {
     id: "usr-2",
     username: "tenant1",
-    email: "student@ktxhub.vn",
+    email: "tenant@ktxhub.vn",
     phone: "0907654321",
     role: "TENANT",
     status: "ACTIVE",
     tenantProfile: {
       id: "ten-1",
       tenantCode: "SV001",
-      fullName: "Trần Sinh Viên",
+      fullName: "Trần Khách Thuê",
       gender: "Nam",
       idCardNumber: "001200000001",
       phone: "0907654321",
-      email: "student@ktxhub.vn",
+      email: "tenant@ktxhub.vn",
       permanentAddress: "Hà Nội",
     },
   };
 
   const tenantFrontend = toFrontendUserProfile(tenantProfile);
-  assert.equal(tenantFrontend.name, "Trần Sinh Viên");
-  assert.equal(tenantFrontend.email, "student@ktxhub.vn");
-  assert.equal(tenantFrontend.role, "student");
+  assert.equal(tenantFrontend.name, "Trần Khách Thuê");
+  assert.equal(tenantFrontend.email, "tenant@ktxhub.vn");
+  assert.equal(tenantFrontend.role, "tenant");
 
   const fallbackProfile: UserProfileResponse = {
     id: "usr-3",

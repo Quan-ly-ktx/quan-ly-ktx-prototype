@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   Drawer,
+  Icon,
   Modal,
   PageHeader,
   PriorityPicker,
@@ -12,6 +13,7 @@ import { money } from "../../../utils/formatters.ts";
 import { TECHNICIANS } from "../../../services/mock/mockData.ts";
 import type { Priority, Ticket } from "../../../types/index.ts";
 import { card, th, rowCls, inputCls, Badge, type Toast } from "../common.tsx";
+import { technicianService } from "../../../services/technicianService.ts";
 
 type Violation = {
   id: string;
@@ -66,6 +68,26 @@ const initialViolations: Violation[] = [
 
 const lvlTone = (l: Violation["level"]) =>
   l === "Phạt tiền" ? "danger" : l === "Cảnh cáo" ? "warning" : "slate";
+const parseDeadlineToDateInput = (d?: string): string => {
+  if (!d) return new Date().toISOString().split("T")[0];
+  const parts = d.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (parts) {
+    const [, day, month, year] = parts;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  return new Date().toISOString().split("T")[0];
+};
+
+const formatDateInputToDisplay = (d: string): string => {
+  if (!d) return "";
+  const [year, month, day] = d.split("-");
+  if (year && month && day) {
+    return `${day}/${month}/${year}`;
+  }
+  return d;
+};
+
 
 export function IncidentsPage({
   tickets,
@@ -73,9 +95,26 @@ export function IncidentsPage({
   showToast,
 }: Toast & {
   tickets: Ticket[];
-  onAssign: (id: string, tech?: string, priority?: Priority) => void;
+  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => void;
 }) {
   const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [dispatchTech, setDispatchTech] = useState("");
+  const [dispatchPriority, setDispatchPriority] = useState<Priority>("Bình thường");
+  const [dispatchDeadline, setDispatchDeadline] = useState("");
+  const [activeTechnicians, setActiveTechnicians] = useState<string[]>([]);
+
+  useEffect(() => {
+    technicianService
+      .getTechnicians({ active: true })
+      .then((res) => {
+        const items = Array.isArray(res) ? res : res.items || [];
+        const names = items.filter((t) => t.active).map((t) => t.fullName);
+        setActiveTechnicians(names.length > 0 ? names : [TECHNICIANS[0]]);
+      })
+      .catch(() => {
+        setActiveTechnicians([TECHNICIANS[0]]);
+      });
+  }, []);
   const [viol, setViol] = useState<Violation | null>(null);
   const [tab, setTab] = useState<"repair" | "discipline">("repair");
   const [violations, setViolations] = useState(initialViolations);
@@ -90,7 +129,13 @@ export function IncidentsPage({
   });
 
   const stTone = (s: Ticket["status"]) =>
-    s === "Hoàn thành" ? "success" : s === "Đang xử lý" ? "brand" : "warning";
+    s === "Hoàn thành"
+      ? "success"
+      : s === "Đang xử lý"
+        ? "brand"
+        : s === "Mới giao"
+          ? "warning"
+          : "slate";
 
   const submit = () => {
     if (!form.tenant.trim() || !form.room.trim()) {
@@ -200,7 +245,12 @@ export function IncidentsPage({
                 <tr
                   key={t.id}
                   className={`${rowCls} cursor-pointer`}
-                  onClick={() => setTicket(t)}
+                  onClick={() => {
+                    setTicket(t);
+                    setDispatchTech(t.assignee || activeTechnicians[0] || TECHNICIANS[0]);
+                    setDispatchPriority(t.priority);
+                    setDispatchDeadline(parseDeadlineToDateInput(t.deadline));
+                  }}
                 >
                   <td className="px-6 py-4 font-mono text-sm font-medium text-brand-700">
                     {t.id}
@@ -297,7 +347,7 @@ export function IncidentsPage({
             {[
               ["Người báo", `${ticket.reporter} · ${ticket.phone}`],
               ["Hạng mục", ticket.category],
-              ["Tiếp nhận", ticket.createdAt],
+              ["Thời gian báo", ticket.createdAt],
               ["Hạn xử lý", ticket.deadline],
               ["Kỹ thuật viên", ticket.assignee ?? "Chưa phân công"],
               ...(ticket.resolution
@@ -314,41 +364,78 @@ export function IncidentsPage({
             ))}
           </dl>
           {ticket.status !== "Hoàn thành" && (
-            <div className="mt-6 grid gap-2">
-              <p className="text-sm font-semibold text-slate-700">
-                Mức độ ưu tiên
+            <div className="mt-6 rounded-sm border border-slate-200 bg-slate-50 p-4">
+              <h3 className="font-heading text-sm font-bold text-slate-900">
+                Giao việc cho kỹ thuật viên
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Chỉ định thợ phụ trách, cập nhật mức độ ưu tiên và đặt hạn hoàn thành (FR-18).
               </p>
-              <PriorityPicker
-                value={ticket.priority}
-                onChange={(p) => {
-                  onAssign(ticket.id, undefined, p);
-                  setTicket({ ...ticket, priority: p });
-                  showToast(`Đã đặt ưu tiên "${p}" cho ${ticket.id}`);
-                }}
-              />
-              <p className="mt-4 text-sm font-semibold text-slate-700">
-                Giao cho kỹ thuật viên
-              </p>
-              {TECHNICIANS.map((n) => (
-                <Button
-                  key={n}
-                  label={n}
-                  className={`h-10 rounded-sm border text-sm font-semibold active:translate-y-[1px] transition-all ${
-                    ticket.assignee === n
-                      ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                  }`}
-                  onClick={() => {
-                    onAssign(ticket.id, n);
-                    setTicket({ ...ticket, assignee: n });
-                    showToast(`Đã giao ${ticket.id} cho ${n}`);
-                  }}
-                >
-                  {n}
-                </Button>
-              ))}
-            </div>
-          )}
+              <div className="mt-4 space-y-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    Cấp độ ưu tiên
+                  </span>
+                  <PriorityPicker
+                    value={dispatchPriority}
+                    onChange={setDispatchPriority}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    Kỹ thuật viên phụ trách
+                  </span>
+                  <select
+                    className="focus-ring h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500"
+                    value={dispatchTech}
+                    onChange={(e) => setDispatchTech(e.target.value)}
+                  >
+                    {activeTechnicians.map((n) => (
+                       <option key={n} value={n}>
+                         {n}
+                       </option>
+                     ))}
+                   </select>
+                 </label>
+
+                 <label className="block">
+                   <span className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    Hạn hoàn thành (Ngày chót)
+                  </span>
+                  <input
+                    type="date"
+                    className="focus-ring h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500"
+                    min={new Date().toISOString().split("T")[0]}
+                    value={dispatchDeadline}
+                    onChange={(e) => setDispatchDeadline(e.target.value)}
+                    required
+                  />
+                </label>
+
+                 <Button
+                   label="Xác nhận giao việc"
+                   className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
+                   onClick={() => {
+                    const finalDeadline = formatDateInputToDisplay(dispatchDeadline);
+                    const nextStatus = "Mới giao" as const;
+                    onAssign(ticket.id, dispatchTech, dispatchPriority, finalDeadline);
+                    setTicket({
+                      ...ticket,
+                      assignee: dispatchTech,
+                      priority: dispatchPriority,
+                      deadline: finalDeadline,
+                      status: nextStatus,
+                    });
+                    showToast(`Đã giao việc ${ticket.id} cho ${dispatchTech} (Hạn: ${finalDeadline})`);
+                   }}
+                 >
+                   <Icon name="check" className="size-4" />
+                   Giao việc cho kỹ thuật viên
+                 </Button>
+               </div>
+             </div>
+           )}
         </Drawer>
       )}
 

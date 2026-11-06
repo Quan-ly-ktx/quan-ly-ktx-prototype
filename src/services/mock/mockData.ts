@@ -5,6 +5,8 @@ import type {
   RoomRecord,
   RentalSlot,
   Invoice,
+  TenantVehicle,
+  FacilityExpense,
 } from "../../types/index.ts";
 import { money } from "../../utils/formatters.ts";
 export { money };
@@ -72,7 +74,7 @@ export const initialTickets: Ticket[] = [
     category: "Nội thất",
     priority: "Bình thường",
     bed: "G03",
-    status: "Mới giao",
+    status: "Chưa phân công",
     reporter: "Phạm Đức Anh",
     phone: "0935 771 220",
     createdAt: "23/10, 10:12",
@@ -100,7 +102,7 @@ export const initialTickets: Ticket[] = [
 
 
 export const people: Person[] = [
-  { name: "Nguyễn Hoàng Nam", gender: "Nam", phone: "0987 214 506", cccd: "079203001187", email: "student@gmail.com", address: "Quận Bình Thạnh, TP.HCM" },
+  { name: "Nguyễn Hoàng Nam", gender: "Nam", phone: "0987 214 506", cccd: "079203001187", email: "tenant@gmail.com", address: "Quận Bình Thạnh, TP.HCM" },
   { name: "Lê Hoàng Nam", gender: "Nam", phone: "0903 456 118", cccd: "079204009106", email: "lehoangnam@gmail.com", address: "TP. Thủ Đức, TP.HCM" },
   { name: "Trần Quốc Bảo", gender: "Nam", phone: "0912 330 779", cccd: "079205017025", email: "tranquocbao@gmail.com", address: "Quận 7, TP.HCM" },
   { name: "Phạm Đức Anh", gender: "Nam", phone: "0935 771 220", cccd: "079203024944", email: "phamducanh@gmail.com", address: "Quận Gò Vấp, TP.HCM" },
@@ -129,7 +131,7 @@ export const person = (name: string): Person =>
   people.find((p) => p.name === name) ?? { name, gender: "Nam", phone: "—", cccd: "—", email: "—", address: "—" };
 
 export const initialTenants: TenantRecord[] = [
-  { id: "NT-0187", name: "Nguyễn Hoàng Nam", email: "student@gmail.com", phone: "0987 214 506", gender: "Nam", cccd: "079203001187", address: "Quận Bình Thạnh, TP.HCM", room: "P.302", bed: "G02", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
+  { id: "NT-0187", name: "Nguyễn Hoàng Nam", email: "tenant@gmail.com", phone: "0987 214 506", gender: "Nam", cccd: "079203001187", address: "Quận Bình Thạnh, TP.HCM", room: "P.302", bed: "G02", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
   { id: "NT-0188", name: "Nguyễn Văn Nam", email: "nguyenvannam@gmail.com", phone: "0912 345 678", gender: "Nam", cccd: "079205088296", address: "Quận Bình Tân, TP.HCM", room: "P.302", bed: "G01", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
   { id: "NT-0189", name: "Trần Thị Thảo", email: "tranthithao@gmail.com", phone: "0987 654 321", gender: "Nữ", cccd: "079203096215", address: "Quận Tân Phú, TP.HCM", room: "P.102", bed: "G04", start: "15/01/2026", end: "15/01/2027", monthlyRent: 1600000, deposit: 1600000, status: "Sắp hết HĐ" },
   { id: "NT-0190", name: "Lê Minh Tuấn", email: "leminhtuan@gmail.com", phone: "0903 112 233", gender: "Nam", cccd: "079204104134", address: "Huyện Bình Chánh, TP.HCM", room: "P.302", bed: "G04", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
@@ -330,13 +332,97 @@ export const rentalSlots: RentalSlot[] = initialRooms.flatMap((room) =>
 );
 
 export const initialInvoices: Invoice[] = [
-  { id: "HD-2610-0001", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1200000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1200000, method: "Trực tuyến", paidAt: "03/10/2026 09:15", confirmedBy: "Hệ thống VietQR" } },
+  { id: "HD-2610-0001", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "05/10/2026", status: "Đã thu", kind: "Tiền phòng tháng 10", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "03/10/2026 09:15", confirmedBy: "Hệ thống VietQR" } },
   { id: "HD-2610-0002", tenant: "Lê Hoàng Nam", room: "P.401", bed: "G01", amount: 1500000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "04/10/2026 14:20", confirmedBy: "Hệ thống VietQR" } },
-  { id: "HD-2610-0003", tenant: "Trần Quốc Bảo", room: "P.205", bed: "G03", amount: 1200000, due: "05/10/2026", status: "Nợ" },
+  { id: "HD-2610-0003", tenant: "Trần Quốc Bảo", room: "P.205", bed: "G03", amount: 1200000, due: "05/10/2026", status: "Chờ xác nhận", proof: { fileName: "bien-lai-vcb-05-10.png", submittedAt: "10:15 05/10/2026" } },
   { id: "HD-2610-0004", tenant: "Phạm Đức Anh", room: "P.103", bed: "G03", amount: 900000, due: "05/10/2026", status: "Nợ", late: 1 },
   { id: "HD-2610-0005", tenant: "Đỗ Anh Tuấn", room: "P.204", bed: "G04", amount: 1200000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1200000, method: "Trực tuyến", paidAt: "02/10/2026 08:40", confirmedBy: "Hệ thống VietQR" } },
   { id: "HD-2610-0006", tenant: "Võ Thị Mai", room: "P.108", bed: "G01", amount: 1500000, due: "05/10/2026", status: "Nợ", late: 1 },
   { id: "HD-2610-0007", tenant: "Bùi Khánh Linh", room: "P.210", bed: "G02", kind: "Dịch vụ giặt ủi + gửi xe", amount: 350000, due: "05/10/2026", status: "Nợ" },
   { id: "HD-2609-0011", tenant: "Hồ Minh Khoa", room: "P.312", bed: "G04", amount: 900000, due: "05/09/2026", status: "Nợ", late: 31, kind: "Tiền phòng tháng 9" },
-  { id: "HD-2611-0187", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "05/11/2026", status: "Chờ xác nhận", kind: "Tiền phòng tháng 11", proof: { fileName: "bien-lai-mb-bank-19-10.png", submittedAt: "14:20 19/10/2026" } },
+  { id: "HD-2609-0187", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "01/09/2026", status: "Đã thu", kind: "Tiền cọc giữ chỗ", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "29/08/2026 15:30", confirmedBy: "Hệ thống VietQR" } },
+  { id: "HD-2611-0187", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "05/11/2026", status: "Nợ", kind: "Tiền phòng tháng 11" },
+];
+export const initialFacilityExpenses: FacilityExpense[] = [
+  {
+    id: "EXP-2610-001",
+    category: "Điện EVN",
+    title: "Hóa đơn tiền điện tổng cơ sở tháng 10/2026",
+    amount: 24500000,
+    expenseDate: "20/10/2026",
+    invoiceCode: "EVN-202610-098",
+    note: "Thanh toán qua cổng EVN HCMC",
+    createdAt: "20/10/2026 14:30",
+  },
+  {
+    id: "EXP-2610-002",
+    category: "Nước",
+    title: "Hóa đơn tiền nước tổng cơ sở tháng 10/2026",
+    amount: 6200000,
+    expenseDate: "18/10/2026",
+    invoiceCode: "WAT-202610-045",
+    note: "Công ty Cấp nước Sawaco",
+    createdAt: "18/10/2026 09:15",
+  },
+  {
+    id: "EXP-2610-003",
+    category: "Internet",
+    title: "Cước mạng Internet cáp quang tòa nhà VNPT",
+    amount: 1800000,
+    expenseDate: "15/10/2026",
+    invoiceCode: "NET-202610-012",
+    note: "Gói Fiber Business 500Mbps",
+    createdAt: "15/10/2026 11:00",
+  },
+  {
+    id: "EXP-2610-004",
+    category: "Khác",
+    title: "Dịch vụ thu gom rác & vệ sinh khu vực chung",
+    amount: 1200000,
+    expenseDate: "10/10/2026",
+    invoiceCode: "SRV-202610-001",
+    note: "Hợp đồng vệ sinh môi trường đô thị",
+    createdAt: "10/10/2026 16:45",
+  },
+];
+
+
+export const initialVehicles: TenantVehicle[] = [
+  {
+    id: "XE-001",
+    tenantId: "NT-0187",
+    plate: "59-X3 789.12",
+    type: "Xe tay ga",
+    brand: "Honda Air Blade 150cc",
+    color: "Xanh xám đen",
+    registration: "Đủ 2 mặt",
+    cardStatus: "Đã cấp thẻ",
+    cardCode: "THE-0187",
+    status: "Đã cấp thẻ xe",
+    registeredAt: "01/09/2026",
+  },
+  {
+    id: "XE-002",
+    tenantId: "NT-0188",
+    plate: "59P2-678.90",
+    type: "Xe số",
+    brand: "Yamaha Exciter",
+    color: "Xanh",
+    registration: "Đủ 2 mặt",
+    cardStatus: "Chưa cấp thẻ",
+    status: "Chờ duyệt",
+    registeredAt: "05/09/2026",
+  },
+  {
+    id: "XE-003",
+    tenantId: "NT-0189",
+    plate: "59N1-456.78",
+    type: "Xe máy điện",
+    brand: "VinFast Feliz",
+    color: "Trắng",
+    registration: "Đủ 2 mặt",
+    cardStatus: "Chưa cấp thẻ",
+    status: "Chờ duyệt",
+    registeredAt: "10/09/2026",
+  },
 ];

@@ -6,7 +6,7 @@ import {
   Card,
   TenantCtx,
   type TenantInvoice,
-} from "./studentConstants.tsx";
+} from "./tenantConstants.tsx";
 import { PaymentProofPanel } from "./PaymentProofPanel.tsx";
 
 function InvoiceArt() {
@@ -218,55 +218,31 @@ export function TenantInvoicesPage({
 
                   <dl className="mt-6 divide-y divide-slate-100 border-y border-slate-100 text-sm">
                     <div className="flex justify-between gap-4 py-3">
-                      <dt className="text-slate-600">Tiền thuê phòng định kỳ</dt>
+                      <dt className="text-slate-600">Tiền phòng trọn gói (All-inclusive)</dt>
                       <dd className="font-semibold text-slate-900">
                         {money(inv.amount)}
                       </dd>
                     </div>
-                    <div className="py-4">
-                      <div className="flex justify-between gap-4">
-                        <dt className="font-semibold text-slate-700">
-                          Điện sinh hoạt
-                        </dt>
-                        <dd className="font-mono font-bold text-slate-950">
-                          0 kWh = 0 đ
-                        </dd>
-                      </div>
-                      <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
-                        <span>Đầu kỳ: 1.420 kWh</span>
-                        <span>Cuối kỳ: 1.420 kWh</span>
-                        <span>Đơn giá: 3.500 đ/kWh</span>
-                      </div>
-                      <p className="mt-3 rounded-sm bg-info-50 p-2.5 text-xs text-info-700 border border-info-100">
-                        Thực tế tiêu thụ 0 kWh — đồng hồ không phát sinh trong
-                        kỳ chốt.
-                      </p>
-                    </div>
-                    <div className="py-4">
-                      <div className="flex justify-between gap-4">
-                        <dt className="font-semibold text-slate-700">
-                          Nước sinh hoạt
-                        </dt>
-                        <dd className="font-mono font-bold text-slate-950">
-                          0 m³ = 0 đ
-                        </dd>
-                      </div>
-                      <div className="mt-2 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
-                        <span>Đầu kỳ: 85 m³</span>
-                        <span>Cuối kỳ: 85 m³</span>
-                        <span>Đơn giá: 25.000 đ/m³</span>
-                      </div>
-                      <p className="mt-3 rounded-sm bg-info-50 p-2.5 text-xs text-info-700 border border-info-100">
-                        Thực tế tiêu thụ 0 m³ — không phát sinh sản lượng nước
-                        trong kỳ.
-                      </p>
+                    <div className="flex justify-between gap-4 py-3">
+                      <dt className="text-slate-600">Điện & nước sinh hoạt cơ bản</dt>
+                      <dd className="font-semibold text-success-600">
+                        Đã bao gồm trọn gói
+                      </dd>
                     </div>
                     <div className="flex justify-between gap-4 py-3">
                       <dt className="text-slate-600">
-                        Wifi, rác thải, vệ sinh hành lang
+                        Wifi cáp quang, rác, vệ sinh chung
                       </dt>
                       <dd className="font-semibold text-success-600">
                         Miễn phí
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4 py-3">
+                      <dt className="text-slate-600">
+                        Chỗ gửi 01 xe máy tại hầm KTX
+                      </dt>
+                      <dd className="font-semibold text-success-600">
+                        Miễn phí (Trọn gói 100%)
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-4 py-4">
