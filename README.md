@@ -2,6 +2,8 @@
 
 Dự án Frontend Prototype xây dựng trên nền tảng **React 19**, **TypeScript**, **Tailwind CSS v4**, và **Vite 8**. Ứng dụng hỗ trợ kiến trúc **Dual-Mode** linh hoạt, cho phép chạy hoàn toàn độc lập với Mock Data hoặc kết nối trực tiếp với hệ thống Backend Spring Boot REST API.
 
+> **Trạng thái refactor SRS 3.2:** Prototype đang được cập nhật, chưa hoàn chỉnh để bàn giao theo toàn bộ SRS. Đặc biệt các luồng onboarding/hợp đồng/checkout, định danh và lưu trữ dữ liệu xuyên vai trò, xử lý sự cố, báo cáo thu–chi và xuất XLSX/PDF chưa được xác nhận hoàn chỉnh. Mock không chứng minh RBAC, transaction, OTP/email, lưu tệp OCI hay đối soát ngân hàng thật. Contract FE/BE dự kiến xem tại `docs/API_INTEGRATION_PLAN.md`; các mô tả tích hợp cũ bên dưới chỉ là tài liệu lịch sử cần đối chiếu lại.
+
 ---
 
 ## 🚀 Cấu Hình Dual-Mode (Mock vs. Live Backend)
@@ -15,7 +17,7 @@ cp .env.example .env
 ### 1. `VITE_USE_MOCK=true` (Mặc định - Standalone Mock Mode)
 - **Mục đích**: Chạy demo, phát triển giao diện và kiểm thử độc lập mà không cần khởi động Spring Boot backend.
 - **Cơ chế**: Toàn bộ dữ liệu được khởi tạo từ bộ dữ liệu mẫu trong `src/services/mock/mockData.ts` và lưu trữ trạng thái tại `localStorage` của trình duyệt.
-- Dữ liệu demo đầy đủ cho tất cả các luồng: Quản trị viên (Manager), Sinh viên (Resident), và Kỹ thuật viên (Technician).
+- Có dữ liệu demo cho Manager (`manager@gmail.com`), Tenant đang thuê (`079203001187`), Tenant đã checkout (`000000000001`), và Technician (`thinh.vv@ktxhub.vn`). Tất cả dùng mật khẩu demo: `Demo1234!`.
 
 ### 2. `VITE_USE_MOCK=false` (Backend API Integration Mode)
 - **Mục đích**: Kết nối trực tiếp tới Backend Spring Boot đang chạy tại máy local hoặc staging server.
@@ -80,7 +82,7 @@ npm run dev
 Ứng dụng sẽ khả dụng tại: `http://localhost:5173`.
 
 ### Chạy Kiểm Thử Tự Động (Unit & Integration Tests)
-Chạy toàn bộ 61 test case bảo đảm không phát sinh lỗi hồi quy (zero-regression):
+Chạy toàn bộ bộ kiểm thử tự động (116 tests) bảo đảm không phát sinh lỗi hồi quy (zero-regression):
 ```bash
 npm test
 ```

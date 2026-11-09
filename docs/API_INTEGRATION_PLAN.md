@@ -3,6 +3,55 @@
 **Backend:** Spring Boot 3.x (`dormitory-management`) — `http://localhost:8080/api/v1`  
 **Tài liệu tham chiếu:** OpenAPI 3.1.0 (`http://localhost:8080/docs`), `AGENTS.md`, `ARCHITECTURE.md`
 
+## Contract sơ bộ SRS 3.2 — đề xuất cho FE/BE
+
+**Phiên bản:** 0.1, 09/11/2026. **Người tiếp nhận:** nhóm FE và BE. Nguồn chuẩn: `docs/SRS.md` v3.2 Final, `docs/Conceptual-ERD.md` v3.4 Final, `docs/Logical-ERD.md` v3.5 Final. Contract này là đề xuất để hai nhóm thống nhất, không khẳng định endpoint hay DTO đã tồn tại. Các mục khảo sát API cũ bên dưới là lịch sử, không phải chuẩn SRS mới; đặc biệt không áp dụng fallback mock âm thầm hoặc giả định giữ nguyên toàn bộ UI.
+
+### Quy ước dữ liệu và lỗi
+
+- Mọi `id`, khóa ngoại và chủ thể xác thực là UUID; mã phòng, CCCD và mã nghiệp vụ không thay thế ID. Tên trường JSON dưới đây là đề xuất camelCase; ngày là `YYYY-MM-DD`, thời điểm ISO 8601 có offset/UTC, kỳ hóa đơn là ngày 01 của tháng. Lịch nghiệp vụ theo `Asia/Ho_Chi_Minh`; tiền VND nguyên.
+- Role `MANAGER | TENANT | TECHNICIAN`; trạng thái tài khoản `ACTIVE | INACTIVE | LOCKED`; cư trú `ACTIVE | CHECKED_OUT`; giới tính `MALE | FEMALE`. Email User duy nhất không phân biệt hoa thường; Tenant đăng nhập CCCD, staff đăng nhập email.
+- Trả lỗi có mã nghiệp vụ ổn định và thông điệp hiển thị được, ví dụ `{ "code": "BED_UNAVAILABLE", "message": "Giường không còn sẵn sàng" }`; hình thức HTTP/status cụ thể chờ BE thống nhất. Không trả thành công khi cập nhật thất bại; không dùng mock thay dữ liệu API lỗi.
+
+**Ràng buộc quan hệ bắt buộc:** `Tenant.userId`, `Bed.roomId`, `Contract.tenantId`, `Contract.bedId`, `Invoice.contractId`, `Invoice.billingPeriod`, `MaintenanceTicket.reporterTenantId` và `MaintenanceTicket.roomId` không được thiếu. `MaintenanceTicket.bedId` và `assigneeStaffId` có thể null; nếu có `bedId` thì Bed phải thuộc đúng `roomId`. Mã phòng/giường và tên là dữ liệu hiển thị hoặc snapshot, không dùng để xác định chủ sở hữu.
+
+**Lỗi nghiệp vụ đề xuất:** `VALIDATION_ERROR`, `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `BED_UNAVAILABLE`, `ROOM_MISMATCH`, `OUTSTANDING_INVOICE`, `INVALID_TRANSITION`, `FILE_ACCESS_DENIED`, `NOT_IMPLEMENTED`. Mỗi lỗi trả `{ "code": "...", "message": "..." }`; status HTTP, cấu trúc bao ngoài và endpoint cụ thể vẫn chờ FE/BE thống nhất. Không hiển thị kết quả lưu thành công khi request thất bại.
+
+**Ranh giới mock/API:** Mock mô phỏng các lệnh theo cùng quan hệ và trạng thái, với dữ liệu demo biệt lập. API mode dùng response thật hoặc báo lỗi rõ; không chuyển sang dữ liệu demo khi API lỗi. Reset chỉ áp dụng dữ liệu demo, yêu cầu xác nhận của người dùng và không tác động dữ liệu Backend.
+
+### DTO mẫu theo phân hệ
+
+Các chuỗi UUID dưới đây minh họa; các trường nullable có thể là `null`. Dữ liệu hợp đồng cũ phải giữ snapshot, không suy ngược từ phòng hiện tại.
+
+| Module | Response mẫu / trường tối thiểu |
+|---|---|
+| User/Tenant/Staff | `{ "id": "<user-uuid>", "role": "TENANT", "status": "ACTIVE", "email": "tenant@example.invalid", "tenant": { "id": "<tenant-uuid>", "userId": "<user-uuid>", "idCardNumber": "012345678901", "residentStatus": "ACTIVE", "fullName": "Khách mẫu", "gender": "MALE", "phone": "0900000000", "permanentAddress": "Địa chỉ mẫu" } }`; Staff gồm `id` và `userId` trỏ User nhân sự. |
+| Room/Bed/Amenity | `{ "id": "<room-uuid>", "roomNumber": "P.302", "floor": 3, "totalBeds": 4, "genderPolicy": "MALE", "basePrice": 1500000, "archivedAt": null, "amenities": [{ "id": "<uuid>", "quantity": 1 }], "beds": [{ "id": "<bed-uuid>", "roomId": "<room-uuid>", "bedCode": "G01", "slotKey": "P.302-G01", "status": "AVAILABLE", "occupant": null }] }` |
+| Contract/Renewal | `{ "id": "<uuid>", "tenantId": "<uuid>", "bedId": "<uuid>", "roomCodeSnapshot": "P.302", "bedCodeSnapshot": "G01", "startOn": "2026-11-01", "originalEndOn": "2027-01-31", "originalMonthlyRent": 1500000, "depositAmount": 1500000, "status": "ACTIVE", "renewals": [{ "id": "<uuid>", "effectiveFrom": "2027-02-01", "newEndOn": "2027-04-30", "monthlyRent": 1600000 }] }` |
+| Invoice/Receipt | `{ "id": "<uuid>", "contractId": "<uuid>", "invoiceCode": "HD-MAU", "billingPeriod": "2026-11-01", "dueOn": "2026-11-05", "amount": 1500000, "status": "PAID", "proof": null, "receipt": { "id": "<uuid>", "paymentMethod": "CASH", "amount": 1500000, "confirmedByStaffId": "<uuid>", "confirmedAt": "2026-11-02T03:00:00Z" } }` |
+| Facility expense | `{ "id": "<uuid>", "expenseType": "ELECTRICITY", "title": "Điện cơ sở", "expenseDate": "2026-11-02", "amount": 100000, "invoiceCode": null, "notes": null }` |
+| Maintenance/parts | `{ "id": "<uuid>", "reporterTenantId": "<uuid>", "roomId": "<uuid>", "bedId": null, "assigneeStaffId": null, "category": "WATER", "priority": "URGENT", "status": "UNASSIGNED", "title": "Rò nước", "description": "Dưới bồn rửa", "parts": [] }` |
+| Vehicle | `{ "id": "<uuid>", "tenantId": "<uuid>", "vehicleType": "BICYCLE", "licensePlate": null, "brand": "Mẫu", "color": "Đen", "status": "PENDING_CARD", "cardCode": null }` |
+| Violation/Notification | `{ "id": "<uuid>", "tenantId": "<uuid>", "violationType": "NOISE", "level": "WARNING", "occurredOn": "2026-11-02", "fineAmount": 0 }`; `{ "id": "<uuid>", "tenantId": "<uuid>", "eventType": "INVOICE_ISSUED", "title": "Hóa đơn mới", "body": "Hóa đơn tháng 11", "readAt": null }` |
+
+### Lệnh và chuyển trạng thái đề xuất
+
+| Nghiệp vụ | Request mẫu / hành vi |
+|---|---|
+| Đăng nhập | `{ "identifier": "012345678901", "password": "<mật khẩu>" }`; đổi mật khẩu dùng `{ "currentPassword": "<cũ>", "newPassword": "<mới>" }`, không OTP; quên mật khẩu nhận CCCD/email, OTP 6 số/5 phút. |
+| Tạo/sửa phòng | `{ "roomNumber": "P.302", "floor": 3, "totalBeds": 4, "genderPolicy": "MALE", "basePrice": 1500000, "amenities": [{ "amenityId": "<uuid>", "quantity": 1 }] }`; đổi mã/giới tính phải kiểm tra lịch sử và chiếm chỗ. Bed chỉ `AVAILABLE ↔ MAINTENANCE` qua thao tác thường. |
+| Onboarding | `{ "idCardNumber": "012345678901", "bedId": "<uuid>", "startOn": "2026-11-01", "endOn": "2027-01-31", "depositAmount": 1500000, "tenant": { "fullName": "Khách mẫu", "gender": "MALE", "email": "tenant@example.invalid", "phone": "0900000000", "permanentAddress": "Địa chỉ mẫu" } }`; BE tạo/tái dùng Tenant, hợp đồng, chiếm Bed và invoice đầu trong một transaction; mật khẩu mới chỉ trả một lần. |
+| Gia hạn/checkout | `{ "newEndOn": "2027-04-30" }` tạo phụ lục giá phòng hiện hành khi đủ điều kiện; checkout `{ "bedStatus": "MAINTENANCE" }` đồng thời thanh lý, giải phóng Bed, thu hồi xe và giữ nợ. |
+| Thanh toán | Proof `DEBT → PENDING_CONFIRMATION`; Manager từ chối `→ DEBT` hoặc xác nhận chuyển khoản `→ PAID`. Tiền mặt chỉ `DEBT → PAID`. `PAID` có đúng một receipt đã thu đủ, `DEBT`/`PENDING_CONFIRMATION` không có receipt. QR không tự xác nhận tiền. |
+| Sự cố | `{ "category": "WATER", "priority": "URGENT", "title": "Rò nước", "description": "Dưới bồn rửa", "bedId": null }`; `UNASSIGNED → ASSIGNED → IN_PROGRESS → COMPLETED`; hoàn thành gửi kết quả, ảnh và `parts: [{ "partName": "Van", "quantity": 1, "unitCost": 50000 }]`. |
+| Xe / vi phạm | Đăng ký xe gửi loại, biển/ảnh tùy loại, hãng/màu; `PENDING_CARD → ISSUED → REVOKED`, thẻ tái dùng sau thu hồi. Vi phạm gửi `tenantId`, loại, ngày, hình thức và số tiền nếu phạt; không tạo invoice/receipt. |
+
+### Tệp private và trách nhiệm BE
+
+Hợp đồng/phụ lục, giấy đăng ký xe, minh chứng chuyển khoản, ảnh hiện trường/nghiệm thu lưu private OCI. DTO lưu object key hoặc ID tệp bền vững, không lưu URL ký như đường dẫn cố định. Mỗi lần mở/tải, BE xác thực JWT, role và quyền sở hữu trước khi cấp URL ký hiệu lực tối đa 15 phút; khi hết hạn FE xin lại. File mock chỉ phục vụ demo và không chứng minh quyền OCI.
+
+BE chịu trách nhiệm kiểm tra quyền, transaction/concurrency, lịch phát hành 00:00 ngày 25 và chạy lại không trùng, bảo vệ mã phòng, OTP/Redis, thu hồi token và tổng hợp báo cáo. Phụ lục hợp đồng hiện hành ký sau batch ngày 25 có thể cần bù hóa đơn tháng sau; không mở onboarding giữa tháng.
+
 ---
 
 ## 1. Tổng quan & Chiến lược Tích hợp (Integration Strategy)
@@ -17,12 +66,11 @@ Qua đối soát trực tiếp từ endpoint `http://localhost:8080/v3/api-docs`
 - **Chưa có REST Controller ở Backend (Đang ở tầng Repository/Entity):**
   - Khách thuê (`Tenant`), Hợp đồng (`Contract`), Hóa đơn (`Invoice`), Sự cố kỹ thuật (`MaintenanceTicket`), Phương tiện xe (`Vehicle`).
 
-### 1.2. Chiến lược Tích hợp Lai (Hybrid Dual-Mode Strategy)
-Để đảm bảo trải nghiệm người dùng không bị gián đoạn và tuân thủ nguyên tắc độc lập của Prototype:
-- **Nhóm tính năng có Backend:** Chuyển thẳng sang gọi REST API thật qua `apiDormService` & `authService`.
-- **Nhóm tính năng chưa có Backend:** Tự động fallback dữ liệu từ Mock Data hoặc lưu cục bộ (`localStorage`), không gây crash ứng dụng.
-- **Bảo toàn 100% giao diện (Zero Visual Regression):** Giữ nguyên toàn bộ layout, CSS tokens, màu sắc và component UI.
-
+### 1.2. Chiến lược Tích hợp Rõ ràng (Strict Dual-Mode Strategy — No Silent Fallback)
+Theo nguyên tắc độc lập và bảo toàn dữ liệu của SRS 3.2:
+- **Chế độ Mock (`VITE_USE_MOCK=true`):** Prototype vận hành độc lập trên mock store snapshot cô lập trong `localStorage` (`dorm_mock_snapshot_v2`), cung cấp dữ liệu cho cả 3 vai trò và cơ chế khôi phục dữ liệu demo có xác nhận.
+- **Chế độ Backend API (`VITE_USE_MOCK=false`):** Kết nối trực tiếp tới Backend Spring Boot; các endpoint chưa thống nhất hoặc lỗi mạng sẽ ném lỗi rõ ràng (`Unsupported` / `Network Error`), **tuyệt đối không âm thầm fallback sang mock data** để tránh làm sai lệch dữ liệu thật.
+- **Bảo toàn 100% giao diện (Zero Visual Regression):** Giữ nguyên toàn bộ layout, CSS tokens, màu sắc và component UI chuẩn Phase 1.
 ```mermaid
 flowchart TD
     subgraph Frontend["dorm-management-prototype"]
