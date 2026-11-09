@@ -43,7 +43,6 @@ export function getRouteByRole(role: Role | "admin"): string {
     case "admin":
       return "Bảng điều khiển";
     case "tenant":
-    case "student":
       return "portal";
     case "technician":
       return "tasks";

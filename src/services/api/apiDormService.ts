@@ -6,6 +6,8 @@ import type {
   Ticket,
   BedStatus,
 } from "../../types/index.ts";
+import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle } from "../../types/tenant.ts";
+import type { FacilityExpense, PaymentProof } from "../../types/invoice.ts";
 import { httpClient } from "../httpClient.ts";
 import type {
   ApiResponse,
@@ -21,6 +23,22 @@ import {
 } from "./adapters/roomAdapter.ts";
 
 class ApiDormServiceImpl implements DormService {
+  async getContracts(): Promise<ContractRecord[]> { throw new Error("API hợp đồng chưa được thống nhất."); }
+  async getExpenses(): Promise<FacilityExpense[]> { throw new Error("API chi phí chưa được thống nhất."); }
+  async createExpense(_expense: FacilityExpense): Promise<FacilityExpense> { throw new Error("API chi phí chưa được thống nhất."); }
+  async updateExpense(_id: string, _expense: FacilityExpense): Promise<FacilityExpense> { throw new Error("API chi phí chưa được thống nhất."); }
+  async deleteExpense(_id: string): Promise<void> { throw new Error("API chi phí chưa được thống nhất."); }
+  async getVehicles(): Promise<TenantVehicle[]> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async registerVehicle(_vehicle: TenantVehicle): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async issueVehicleCard(_id: string, _cardCode: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async revokeVehicle(_id: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async resetMockData(): Promise<void> { throw new Error("Không thể reset dữ liệu demo trong chế độ API."); }
+  async onboard(_input: OnboardingInput): Promise<OnboardingResult> { throw new Error("API tiếp nhận chưa được thống nhất."); }
+  async renewContract(_id: string, _endDate: string): Promise<void> { throw new Error("API gia hạn chưa được thống nhất."); }
+  async checkoutContract(_id: string, _status: "AVAILABLE" | "MAINTENANCE"): Promise<void> { throw new Error("API thanh lý chưa được thống nhất."); }
+  async addContractDocuments(_id: string, _documents: ContractDocumentRecord[]): Promise<void> { throw new Error("API tài liệu hợp đồng chưa được thống nhất."); }
+  async deleteContractDocument(_id: string, _documentId: string): Promise<void> { throw new Error("API tài liệu hợp đồng chưa được thống nhất."); }
+  async updateTenantProfile(_id: string, _profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">): Promise<TenantRecord> { throw new Error("API cập nhật hồ sơ chưa được thống nhất."); }
   async getRooms(): Promise<RoomRecord[]> {
     const res = await httpClient.get<SingleResponse<RoomDetailResponse[]> | RoomDetailResponse[]>(
       "/admin/rooms/matrix",
@@ -80,33 +98,19 @@ class ApiDormServiceImpl implements DormService {
     return "data" in res ? res.data : res;
   }
 
-  async updateTicket(id: string, patch: Partial<Ticket>): Promise<Ticket> {
+  async updateTicket(id: string, patch: Partial<Ticket>, actorStaffId?: string): Promise<Ticket> {
+    if (actorStaffId) throw new Error("API xử lý phiếu theo kỹ thuật viên chưa được thống nhất.");
     const res = await httpClient.patch<ApiResponse<Ticket> | Ticket>(`/tickets/${id}`, patch);
     return "data" in res ? res.data : res;
   }
 
-  async saveRooms(rooms: RoomRecord[]): Promise<RoomRecord[]> {
-    const res = await httpClient.put<ApiResponse<RoomRecord[]> | RoomRecord[]>("/rooms", rooms);
-    return Array.isArray(res) ? res : res.data;
-  }
+  async saveRooms(_rooms: RoomRecord[]): Promise<RoomRecord[]> { throw new Error("API lưu danh sách phòng chưa được thống nhất."); }
+  async issueInvoices(_billingPeriod: string): Promise<Invoice[]> { throw new Error("API phát hành hóa đơn chưa được thống nhất."); }
+  async submitInvoiceProof(_id: string, _tenantId: string, _proof: PaymentProof): Promise<Invoice> { throw new Error("API minh chứng chưa được thống nhất."); }
+  async rejectInvoiceProof(_id: string): Promise<Invoice> { throw new Error("API minh chứng chưa được thống nhất."); }
+  async confirmInvoiceProof(_id: string, _managerStaffId: string): Promise<Invoice> { throw new Error("API minh chứng chưa được thống nhất."); }
 
-  async saveTenants(tenants: TenantRecord[]): Promise<TenantRecord[]> {
-    const res = await httpClient.put<ApiResponse<TenantRecord[]> | TenantRecord[]>("/tenants", tenants);
-    return Array.isArray(res) ? res : res.data;
-  }
-
-  async saveInvoices(invoices: Invoice[]): Promise<Invoice[]> {
-    const res = await httpClient.put<ApiResponse<Invoice[]> | Invoice[]>("/invoices", invoices);
-    return Array.isArray(res) ? res : res.data;
-  }
-
-  async confirmPayment(invoiceId: string, manager: string): Promise<Invoice> {
-    const res = await httpClient.post<ApiResponse<Invoice> | Invoice>(
-      `/invoices/${invoiceId}/confirm-payment`,
-      { manager },
-    );
-    return "data" in res ? res.data : res;
-  }
+  async confirmPayment(_invoiceId: string, _managerStaffId: string): Promise<Invoice> { throw new Error("API xác nhận tiền mặt chưa được thống nhất."); }
 }
 
 export const apiDormService = new ApiDormServiceImpl();

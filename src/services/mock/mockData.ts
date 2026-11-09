@@ -14,7 +14,7 @@ export { money };
 export const TECHNICIANS = ["Võ Văn Thịnh", "Lâm Quốc Huy"];
 export const CURRENT_TECH = "Võ Văn Thịnh";
 
-export const initialTickets: Ticket[] = [
+export const initialTickets: Omit<Ticket, "reporterTenantId" | "roomId">[] = [
   {
     id: "SC-1049",
     room: "P.401",
@@ -97,6 +97,8 @@ export const initialTickets: Ticket[] = [
     hasPhoto: false,
     resolution: "Đã thay 2 bóng LED 12W, kiểm tra nguồn ổn định.",
     cost: 70000,
+    completedAt: "2026-10-20T12:00:00Z",
+    parts: [{ name: "Bóng LED 12W", quantity: 2, unitCost: 35000 }],
   },
 ];
 
@@ -131,11 +133,11 @@ export const person = (name: string): Person =>
   people.find((p) => p.name === name) ?? { name, gender: "Nam", phone: "—", cccd: "—", email: "—", address: "—" };
 
 export const initialTenants: TenantRecord[] = [
-  { id: "NT-0187", name: "Nguyễn Hoàng Nam", email: "tenant@gmail.com", phone: "0987 214 506", gender: "Nam", cccd: "079203001187", address: "Quận Bình Thạnh, TP.HCM", room: "P.302", bed: "G02", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
-  { id: "NT-0188", name: "Nguyễn Văn Nam", email: "nguyenvannam@gmail.com", phone: "0912 345 678", gender: "Nam", cccd: "079205088296", address: "Quận Bình Tân, TP.HCM", room: "P.302", bed: "G01", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
-  { id: "NT-0189", name: "Trần Thị Thảo", email: "tranthithao@gmail.com", phone: "0987 654 321", gender: "Nữ", cccd: "079203096215", address: "Quận Tân Phú, TP.HCM", room: "P.102", bed: "G04", start: "15/01/2026", end: "15/01/2027", monthlyRent: 1600000, deposit: 1600000, status: "Sắp hết HĐ" },
-  { id: "NT-0190", name: "Lê Minh Tuấn", email: "leminhtuan@gmail.com", phone: "0903 112 233", gender: "Nam", cccd: "079204104134", address: "Huyện Bình Chánh, TP.HCM", room: "P.302", bed: "G04", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
-  { id: "NT-0191", name: "Phạm Ngọc Linh", email: "phamngoclinh@gmail.com", phone: "0968 220 155", gender: "Nữ", cccd: "079203119972", address: "Quận 5, TP.HCM", room: "P.301", bed: "G05", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
+  { id: "NT-0187", userId: "demo-tenant", name: "Nguyễn Hoàng Nam", email: "tenant@gmail.com", phone: "0987 214 506", gender: "Nam", cccd: "079203001187", address: "Quận Bình Thạnh, TP.HCM", room: "P.302", bed: "G02", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
+  { id: "NT-0188", userId: "user-NT-0188", name: "Nguyễn Văn Nam", email: "nguyenvannam@gmail.com", phone: "0912 345 678", gender: "Nam", cccd: "079205088296", address: "Quận Bình Tân, TP.HCM", room: "P.302", bed: "G01", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
+  { id: "NT-0189", userId: "user-NT-0189", name: "Trần Thị Thảo", email: "tranthithao@gmail.com", phone: "0987 654 321", gender: "Nữ", cccd: "079203096215", address: "Quận Tân Phú, TP.HCM", room: "P.102", bed: "G04", start: "15/01/2026", end: "15/01/2027", monthlyRent: 1600000, deposit: 1600000, status: "Sắp hết HĐ" },
+  { id: "NT-0190", userId: "user-NT-0190", name: "Lê Minh Tuấn", email: "leminhtuan@gmail.com", phone: "0903 112 233", gender: "Nam", cccd: "079204104134", address: "Huyện Bình Chánh, TP.HCM", room: "P.302", bed: "G04", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
+  { id: "NT-0191", userId: "user-NT-0191", name: "Phạm Ngọc Linh", email: "phamngoclinh@gmail.com", phone: "0968 220 155", gender: "Nữ", cccd: "079203119972", address: "Quận 5, TP.HCM", room: "P.301", bed: "G05", start: "01/09/2026", end: "01/09/2027", monthlyRent: 1500000, deposit: 1500000, status: "Đang thuê" },
 ];
 
 export const initialRooms: RoomRecord[] = [
@@ -283,8 +285,8 @@ export const initialRooms: RoomRecord[] = [
       { name: "Tủ cá nhân", quantity: 6 },
     ],
     bedOverrides: {
-      G01: { status: "MAINTENANCE" },
-      G02: { status: "MAINTENANCE" },
+      G01: { id: "bed-RM-304-G01", roomId: "RM-304", status: "MAINTENANCE" },
+      G02: { id: "bed-RM-304-G02", roomId: "RM-304", status: "MAINTENANCE" },
     },
   },
   // TẦNG 4
@@ -331,17 +333,15 @@ export const rentalSlots: RentalSlot[] = initialRooms.flatMap((room) =>
   }),
 );
 
-export const initialInvoices: Invoice[] = [
-  { id: "HD-2610-0001", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "05/10/2026", status: "Đã thu", kind: "Tiền phòng tháng 10", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "03/10/2026 09:15", confirmedBy: "Hệ thống VietQR" } },
-  { id: "HD-2610-0002", tenant: "Lê Hoàng Nam", room: "P.401", bed: "G01", amount: 1500000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "04/10/2026 14:20", confirmedBy: "Hệ thống VietQR" } },
-  { id: "HD-2610-0003", tenant: "Trần Quốc Bảo", room: "P.205", bed: "G03", amount: 1200000, due: "05/10/2026", status: "Chờ xác nhận", proof: { fileName: "bien-lai-vcb-05-10.png", submittedAt: "10:15 05/10/2026" } },
-  { id: "HD-2610-0004", tenant: "Phạm Đức Anh", room: "P.103", bed: "G03", amount: 900000, due: "05/10/2026", status: "Nợ", late: 1 },
-  { id: "HD-2610-0005", tenant: "Đỗ Anh Tuấn", room: "P.204", bed: "G04", amount: 1200000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1200000, method: "Trực tuyến", paidAt: "02/10/2026 08:40", confirmedBy: "Hệ thống VietQR" } },
-  { id: "HD-2610-0006", tenant: "Võ Thị Mai", room: "P.108", bed: "G01", amount: 1500000, due: "05/10/2026", status: "Nợ", late: 1 },
-  { id: "HD-2610-0007", tenant: "Bùi Khánh Linh", room: "P.210", bed: "G02", kind: "Dịch vụ giặt ủi + gửi xe", amount: 350000, due: "05/10/2026", status: "Nợ" },
-  { id: "HD-2609-0011", tenant: "Hồ Minh Khoa", room: "P.312", bed: "G04", amount: 900000, due: "05/09/2026", status: "Nợ", late: 31, kind: "Tiền phòng tháng 9" },
-  { id: "HD-2609-0187", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "01/09/2026", status: "Đã thu", kind: "Tiền cọc giữ chỗ", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "29/08/2026 15:30", confirmedBy: "Hệ thống VietQR" } },
-  { id: "HD-2611-0187", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "05/11/2026", status: "Nợ", kind: "Tiền phòng tháng 11" },
+export const initialInvoices: Omit<Invoice, "contractId">[] = [
+  { id: "HD-2610-0001", tenantId: "NT-0187", billingPeriod: "2026-10-01", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "05/10/2026", status: "Đã thu", kind: "Tiền phòng tháng 10", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "03/10/2026 09:15", confirmedBy: "Quản lý" } },
+  { id: "HD-2610-0002", billingPeriod: "2026-10-01", tenant: "Lê Hoàng Nam", room: "P.401", bed: "G01", amount: 1500000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1500000, method: "Trực tuyến", paidAt: "04/10/2026 14:20", confirmedBy: "Quản lý" } },
+  { id: "HD-2610-0003", billingPeriod: "2026-10-01", tenant: "Trần Quốc Bảo", room: "P.205", bed: "G03", amount: 1200000, due: "05/10/2026", status: "Chờ xác nhận", proof: { fileName: "bien-lai-vcb-05-10.png", submittedAt: "10:15 05/10/2026" } },
+  { id: "HD-2610-0004", billingPeriod: "2026-10-01", tenant: "Phạm Đức Anh", room: "P.103", bed: "G03", amount: 900000, due: "05/10/2026", status: "Nợ", late: 1 },
+  { id: "HD-2610-0005", billingPeriod: "2026-10-01", tenant: "Đỗ Anh Tuấn", room: "P.204", bed: "G04", amount: 1200000, due: "05/10/2026", status: "Đã thu", payment: { amount: 1200000, method: "Trực tuyến", paidAt: "02/10/2026 08:40", confirmedBy: "Quản lý" } },
+  { id: "HD-2610-0006", billingPeriod: "2026-10-01", tenant: "Võ Thị Mai", room: "P.108", bed: "G01", amount: 1500000, due: "05/10/2026", status: "Nợ", late: 1 },
+  { id: "HD-2609-0011", billingPeriod: "2026-09-01", tenant: "Hồ Minh Khoa", room: "P.312", bed: "G04", amount: 900000, due: "05/09/2026", status: "Nợ", late: 31, kind: "Tiền phòng tháng 9" },
+  { id: "HD-2611-0187", tenantId: "NT-0187", billingPeriod: "2026-11-01", tenant: "Nguyễn Hoàng Nam", room: "P.302", bed: "G02", amount: 1500000, due: "05/11/2026", status: "Nợ", kind: "Tiền phòng tháng 11" },
 ];
 export const initialFacilityExpenses: FacilityExpense[] = [
   {

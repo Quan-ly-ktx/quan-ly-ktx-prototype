@@ -1,25 +1,21 @@
-import type { BedRecord, BedStatus, RoomRecord, TenantRecord } from "../types/index.ts";
+import type { BedStatus, RoomRecord, TenantRecord } from "../types/index.ts";
+import type { ContractRecord } from "../types/tenant.ts";
 
 export const slotKey = (room: string, bed: string) => `${room}-${bed}`;
 
 export function isSlotAvailable(
-  tenants: TenantRecord[],
-  room: string,
-  bed: string,
+  contracts: ContractRecord[],
+  roomId: string,
+  bedId: string,
 ): boolean {
-  return !tenants.some(
-    (tenant) =>
-      tenant.status !== "Đã trả phòng" &&
-      tenant.room === room &&
-      tenant.bed === bed,
-  );
+  return !contracts.some((contract) => contract.status !== "Đã thanh lý" && contract.roomId === roomId && contract.bedId === bedId);
 }
 
 export function generateBedsForRoom(
   roomCode: string,
   totalBeds: number,
   basePrice: number,
-): BedRecord[] {
+): { bedCode: string; slotKey: string; price: number; status: BedStatus }[] {
   return Array.from({ length: totalBeds }, (_, i) => {
     const bedCode = `G0${i + 1}`;
     return {
@@ -32,21 +28,17 @@ export function generateBedsForRoom(
 }
 
 export function canChangeGenderPolicy(
-  roomCode: string,
-  tenants: TenantRecord[],
+  roomId: string,
+  contracts: ContractRecord[],
 ): boolean {
-  return !tenants.some(
-    (t) => t.status !== "Đã trả phòng" && t.room === roomCode,
-  );
+  return !contracts.some((contract) => contract.status !== "Đã thanh lý" && contract.roomId === roomId);
 }
 
 export function canDeleteRoom(
-  roomCode: string,
-  tenants: TenantRecord[],
+  roomId: string,
+  contracts: ContractRecord[],
 ): boolean {
-  return !tenants.some(
-    (t) => t.status !== "Đã trả phòng" && t.room === roomCode,
-  );
+  return !contracts.some((contract) => contract.status !== "Đã thanh lý" && contract.roomId === roomId);
 }
 
 export function canAssignTenantToRoom(
@@ -57,16 +49,11 @@ export function canAssignTenantToRoom(
 }
 
 export function canToggleBedMaintenance(
-  roomCode: string,
-  bedCode: string,
-  tenants: TenantRecord[],
+  roomId: string,
+  bedId: string,
+  contracts: ContractRecord[],
 ): boolean {
-  return !tenants.some(
-    (t) =>
-      t.status !== "Đã trả phòng" &&
-      t.room === roomCode &&
-      t.bed === bedCode,
-  );
+  return isSlotAvailable(contracts, roomId, bedId);
 }
 
 export type RoomOccupancyBed = {
@@ -79,6 +66,7 @@ export type RoomOccupancyBed = {
 
 export type RoomOccupancySummary = {
   occupied: number;
+  available: number;
   total: number;
   beds: RoomOccupancyBed[];
   tenants: TenantRecord[];
@@ -87,23 +75,19 @@ export type RoomOccupancySummary = {
 export function getRoomOccupancy(
   room: RoomRecord,
   tenants: TenantRecord[],
+  contracts: ContractRecord[],
 ): RoomOccupancySummary {
-  const roomTenants = tenants.filter(
-    (t) => t.status !== "Đã trả phòng" && t.room === room.code,
-  );
+  const activeContracts = contracts.filter((contract) => contract.status !== "Đã thanh lý" && contract.roomId === room.id);
+  const roomTenants = tenants.filter((tenant) => activeContracts.some((contract) => contract.tenantId === tenant.id));
 
   const beds = Array.from({ length: room.total }, (_, i) => {
     const bedCode = `G0${i + 1}`;
     const sKey = slotKey(room.code, bedCode);
-    const tenant = roomTenants.find((t) => t.bed === bedCode);
     const override = room.bedOverrides?.[bedCode];
+    const contract = activeContracts.find((item) => item.bedId === override?.id);
+    const tenant = roomTenants.find((item) => item.id === contract?.tenantId);
 
-    let status: BedStatus = "AVAILABLE";
-    if (tenant) {
-      status = "OCCUPIED";
-    } else if (override?.status === "MAINTENANCE") {
-      status = "MAINTENANCE";
-    }
+    const status: BedStatus = contract ? "OCCUPIED" : (override?.status ?? "AVAILABLE");
 
     return {
       bedCode,
@@ -118,6 +102,7 @@ export function getRoomOccupancy(
 
   return {
     occupied,
+    available: beds.filter((bed) => bed.status === "AVAILABLE").length,
     total: room.total,
     beds,
     tenants: roomTenants,

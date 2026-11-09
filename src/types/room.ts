@@ -8,9 +8,10 @@ export type AmenityItem = {
 };
 
 export type BedRecord = {
+  id: string;
+  roomId: string;
   bedCode: string;
   slotKey: string;
-  price: number;
   status: BedStatus;
 };
 
@@ -23,7 +24,7 @@ export type RoomRecord = {
   total: number;
   basePrice: number;
   amenities: AmenityItem[];
-  bedOverrides?: Record<string, { id?: string; status?: BedStatus; price?: number }>;
+  bedOverrides?: Record<string, { id: string; roomId: string; status: BedStatus }>;
   deletedAt?: string | null;
 };
 

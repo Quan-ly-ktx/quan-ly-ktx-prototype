@@ -1,5 +1,7 @@
 import { httpClient } from "./httpClient.ts";
 import { env } from "../config/env.ts";
+import { getMockSnapshot, updateMockSnapshot, type MockStaff } from "./mock/mockStore.ts";
+import { demoEmailAvailable } from "./mock/mockAuth.ts";
 import type {
   TechnicianResponse,
   CreateTechnicianRequest,
@@ -30,62 +32,12 @@ export interface TechnicianService {
   toggleStatus(id: string, active: boolean): Promise<TechnicianResponse>;
 }
 
-// In-memory / localStorage storage keys for mock mode
-const STORAGE_KEY = "dorm_mock_technicians";
-
-const initialMockTechnicians: TechnicianResponse[] = [
-  {
-    id: "tech-1",
-    fullName: "Võ Văn Thịnh",
-    email: "thinh.vv@ktxhub.vn",
-    phone: "0908 112 245",
-    active: true,
-    userStatus: "ACTIVE",
-    createdAt: "2024-01-15T08:00:00Z",
-  },
-  {
-    id: "tech-2",
-    fullName: "Lâm Quốc Huy",
-    email: "huy.lq@ktxhub.vn",
-    phone: "0912 334 556",
-    active: false,
-    userStatus: "INACTIVE",
-    createdAt: "2024-02-10T09:30:00Z",
-  },
-];
-
-function loadMockStorage(): TechnicianResponse[] {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return [...initialMockTechnicians];
-  }
-  try {
-    const item = window.localStorage.getItem(STORAGE_KEY);
-    return item ? (JSON.parse(item) as TechnicianResponse[]) : [...initialMockTechnicians];
-  } catch {
-    return [...initialMockTechnicians];
-  }
-}
-
-function saveMockStorage(data: TechnicianResponse[]): void {
-  if (typeof window === "undefined" || !window.localStorage) return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore quota or disabled storage error
-  }
-}
 
 // Mock Implementation
 class MockTechnicianServiceImpl implements TechnicianService {
-  private inMemoryTechs: TechnicianResponse[] = loadMockStorage();
-
-  private getTechs(): TechnicianResponse[] {
-    return this.inMemoryTechs;
-  }
-
-  private saveTechs(data: TechnicianResponse[]): void {
-    this.inMemoryTechs = data;
-    saveMockStorage(data);
+  private getTechs(): MockStaff[] {
+    const state = getMockSnapshot();
+    return state.staff.filter((staff) => state.accounts.some((account) => account.id === staff.userId && account.role === "technician"));
   }
   async getTechnicians(
     params?: GetTechniciansParams,
@@ -126,18 +78,18 @@ class MockTechnicianServiceImpl implements TechnicianService {
   }
 
   async createTechnician(req: CreateTechnicianRequest): Promise<TechnicianResponse> {
-    const techs = this.getTechs();
-    const newTech: TechnicianResponse = {
-      id: `tech-${Date.now()}`,
-      fullName: req.fullName,
-      email: req.email,
-      phone: req.phone,
-      active: true,
-      userStatus: "ACTIVE",
-      createdAt: new Date().toISOString(),
+    if (!demoEmailAvailable(req.email)) throw new Error("Email đã được sử dụng.");
+    const id = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    const newTech = {
+      id, userId, fullName: req.fullName, email: req.email, phone: req.phone,
+      active: true, userStatus: "ACTIVE" as const, createdAt: new Date().toISOString(),
     };
-    const updated = [...techs, newTech];
-    this.saveTechs(updated);
+    updateMockSnapshot((state) => ({
+      ...state,
+      staff: [...state.staff, newTech],
+      accounts: [...state.accounts, { id: userId, staffId: id, identifier: req.email, email: req.email, name: req.fullName, password: req.password, role: "technician" }],
+    }));
     return newTech;
   }
 
@@ -154,39 +106,34 @@ class MockTechnicianServiceImpl implements TechnicianService {
     id: string,
     req: UpdateTechnicianRequest,
   ): Promise<TechnicianResponse> {
-    const techs = this.getTechs();
-    const idx = techs.findIndex((t) => t.id === id || t.email === id);
-    if (idx === -1) {
-      throw new Error(`Technician with id ${id} not found`);
-    }
-    const current = techs[idx];
-    const updatedTech: TechnicianResponse = {
+    const current = this.getTechs().find((t) => t.id === id || t.email === id);
+    if (!current) throw new Error(`Technician with id ${id} not found`);
+    if (!demoEmailAvailable(req.email ?? current.email ?? "", current.id)) throw new Error("Email đã được sử dụng.");
+    const updatedTech = {
       ...current,
       fullName: req.fullName ?? current.fullName,
       email: req.email ?? current.email,
       phone: req.phone ?? current.phone,
     };
-    const nextTechs = [...techs];
-    nextTechs[idx] = updatedTech;
-    this.saveTechs(nextTechs);
+    updateMockSnapshot((state) => ({
+      ...state,
+      staff: state.staff.map((item) => item.id === current.id ? updatedTech : item),
+      accounts: state.accounts.map((account) => account.id === current.userId
+        ? { ...account, identifier: updatedTech.email ?? account.identifier, email: updatedTech.email ?? account.email, name: updatedTech.fullName }
+        : account),
+    }));
     return updatedTech;
   }
 
   async toggleStatus(id: string, active: boolean): Promise<TechnicianResponse> {
-    const techs = this.getTechs();
-    const idx = techs.findIndex((t) => t.id === id || t.email === id);
-    if (idx === -1) {
-      throw new Error(`Technician with id ${id} not found`);
-    }
-    const current = techs[idx];
-    const updatedTech: TechnicianResponse = {
-      ...current,
-      active,
-      userStatus: active ? "ACTIVE" : "INACTIVE",
-    };
-    const nextTechs = [...techs];
-    nextTechs[idx] = updatedTech;
-    this.saveTechs(nextTechs);
+    const current = this.getTechs().find((t) => t.id === id || t.email === id);
+    if (!current) throw new Error(`Technician with id ${id} not found`);
+    const updatedTech = { ...current, active, userStatus: active ? "ACTIVE" as const : "INACTIVE" as const };
+    updateMockSnapshot((state) => ({
+      ...state,
+      staff: state.staff.map((item) => item.id === current.id ? updatedTech : item),
+      accounts: state.accounts.map((account) => account.id === current.userId ? { ...account, status: active ? "ACTIVE" : "INACTIVE" } : account),
+    }));
     return updatedTech;
   }
 }

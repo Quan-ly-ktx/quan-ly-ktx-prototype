@@ -10,8 +10,18 @@ export const priorityRank: Record<Priority, number> = {
 
 export type TicketStatus = "Chưa phân công" | "Mới giao" | "Đang xử lý" | "Hoàn thành";
 
+export type TicketPart = { name: string; quantity: number; unitCost: number };
+
 export type Ticket = {
   id: string;
+  reporterTenantId: string;
+  roomId: string;
+  bedId?: string;
+  assigneeStaffId?: string;
+  scenePhoto?: string;
+  completionPhoto?: string;
+  completedAt?: string;
+  parts?: TicketPart[];
   room: string;
   title: string;
   description: string;

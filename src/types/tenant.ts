@@ -1,5 +1,6 @@
 export type TenantRecord = {
   id: string;
+  userId: string;
   name: string;
   email: string;
   phone: string;
@@ -15,9 +16,36 @@ export type TenantRecord = {
   status: "Đang thuê" | "Sắp hết HĐ" | "Đã trả phòng";
 };
 
+export type OnboardingInput = {
+  name: string;
+  gender: "Nam" | "Nữ";
+  phone: string;
+  cccd: string;
+  email: string;
+  address: string;
+  bedId: string;
+  startDate: string;
+  endDate: string;
+  deposit: number;
+};
+
+export type OnboardingResult = {
+  tenant: TenantRecord;
+  initialPassword?: string;
+};
+
+export type ContractRenewal = {
+  id: string;
+  contractId: string;
+  startDate: string;
+  endDate: string;
+  monthlyRent: number;
+  signedAt: string;
+};
+
 export type TenantVehicle = {
   id: string;
-  tenantId?: string;
+  tenantId: string;
   plate: string;
   type: "Xe tay ga" | "Xe số" | "Xe máy điện" | "Xe côn tay" | "Xe đạp" | "Xe đạp điện" | "Xe máy";
   brand: string;
@@ -37,8 +65,10 @@ export type ContractDocumentRecord = {
   name: string;
   size: number;
   type: string;
-  url: string;
+  url?: string;
   category: "ORIGINAL_CONTRACT" | "RENEWAL_ANNEX" | "CHECKOUT_HANDOVER" | "OTHER";
+  renewalId?: string;
+  content?: string;
   uploadedAt: string;
 };
 
@@ -47,6 +77,8 @@ export type ContractRecord = {
   tenantId: string;
   tenantName: string;
   room: string;
+  roomId: string;
+  bedId: string;
   bed: string;
   startDate: string;
   endDate: string;
@@ -54,4 +86,5 @@ export type ContractRecord = {
   monthlyRent: number;
   status: "Hiệu lực" | "Sắp hết hạn" | "Đã thanh lý";
   documents?: ContractDocumentRecord[];
+  renewals?: ContractRenewal[];
 };

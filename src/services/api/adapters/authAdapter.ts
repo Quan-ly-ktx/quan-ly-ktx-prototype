@@ -8,15 +8,13 @@ import type {
 export function toFrontendRole(backendRole: string): Role {
   switch (backendRole.toUpperCase()) {
     case "MANAGER":
-    case "ADMIN":
       return "manager";
     case "TECHNICIAN":
       return "technician";
     case "TENANT":
-    case "STUDENT":
       return "tenant";
     default:
-      return "tenant";
+      throw new Error("Vai trò tài khoản không được hỗ trợ.");
   }
 }
 
@@ -27,7 +25,6 @@ export function toBackendRole(frontendRole: Role): BackendUserRole {
     case "technician":
       return "TECHNICIAN";
     case "tenant":
-    case "student":
       return "TENANT";
     default:
       return "TENANT";
@@ -36,6 +33,9 @@ export function toBackendRole(frontendRole: Role): BackendUserRole {
 
 export function toFrontendUserProfile(res: UserProfileResponse): UserProfile {
   let name = res.username;
+  if (!res.id || (res.role === "TENANT" && !res.tenantProfile?.id)) {
+    throw new Error("Không thể xác định hồ sơ tài khoản.");
+  }
   if (res.staffProfile?.fullName) {
     name = res.staffProfile.fullName;
   } else if (res.tenantProfile?.fullName) {
@@ -46,5 +46,9 @@ export function toFrontendUserProfile(res: UserProfileResponse): UserProfile {
     name,
     email: res.email,
     role: toFrontendRole(res.role),
+    userId: res.id,
+    staffId: res.staffProfile?.id,
+    tenantId: res.tenantProfile?.id,
+    residentStatus: res.tenantProfile?.residentStatus,
   };
 }

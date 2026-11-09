@@ -112,11 +112,12 @@ export function toBackendBedStatus(status: BedStatus): BackendBedStatus {
 /**
  * Maps backend BedSlotResponse to frontend BedRecord
  */
-export function toFrontendBedRecord(bed: BedSlotResponse): BedRecord {
+export function toFrontendBedRecord(bed: BedSlotResponse, roomId: string): BedRecord {
   return {
+    id: bed.id,
+    roomId,
     bedCode: bed.bedCode,
     slotKey: bed.slotKey,
-    price: bed.price,
     status: toFrontendBedStatus(bed.status),
   };
 }
@@ -145,16 +146,12 @@ export function toFrontendRoomRecord(
   };
 
   if ("beds" in res && Array.isArray(res.beds)) {
-    const bedOverrides: Record<string, { id?: string; status?: BedStatus; price?: number }> = {};
+    const bedOverrides: NonNullable<RoomRecord["bedOverrides"]> = {};
     for (const bed of res.beds) {
-      const status = toFrontendBedStatus(bed.status);
-      const isCustomStatus = status !== "AVAILABLE";
-      const isCustomPrice = typeof bed.price === "number" && bed.price !== res.basePrice;
-
       bedOverrides[bed.bedCode] = {
         id: bed.id,
-        ...(isCustomStatus ? { status } : {}),
-        ...(isCustomPrice ? { price: bed.price } : {}),
+        roomId: res.id,
+        status: toFrontendBedStatus(bed.status),
       };
     }
     if (Object.keys(bedOverrides).length > 0) {

@@ -1,6 +1,19 @@
 export type Role = "manager" | "tenant" | "technician";
 
 export const ROLES: Role[] = ["manager", "tenant", "technician"];
+export type UserAccount = {
+  id: string;
+  role: Role;
+  email: string;
+  status: "ACTIVE" | "INACTIVE" | "LOCKED";
+};
+
+export type StaffRecord = {
+  id: string;
+  userId: string;
+  name: string;
+  phone: string;
+};
 
 export type Person = {
   name: string;
@@ -15,6 +28,10 @@ export type UserProfile = {
   name: string;
   email: string;
   role: Role;
+  userId?: string;
+  staffId?: string;
+  tenantId?: string;
+  residentStatus?: BackendResidentStatus;
   avatar?: string;
 };
 

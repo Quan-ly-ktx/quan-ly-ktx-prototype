@@ -3,6 +3,7 @@ export type PaymentRecord = {
   method: "Trực tuyến" | "Tiền mặt";
   paidAt: string;
   confirmedBy: string;
+  confirmedByStaffId?: string;
 };
 
 export type InvoiceStatus = "Đã thu" | "Nợ" | "Chờ xác nhận";
@@ -10,10 +11,14 @@ export type InvoiceStatus = "Đã thu" | "Nợ" | "Chờ xác nhận";
 export type PaymentProof = {
   fileName: string;
   submittedAt: string;
+  dataUrl?: string;
 };
 
 export type Invoice = {
   id: string;
+  tenantId?: string;
+  contractId: string;
+  billingPeriod: string;
   tenant: string;
   room: string;
   bed: string;
