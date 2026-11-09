@@ -1,4 +1,5 @@
 import { Button } from "../../../components/common/Button.tsx";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import { Icon } from "../../../components/common/Icon.tsx";
 import { money } from "../../../utils/formatters.ts";
 import type { RoomRecord, TenantRecord } from "../../../types/index.ts";
@@ -26,10 +27,11 @@ export function RoomDetailDrawer({
     newStatus: "AVAILABLE" | "MAINTENANCE",
   ) => void;
 }) {
+  const { contracts } = useDormData();
   if (!room) return null;
 
-  const isDeletable = canDeleteRoom(room.code, tenants);
-  const remainingSlots = room.total - room.occupancy.occupied;
+  const isDeletable = canDeleteRoom(room.id, contracts) && room.occupancy.occupied === 0;
+  const remainingSlots = room.occupancy.available;
 
   return (
     <>
@@ -98,9 +100,7 @@ export function RoomDetailDrawer({
                 </span>
               </div>
               <div className="mt-1 text-xs text-slate-500">
-                {remainingSlots === 0
-                  ? "Đã kín chỗ"
-                  : `Còn ${remainingSlots} chỗ trống`}
+                {`Còn ${remainingSlots} giường sẵn sàng`}
               </div>
             </div>
 
@@ -191,6 +191,8 @@ export function RoomDetailDrawer({
                                 </span>
                               </div>
                             </div>
+                          ) : isOccupied ? (
+                            <p className="mt-1 text-xs text-slate-500">Giường đang được sử dụng; chưa có thông tin người thuê.</p>
                           ) : isMaint ? (
                             <p className="mt-1 text-xs text-warning-800">
                               Vị trí giường đang được bảo trì vật tư hoặc hỏng
@@ -212,7 +214,9 @@ export function RoomDetailDrawer({
                               <Button
                                 className="rounded-sm bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
                                 onClick={() => {
-                                  onQuickOnboard(room.code, slot.bedCode);
+                                  const bedId = room.bedOverrides?.[slot.bedCode]?.id;
+                                  if (!bedId) return;
+                                  onQuickOnboard(room.id, bedId);
                                   onClose();
                                 }}
                               >

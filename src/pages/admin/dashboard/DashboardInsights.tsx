@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Drawer } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
-import { person } from "../../../services/mock/mockData.ts";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import type { Invoice } from "../../../types/invoice.ts";
 import { card, th, rowCls, Badge, type Toast } from "../common.tsx";
 
@@ -18,6 +18,7 @@ export function DashboardInsights({
   records,
   showToast,
 }: Toast & { records: Invoice[] }) {
+  const { tenants } = useDormData();
   const [debtor, setDebtor] = useState<Invoice | null>(null);
   const debtors = records.filter((invoice) => invoice.status !== "Đã thu");
 
@@ -90,7 +91,7 @@ export function DashboardInsights({
                         {d.tenant}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {person(d.tenant).phone}
+                        {tenants.find((tenant) => tenant.id === d.tenantId)?.phone ?? ""}
                       </p>
                     </td>
                     <td className="px-6 py-4 font-mono text-sm text-slate-600">
@@ -116,7 +117,7 @@ export function DashboardInsights({
       {debtor && (
         <Drawer
           title={debtor.tenant}
-          subtitle={`${debtor.id} · ${person(debtor.tenant).phone}`}
+          subtitle={`${debtor.id} · ${tenants.find((tenant) => tenant.id === debtor.tenantId)?.phone ?? ""}`}
           onClose={() => setDebtor(null)}
         >
           <Badge tone="danger">

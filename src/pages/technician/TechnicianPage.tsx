@@ -16,11 +16,13 @@ export function TechnicianApp({
   onUpdate,
   onLogout,
   showToast,
+  staffId,
 }: {
   tickets: Ticket[];
-  onUpdate: (id: string, patch: Partial<Ticket>) => void;
+  onUpdate: (id: string, patch: Partial<Ticket>) => Promise<unknown>;
   onLogout: () => void;
   showToast: (message: string) => void;
+  staffId?: string;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"jobs" | "settings">("jobs");
@@ -39,12 +41,8 @@ export function TechnicianApp({
     .join("")
     .toUpperCase();
   const unread = notices.filter((n) => n.unread).length;
-  const selected = tickets.find((ticket) => ticket.id === selectedId) ?? null;
-  const count = (status: Ticket["status"]) =>
-    tickets.filter((ticket) => ticket.status === status).length;
-  const urgentOpen = tickets.filter(
-    (t) => t.priority === "Khẩn cấp" && t.status !== "Hoàn thành",
-  ).length;
+  const assignedTickets = staffId ? tickets.filter((ticket) => ticket.assigneeStaffId === staffId) : [];
+  const selected = assignedTickets.find((ticket) => ticket.id === selectedId) ?? null;
 
   return (
     <div className="min-h-[100dvh] bg-slate-100 md:py-6">
@@ -54,15 +52,21 @@ export function TechnicianApp({
             key={selected.id}
             onBack={() => setSelectedId(null)}
             onComplete={async (patch) => {
-              await onUpdate(selected.id, { ...patch, status: "Hoàn thành" });
-              showToast(
-                `Đã hoàn thành ${selected.id}, thông báo gửi quản lý và người thuê`,
-              );
-              setSelectedId(null);
+              try {
+                await onUpdate(selected.id, { ...patch, status: "Hoàn thành" });
+                showToast(`Đã hoàn thành ${selected.id}`);
+                setSelectedId(null);
+              } catch {
+                throw new Error("Không thể hoàn thành phiếu. Vui lòng thử lại.");
+              }
             }}
-            onStart={() => {
-              onUpdate(selected.id, { status: "Đang xử lý" });
-              showToast(`Đã nhận việc ${selected.id} - Bắt đầu xử lý`);
+            onStart={async () => {
+              try {
+                await onUpdate(selected.id, { status: "Đang xử lý" });
+                showToast(`Đã bắt đầu xử lý ${selected.id}`);
+              } catch {
+                showToast("Không thể bắt đầu xử lý. Vui lòng thử lại.");
+              }
             }}
             ticket={selected}
           />
@@ -108,26 +112,12 @@ export function TechnicianApp({
                 Công việc hôm nay
               </h1>
               <p className="mt-0.5 text-xs text-slate-400">
-                Thứ Bảy, 24/10/2026 · {count("Mới giao") + count("Đang xử lý")}{" "}
-                việc cần xử lý
+                {staffId ? "Các phiếu hiện được giao cho bạn." : "Không xác định được kỹ thuật viên."}
               </p>
-              {urgentOpen > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(null)}
-                  className="focus-ring mt-3 flex h-10 w-full cursor-pointer items-center gap-2.5 rounded-sm bg-danger-500 px-3.5 text-left text-xs font-semibold text-white shadow-xs active:translate-y-[1px]"
-                >
-                  <span className="size-2 animate-pulse rounded-sm bg-white" />
-                  <span className="flex-1">
-                    {urgentOpen} việc khẩn cấp đang chờ
-                  </span>
-                  <Icon name="chevron" className="size-3.5 rotate-90" />
-                </button>
-              )}
             </header>
 
             <TicketListPage
-              tickets={tickets}
+              tickets={assignedTickets}
               onSelectTicket={setSelectedId}
               onUpdateTicket={onUpdate}
               showToast={showToast}

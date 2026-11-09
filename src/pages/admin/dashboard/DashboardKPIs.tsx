@@ -1,70 +1,36 @@
-import { Icon } from "../../../components/common/Icon.tsx";
-import type { IconName } from "../../../types/shared.ts";
+import type { Invoice, RoomRecord, TenantRecord, Ticket } from "../../../types/index.ts";
+import { useDormData } from "../../../hooks/useDormData.ts";
+import { getRoomOccupancy } from "../../../utils/roomCalculations.ts";
+import { money } from "../../../utils/formatters.ts";
+import { revenueForPeriod } from "../../../utils/revenueForPeriod.ts";
 
-export const kpis = [
-  {
-    label: "Tỷ lệ lấp đầy",
-    value: "87,7%",
-    detail: "158 / 180 giường",
-    change: "+3,2%",
-    icon: "bed" as IconName,
-    tone: "brand",
-  },
-  {
-    label: "Doanh thu tháng 10",
-    value: "145,2 tr",
-    detail: "Đã thu 94,4 triệu",
-    change: "+8,4%",
-    icon: "wallet" as IconName,
-    tone: "success",
-  },
-  {
-    label: "Công nợ quá hạn",
-    value: "18,4 tr",
-    detail: "12 người thuê",
-    change: "Cần xử lý",
-    icon: "receipt" as IconName,
-    tone: "danger",
-  },
-  {
-    label: "Sự cố chờ xử lý",
-    value: "4 phiếu",
-    detail: "2 phiếu mới hôm nay",
-    change: "Mới hôm nay",
-    icon: "tools" as IconName,
-    tone: "warning",
-  },
-];
+function dateKey(value: string): string | null {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  return date.getUTCFullYear() === Number(year) && date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day)
+    ? `${year}-${month}-${day}` : null;
+}
 
-export function DashboardKPIs() {
-  return (
-    <section
-      aria-label="Chỉ số vận hành"
-      className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-    >
-      {kpis.map((kpi) => (
-        <article
-          className="group rounded-sm border border-slate-200 bg-white p-4.5 shadow-xs transition-all hover:border-slate-300"
-          key={kpi.label}
-        >
-          <div className="mb-5 flex items-start justify-between">
-            <span className={`icon-box icon-box-${kpi.tone}`}>
-              <Icon name={kpi.icon} />
-            </span>
-            <span className={`status-label status-label-${kpi.tone}`}>
-              {kpi.tone === "brand" || kpi.tone === "success" ? (
-                <Icon name="trend" className="size-3.5" />
-              ) : null}
-              {kpi.change}
-            </span>
-          </div>
-          <div className="text-sm font-medium text-slate-500">{kpi.label}</div>
-          <div className="mt-1 font-mono text-2xl font-bold tracking-tight text-slate-900">
-            {kpi.value}
-          </div>
-          <div className="mt-2 text-sm text-slate-500">{kpi.detail}</div>
-        </article>
-      ))}
-    </section>
-  );
+export function DashboardKPIs({ invoices, rooms, tenants, tickets, period }: {
+  invoices: Invoice[]; rooms: RoomRecord[]; tenants: TenantRecord[]; tickets: Ticket[]; period: string;
+}) {
+  const { contracts } = useDormData();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const occupancy = rooms.filter((room) => !room.deletedAt).map((room) => getRoomOccupancy(room, tenants, contracts));
+  const total = occupancy.reduce((sum, item) => sum + item.total, 0);
+  const occupied = occupancy.reduce((sum, item) => sum + item.occupied, 0);
+  const debts = invoices.filter((invoice) => invoice.status === "Nợ");
+  const invalidDates = debts.filter((invoice) => !dateKey(invoice.due)).length;
+  const overdue = debts.filter((invoice) => { const due = dateKey(invoice.due); return due !== null && due < today; });
+  const open = tickets.filter((ticket) => ticket.status !== "Hoàn thành").length;
+  const revenue = revenueForPeriod(invoices, period);
+  const cards = [
+    { label: "Doanh thu kỳ vọng / đã thu", value: revenue ? `${money(revenue.expected)} / ${money(revenue.collected)}` : "Chưa đủ dữ liệu", detail: revenue ? `Kỳ hóa đơn ${period}` : `Kỳ ${period || "chưa chọn"}: hóa đơn thiếu kỳ hợp lệ.` },
+    { label: "Tỷ lệ lấp đầy", value: total ? `${(occupied / total * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%` : "Chưa có giường", detail: `${occupied}/${total} giường · hiện tại, gồm giường bảo trì trong mẫu số` },
+    { label: "Công nợ quá hạn", value: invalidDates ? "Chưa đủ dữ liệu" : money(overdue.reduce((sum, invoice) => sum + invoice.amount, 0)), detail: invalidDates ? `${invalidDates} hóa đơn nợ thiếu ngày hạn hợp lệ · hiện tại` : `${overdue.length} hóa đơn nợ · hiện tại, không gồm chờ xác nhận` },
+    { label: "Sự cố đang mở", value: String(open), detail: "Phiếu chưa hoàn thành · hiện tại" },
+  ];
+  return <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{cards.map((card) => <article key={card.label} className="rounded-sm border border-slate-200 bg-white p-5 shadow-xs"><h2 className="text-sm font-semibold text-slate-600">{card.label}</h2><p className="mt-3 text-xl font-bold tabular-nums text-slate-950">{card.value}</p><p className="mt-2 text-xs text-slate-500">{card.detail}</p></article>)}</section>;
 }

@@ -39,7 +39,7 @@ export function NoticeSheet({
         <div className="px-5 pb-2">
           <button
             type="button"
-            className="focus-ring h-11 cursor-pointer rounded-lg text-sm font-semibold text-brand-600"
+            className="focus-ring h-10 cursor-pointer rounded-sm text-xs font-semibold text-brand-600 hover:text-brand-700"
             onClick={onReadAll}
           >
             Đánh dấu tất cả đã đọc

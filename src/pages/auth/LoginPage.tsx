@@ -1,26 +1,25 @@
 import { useState } from "react";
 import type React from "react";
 import { Button, Icon, Modal } from "../../components/common/index.ts";
-import { resolveRole } from "../../utils/authUtils.ts";
 import type { Role, LoginRequest } from "../../types/auth.ts";
 import { authService } from "../../services/authService.ts";
-import { ApiError } from "../../services/httpClient.ts";
 import { env } from "../../config/env.ts";
+import { demoRequestOtp, demoResetPassword, demoVerifyOtp } from "../../services/mock/mockAuth.ts";
 
 const demoAccounts: { role: Role; label: string; email: string }[] = [
   { role: "manager", label: "Quản lý", email: "manager@gmail.com" },
-  { role: "tenant", label: "Người thuê", email: "tenant@gmail.com" },
-  { role: "technician", label: "Kỹ thuật viên", email: "technician@gmail.com" },
+  { role: "tenant", label: "Người thuê", email: "079203001187" },
+  { role: "tenant", label: "Khách đã checkout", email: "000000000001" },
+  { role: "technician", label: "Kỹ thuật viên", email: "thinh.vv@ktxhub.vn" },
 ];
 
 export function LoginPage({
   onLogin,
 }: {
-  onLogin: (roleOrCredentials: Role | LoginRequest) => void;
+  onLogin: (roleOrCredentials: Role | LoginRequest) => Promise<void> | void;
 }) {
-  const [email, setEmail] = useState("manager@gmail.com");
-  const [password, setPassword] = useState("SecurePassword123!");
-  const [remember, setRemember] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -28,11 +27,12 @@ export function LoginPage({
   // Forgot Password modal state
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotStep, setForgotStep] = useState(1);
-  const [forgotEmail, setForgotEmail] = useState("admin@ktxhub.vn");
-  const [forgotOtp, setForgotOtp] = useState("246810");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [demoOtp, setDemoOtp] = useState("");
   const [resetToken, setResetToken] = useState("");
-  const [newPassword, setNewPassword] = useState("NewPassword123!");
-  const [confirmPassword, setConfirmPassword] = useState("NewPassword123!");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState("");
   const [forgotSuccess, setForgotSuccess] = useState("");
@@ -41,26 +41,8 @@ export function LoginPage({
     event.preventDefault();
     setError("");
 
-    if (password.length < 6) {
-      setError("Mật khẩu phải chứa ít nhất 6 ký tự.");
-      return;
-    }
-
-    if (env.USE_MOCK) {
-      // Mock Mode / Offline Fallback validation before setting submitting
-      const role = resolveRole(email);
-      if (!role) {
-        setError(
-          "Tài khoản Gmail không hợp lệ. Hãy dùng manager@gmail.com, tenant@gmail.com hoặc technician@gmail.com.",
-        );
-        return;
-      }
-
-      setSubmitting(true);
-      window.setTimeout(() => {
-        setSubmitting(false);
-        onLogin(role);
-      }, 650);
+    if (!/^(?:\d{12}|[^\s@]+@[^\s@]+\.[^\s@]+)$/.test(email.trim()) || !password) {
+      setError("Thông tin đăng nhập không hợp lệ.");
       return;
     }
 
@@ -68,17 +50,11 @@ export function LoginPage({
     setSubmitting(true);
     try {
       await onLogin({
-        identifier: email,
+        identifier: email.trim(),
         password,
       });
-    } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        setError(err.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Đăng nhập thất bại. Vui lòng thử lại.");
-      }
+    } catch {
+      setError("Thông tin đăng nhập không hợp lệ hoặc không thể kết nối. Vui lòng thử lại.");
     } finally {
       setSubmitting(false);
     }
@@ -89,29 +65,29 @@ export function LoginPage({
     setForgotSuccess("");
 
     if (forgotStep === 1) {
-      if (!forgotEmail) {
-        setForgotError("Vui lòng nhập email hợp lệ.");
+      if (!/^(?:\d{12}|[^\s@]+@[^\s@]+\.[^\s@]+)$/.test(forgotEmail.trim())) {
+        setForgotError("Vui lòng nhập email hoặc CCCD 12 chữ số hợp lệ.");
+        return;
+      }
+      if (!env.USE_MOCK && /^\d{12}$/.test(forgotEmail.trim())) {
+        setForgotError("Khôi phục bằng CCCD chưa có contract API. Vui lòng liên hệ quản lý.");
         return;
       }
       setForgotLoading(true);
       try {
         if (!env.USE_MOCK) {
           await authService.forgotPassword({ email: forgotEmail });
+        } else {
+          setDemoOtp(demoRequestOtp(forgotEmail));
         }
         setForgotStep(2);
-      } catch (err: unknown) {
-        if (err instanceof ApiError) {
-          setForgotError(err.message || "Gửi mã OTP thất bại.");
-        } else if (err instanceof Error) {
-          setForgotError(err.message);
-        } else {
-          setForgotError("Có lỗi xảy ra khi gửi mã OTP.");
-        }
+      } catch {
+        setForgotError("Không thể xử lý yêu cầu. Vui lòng thử lại.");
       } finally {
         setForgotLoading(false);
       }
     } else if (forgotStep === 2) {
-      if (!forgotOtp || forgotOtp.length < 6) {
+      if (!/^\d{6}$/.test(forgotOtp)) {
         setForgotError("Mã xác thực OTP gồm 6 chữ số.");
         return;
       }
@@ -124,17 +100,11 @@ export function LoginPage({
           });
           setResetToken(res.resetToken);
         } else {
-          setResetToken("mock_reset_token");
+          demoVerifyOtp(forgotEmail, forgotOtp);
         }
         setForgotStep(3);
-      } catch (err: unknown) {
-        if (err instanceof ApiError) {
-          setForgotError(err.message || "Mã OTP không hợp lệ.");
-        } else if (err instanceof Error) {
-          setForgotError(err.message);
-        } else {
-          setForgotError("Mã xác thực không hợp lệ hoặc đã hết hạn.");
-        }
+      } catch {
+        setForgotError("Mã không hợp lệ hoặc đã hết hạn.");
       } finally {
         setForgotLoading(false);
       }
@@ -156,22 +126,18 @@ export function LoginPage({
             newPassword,
             confirmPassword,
           });
+        } else {
+          demoResetPassword(forgotEmail, newPassword);
         }
-        setForgotSuccess("Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay.");
+        setForgotSuccess("Nếu tài khoản hợp lệ, mật khẩu đã được đặt lại. Hãy thử đăng nhập.");
         window.setTimeout(() => {
           setForgotOpen(false);
           setForgotStep(1);
           setForgotError("");
           setForgotSuccess("");
         }, 1200);
-      } catch (err: unknown) {
-        if (err instanceof ApiError) {
-          setForgotError(err.message || "Đặt lại mật khẩu thất bại.");
-        } else if (err instanceof Error) {
-          setForgotError(err.message);
-        } else {
-          setForgotError("Không thể đặt lại mật khẩu. Vui lòng thử lại.");
-        }
+      } catch {
+        setForgotError("Không thể đặt lại mật khẩu. Vui lòng thử lại.");
       } finally {
         setForgotLoading(false);
       }
@@ -265,7 +231,7 @@ export function LoginPage({
           <form className="space-y-4" onSubmit={submit}>
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-slate-700">
-                Tài khoản Gmail
+                Email hoặc CCCD
               </span>
               <span className="relative block">
                 <Icon
@@ -277,8 +243,8 @@ export function LoginPage({
                   className="focus-ring h-10 w-full rounded-sm border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-brand-500"
                   disabled={submitting}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="ten@gmail.com"
-                  type="email"
+                  placeholder="Email nhân viên hoặc CCCD người thuê"
+                  type="text"
                   value={email}
                 />
               </span>
@@ -309,15 +275,7 @@ export function LoginPage({
               </span>
             </label>
             <div className="flex items-center justify-between gap-4">
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
-                <input
-                  checked={remember}
-                  className="size-3.5 rounded-sm accent-brand-500"
-                  onChange={(event) => setRemember(event.target.checked)}
-                  type="checkbox"
-                />
-                Ghi nhớ đăng nhập
-              </label>
+              <span />
               <Button
                 className="text-xs font-semibold text-brand-600 hover:text-brand-700"
                 onClick={() => {
@@ -347,31 +305,42 @@ export function LoginPage({
               )}
             </button>
           </form>
-          <div className="mt-6 rounded-sm border border-slate-200 bg-slate-50 p-3.5">
+          {env.USE_MOCK && <div className="mt-6 rounded-sm border border-slate-200 bg-slate-50 p-3.5">
             <div className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Tài khoản demo theo phân quyền
+              Tài khoản demo · mật khẩu Demo1234!
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {demoAccounts.map((account) => (
                 <button
-                  className="focus-ring min-h-10 cursor-pointer rounded-sm border border-slate-200 bg-white px-2.5 py-1.5 text-left hover:border-brand-500 hover:bg-brand-50 active:translate-y-[1px] transition-all"
-                  key={account.role}
+                  className="focus-ring flex flex-col justify-between min-h-12 cursor-pointer rounded-sm border border-slate-200 bg-white p-2 text-left hover:border-brand-500 hover:bg-brand-50 active:translate-y-[1px] transition-all"
+                  key={account.email}
                   onClick={() => {
                     setEmail(account.email);
                     setError("");
                   }}
                   type="button"
                 >
-                  <span className="block text-xs font-semibold text-slate-800">
-                    {account.label}
-                  </span>
-                  <span className="block truncate font-mono text-[11px] text-slate-500">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="block text-xs font-semibold text-slate-800">
+                      {account.label}
+                    </span>
+                    <span className={`inline-block rounded-xs px-1 text-[9px] font-bold uppercase tracking-wider ${
+                      account.role === "manager"
+                        ? "bg-brand-100 text-brand-700"
+                        : account.role === "technician"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-sky-100 text-sky-700"
+                    }`}>
+                      {account.role === "manager" ? "Quản lý" : account.role === "technician" ? "Kỹ thuật" : "Thuê"}
+                    </span>
+                  </div>
+                  <span className="block truncate font-mono text-[11px] text-slate-500 mt-1">
                     {account.email}
                   </span>
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
         </div>
       </section>
 
@@ -390,6 +359,11 @@ export function LoginPage({
             setForgotStep(1);
             setForgotError("");
             setForgotSuccess("");
+            setForgotOtp("");
+            setDemoOtp("");
+            setResetToken("");
+            setNewPassword("");
+            setConfirmPassword("");
           }}
         >
           <div className="p-6">
@@ -426,18 +400,18 @@ export function LoginPage({
             {forgotStep === 1 && (
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Email quản trị
+                  Email hoặc CCCD
                 </span>
                 <input
                   className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 text-sm outline-none focus:border-brand-500"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   disabled={forgotLoading}
-                  placeholder="admin@ktxhub.vn"
-                  type="email"
+                  placeholder="Email hoặc CCCD"
+                  type="text"
                 />
                 <span className="mt-2 block text-xs text-slate-500">
-                  Mã OTP 6 số sẽ được gửi đến email này.
+                  {env.USE_MOCK ? "Chế độ demo không gửi email thật." : "Nếu thông tin hợp lệ, mã sẽ được gửi tới email đã đăng ký."}
                 </span>
               </label>
             )}
@@ -456,9 +430,7 @@ export function LoginPage({
                     maxLength={6}
                   />
                 </label>
-                <p className="mt-3 text-center text-xs text-slate-500">
-                  Gửi lại mã sau 00:48
-                </p>
+                {env.USE_MOCK && <p className="mt-3 text-center text-xs text-slate-500">Mã demo (không gửi email): {demoOtp}. Có hiệu lực 5 phút, tối đa 5 lần thử.</p>}
               </div>
             )}
             {forgotStep === 3 && (
@@ -487,9 +459,7 @@ export function LoginPage({
                     type="password"
                   />
                 </label>
-                <div className="rounded-sm border border-success-200 bg-success-50 p-2.5 text-xs text-success-600">
-                  Mật khẩu đạt yêu cầu: có chữ hoa, chữ số và ký tự đặc biệt.
-                </div>
+                <p className="text-xs text-slate-500">Mật khẩu mới cần ít nhất 6 ký tự.</p>
               </div>
             )}
             <Button

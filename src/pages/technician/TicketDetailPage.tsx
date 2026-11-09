@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Icon, PriorityTag } from "../../components/common/index.ts";
 import { money } from "../../utils/formatters.ts";
 import type { Ticket } from "../../types/index.ts";
+import { readIncidentImage } from "../../services/mock/incidentImages.ts";
 import { statusStyle, where } from "./technicianConstants.ts";
 
 export function TicketDetailPage({
@@ -16,8 +17,10 @@ export function TicketDetailPage({
   onComplete: (patch: Partial<Ticket>) => void;
 }) {
   const [note, setNote] = useState("");
-  const [cost, setCost] = useState("");
-  const [afterPhoto, setAfterPhoto] = useState(false);
+  const [parts, setParts] = useState<{ name: string; quantity: string; unitPrice: string }[]>([]);
+  const total = parts.reduce((sum, part) => sum + Number(part.quantity || 0) * Number(part.unitPrice || 0), 0);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [pending, setPending] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   const steps = ["Tiếp nhận", "Kiểm tra", "Hoàn thành"];
@@ -96,14 +99,7 @@ export function TicketDetailPage({
             </div>
           </div>
 
-          {ticket.hasPhoto && (
-            <div className="mt-3 flex h-32 items-end overflow-hidden rounded-sm border border-slate-200 bg-slate-100 p-3">
-              <span className="flex items-center gap-1.5 rounded-sm bg-white/95 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-xs">
-                <Icon name="image" className="size-4" />
-                Ảnh người thuê đính kèm
-              </span>
-            </div>
-          )}
+          {ticket.scenePhoto && <img src={ticket.scenePhoto} alt="Ảnh hiện trường" className="mt-3 max-h-64 rounded-sm object-contain" />}
         </div>
 
         <div className="rounded-sm border border-slate-200 bg-white p-4 shadow-xs">
@@ -164,21 +160,22 @@ export function TicketDetailPage({
         {ticket.status === "Đang xử lý" && (
           <form
             className="space-y-4 rounded-sm border border-slate-200 bg-white p-4 shadow-xs"
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
-              setErrorMsg("");
-              if (!afterPhoto) {
-                setErrorMsg("Vui lòng chụp ảnh nghiệm thu sau khi sửa chữa.");
-                return;
+              if (!note.trim() || !photo || pending) {
+                setErrorMsg("Vui lòng nhập kết quả và chọn ảnh nghiệm thu."); return;
               }
-              if (note.trim().length < 5) {
-                setErrorMsg("Vui lòng nhập mô tả kết quả xử lý (tối thiểu 5 ký tự).");
-                return;
+              const lines = parts.map((part) => ({ name: part.name.trim(), quantity: Number(part.quantity), unitCost: Number(part.unitPrice) }));
+              if (lines.some((part, index) => !part.name || !parts[index].quantity || !parts[index].unitPrice || !Number.isSafeInteger(part.quantity) || part.quantity <= 0 || !Number.isSafeInteger(part.unitCost) || part.unitCost < 0 || !Number.isSafeInteger(part.quantity * part.unitCost)) || !Number.isSafeInteger(total)) {
+                setErrorMsg("Vật tư cần tên, số lượng nguyên dương và đơn giá nguyên không âm."); return;
               }
-              onComplete({
-                resolution: note.trim(),
-                cost: Number(cost) || 0,
-              });
+              setPending(true);
+              try {
+                const completionPhoto = await readIncidentImage(photo);
+                await onComplete({ resolution: note.trim(), completionPhoto, parts: lines, cost: total, completedAt: new Date().toISOString() });
+              } catch (error) {
+                setErrorMsg(error instanceof Error ? error.message : "Không thể hoàn thành phiếu.");
+              } finally { setPending(false); }
             }}
           >
             <div>
@@ -202,47 +199,29 @@ export function TicketDetailPage({
               />
             </label>
 
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold text-slate-800">
-                Chi phí vật tư (nếu có)
-              </span>
-              <span className="relative block">
-                <input
-                  className="focus-ring h-10 w-full rounded-sm border border-slate-200 pl-3 pr-10 font-mono text-sm outline-none focus:border-brand-500"
-                  inputMode="numeric"
-                  onChange={(event) =>
-                    setCost(event.target.value.replace(/\D/g, ""))
-                  }
-                  placeholder="0"
-                  value={cost}
-                />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400">
-                  đ
-                </span>
-              </span>
+            <fieldset className="space-y-3">
+              <legend className="mb-2 text-sm font-semibold text-slate-800">Vật tư thực dùng</legend>
+              {parts.map((part, index) => (
+                <div key={index} className="grid gap-2 rounded-sm border border-slate-200 p-3">
+                  <label className="text-xs">Tên vật tư
+                    <input className="mt-1 block h-10 w-full rounded-sm border border-slate-200 px-3 text-sm" value={part.name} onChange={(event) => setParts(parts.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} />
+                  </label>
+                  <label className="text-xs">Số lượng
+                    <input type="number" min="1" step="1" className="mt-1 block h-10 w-full rounded-sm border border-slate-200 px-3 text-sm" value={part.quantity} onChange={(event) => setParts(parts.map((item, i) => i === index ? { ...item, quantity: event.target.value } : item))} />
+                  </label>
+                  <label className="text-xs">Đơn giá (đ)
+                    <input type="number" min="0" step="1" className="mt-1 block h-10 w-full rounded-sm border border-slate-200 px-3 text-sm" value={part.unitPrice} onChange={(event) => setParts(parts.map((item, i) => i === index ? { ...item, unitPrice: event.target.value } : item))} />
+                  </label>
+                  <span className="text-sm font-semibold tabular-nums">Thành tiền: {money(Number(part.quantity || 0) * Number(part.unitPrice || 0))}</span>
+                  <button type="button" className="text-left text-sm text-danger-600" onClick={() => setParts(parts.filter((_, i) => i !== index))}>Xóa vật tư</button>
+                </div>
+              ))}
+              <button type="button" className="text-sm font-semibold text-brand-600" onClick={() => setParts([...parts, { name: "", quantity: "", unitPrice: "" }])}>Thêm vật tư</button>
+              <p className="text-sm font-bold tabular-nums text-slate-900">Tổng vật tư: {money(total)}</p>
+            </fieldset>
+            <label className="block text-sm font-semibold">Ảnh nghiệm thu
+              <input type="file" accept="image/*" className="mt-2 block w-full text-sm" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
             </label>
-
-            <div>
-              <div className="mb-2 text-sm font-semibold text-slate-800">
-                Ảnh sau sửa chữa
-              </div>
-              <Button
-                className={`flex h-24 w-full flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed text-xs font-medium ${
-                  afterPhoto
-                    ? "border-success-500 bg-success-50 text-success-600"
-                    : "border-slate-300 text-slate-500 hover:border-brand-500 hover:text-brand-600"
-                }`}
-                onClick={() => setAfterPhoto(!afterPhoto)}
-              >
-                <Icon
-                  name={afterPhoto ? "check" : "camera"}
-                  className="size-7"
-                />
-                {afterPhoto
-                  ? "Đã chụp 1 ảnh · bấm để chụp lại"
-                  : "Chụp ảnh sau khi sửa"}
-              </Button>
-            </div>
 
             {errorMsg && (
               <div className="rounded-sm border border-danger-200 bg-danger-50 p-2.5 text-xs text-danger-700">
@@ -251,6 +230,7 @@ export function TicketDetailPage({
             )}
             <button
               className="focus-ring flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-sm bg-success-500 text-sm font-semibold text-white hover:bg-success-600 active:translate-y-[1px]"
+              disabled={pending}
               type="submit"
             >
               <Icon name="check" className="size-5" />
@@ -268,6 +248,8 @@ export function TicketDetailPage({
             <p className="mt-2 text-sm leading-6 text-slate-700">
               {ticket.resolution}
             </p>
+            {ticket.completionPhoto && <img src={ticket.completionPhoto} alt="Ảnh nghiệm thu" className="mt-3 max-h-64 rounded-sm object-contain" />}
+            {ticket.parts?.map((part, index) => <p key={index} className="mt-1 text-sm">{part.name} · {part.quantity} × {money(part.unitCost)}</p>)}
             <div className="mt-3 flex justify-between border-t border-success-100 pt-3 text-sm">
               <span className="text-slate-500">Chi phí vật tư</span>
               <span className="font-bold text-slate-900">
@@ -284,7 +266,7 @@ export function TicketDetailPage({
             onClick={onStart}
           >
             <Icon name="play" className="size-5" />
-            Nhận việc
+            Bắt đầu xử lý
           </Button>
         </div>
       )}

@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { authService } from "../../services/authService.ts";
+import { demoChangePassword } from "../../services/mock/mockAuth.ts";
+import { env } from "../../config/env.ts";
+import { useAuth } from "../../hooks/useAuth.ts";
 import { Modal } from "./Modal.tsx";
 
 function PasswordField({
@@ -54,6 +58,9 @@ export function ChangePasswordModal({
 }) {
   const [f, setF] = useState({ old: "", next: "", confirm: "" });
   const [tried, setTried] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const [pending, setPending] = useState(false);
+  const { logout } = useAuth();
   const errors = {
     old: f.old ? "" : "Vui lòng nhập mật khẩu cũ",
     next:
@@ -66,11 +73,21 @@ export function ChangePasswordModal({
   };
   const valid = !errors.old && !errors.next && !errors.confirm;
 
-  const submit = () => {
+  const submit = async () => {
     setTried(true);
-    if (valid) {
+    if (!valid || pending) return;
+    setServerError("");
+    setPending(true);
+    try {
+      if (env.USE_MOCK) demoChangePassword(f.old, f.next);
+      else await authService.changePassword({ oldPassword: f.old, newPassword: f.next, confirmPassword: f.confirm });
+      await logout();
       onClose();
-      onDone("Đã đổi mật khẩu thành công");
+      onDone("Đã đổi mật khẩu. Vui lòng đăng nhập lại.");
+    } catch {
+      setServerError("Không thể đổi mật khẩu. Kiểm tra mật khẩu cũ và thử lại.");
+    } finally {
+      setPending(false);
     }
   };
 
@@ -108,6 +125,7 @@ export function ChangePasswordModal({
           onChange={(v) => setF({ ...f, confirm: v })}
           error={tried ? errors.confirm : ""}
         />
+        {serverError && <p role="alert" className="text-sm text-danger-600">{serverError}</p>}
         <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
@@ -118,6 +136,7 @@ export function ChangePasswordModal({
           </button>
           <button
             type="submit"
+            disabled={pending}
             className="h-10 rounded-sm bg-brand-500 px-5 text-sm font-semibold text-white shadow-brand hover:bg-brand-600 active:translate-y-[1px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
           >
             Cập nhật mật khẩu

@@ -1,17 +1,19 @@
 import { useContext, useState } from "react";
 import { Button, Icon, Modal } from "../../components/common/index.ts";
-import { money } from "../../utils/formatters.ts";
 import type { Ticket } from "../../types/incident.ts";
+import type { ContractRecord, TenantRecord } from "../../types/tenant.ts";
 import {
   Card,
   TenantCtx,
-  roommates,
   type RequestKind,
   type TenantVehicle,
 } from "./tenantConstants.tsx";
 
 export function RoomPage({
+  tenant,
+  contract,
   vehicles,
+  roommates,
   myTickets,
   onReport,
   onVehicles,
@@ -19,7 +21,10 @@ export function RoomPage({
   pendingDeposit,
   onPay,
 }: {
+  tenant: TenantRecord;
+  contract?: ContractRecord;
   vehicles: TenantVehicle[];
+  roommates: { id: string; name: string; bed: string }[];
   myTickets: Ticket[];
   onReport: () => void;
   onVehicles: () => void;
@@ -30,36 +35,16 @@ export function RoomPage({
   const TENANT = useContext(TenantCtx);
   const [docsOpen, setDocsOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const ownedContract = contract?.tenantId === tenant.id && contract.status !== "Đã thanh lý" ? contract : undefined;
+  const contractDocuments = ownedContract?.documents?.filter((doc) => doc.contractId === ownedContract.id) ?? [];
+  const endParts = tenant.end.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const endDate = endParts
+    ? new Date(Number(endParts[3]), Number(endParts[2]) - 1, Number(endParts[1]))
+    : new Date(tenant.end);
+  const daysRemaining = Number.isNaN(endDate.getTime())
+    ? null
+    : Math.max(0, Math.ceil((endDate.getTime() - Date.now()) / 86400000));
 
-  const contractDocuments = [
-    {
-      id: "DOC-001",
-      name: "hop-dong-thue-HD-2026-0187.pdf",
-      category: "Hợp đồng gốc (Bản scan PDF)",
-      type: "pdf" as const,
-      url: "/hop-dong-noi-quy-ktx.pdf",
-      size: "284 KB",
-      date: "01/09/2026",
-    },
-    {
-      id: "DOC-002",
-      name: "anh-chup-hop-dong-trang-1.jpg",
-      category: "Ảnh chụp hợp đồng giấy · Trang 1",
-      type: "image" as const,
-      url: "https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&w=800&q=80",
-      size: "1.2 MB",
-      date: "01/09/2026",
-    },
-    {
-      id: "DOC-003",
-      name: "anh-chup-hop-dong-trang-2.jpg",
-      category: "Ảnh chụp hợp đồng giấy · Trang 2 (Có chữ ký)",
-      type: "image" as const,
-      url: "https://images.unsplash.com/photo-1554415707-9e49fe832847?auto=format&fit=crop&w=800&q=80",
-      size: "1.4 MB",
-      date: "01/09/2026",
-    },
-  ];
 
   const openTickets = myTickets.filter(
     (ticket) => ticket.status !== "Hoàn thành",
@@ -86,7 +71,7 @@ export function RoomPage({
               <b className="font-semibold text-slate-900">
                 Chờ thanh toán cọc.
               </b>{" "}
-              Vui lòng thanh toán hóa đơn đặt cọc trong 24h để hoàn tất giữ chỗ.
+              Vui lòng kiểm tra hóa đơn đặt cọc để hoàn tất giữ chỗ.
             </span>
           </div>
           <Button
@@ -122,9 +107,7 @@ export function RoomPage({
                     <span className="rounded-sm border border-slate-700 bg-slate-800 px-2.5 py-0.5 font-mono text-slate-300">
                       Phòng {TENANT.gender}
                     </span>
-                    <span className="rounded-sm border border-slate-700 bg-slate-800 px-2.5 py-0.5 font-mono text-slate-300">
-                      4 / 6 giường
-                    </span>
+                      Chưa có số liệu giường
                   </div>
                 </div>
                 <span
@@ -143,41 +126,7 @@ export function RoomPage({
                 <h2 className="font-heading text-lg font-bold text-slate-900">
                   Sơ đồ giường trong phòng
                 </h2>
-                <div className="flex items-center gap-4 text-xs text-slate-500">
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-sm bg-brand-500" />
-                    Giường của bạn
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-sm bg-slate-300" />
-                    Đã có người
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-sm border border-dashed border-success-500 bg-success-50" />
-                    Còn chỗ
-                  </span>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-                {["G01", "G02", "G03", "G04", "G05", "G06"].map((bed) => {
-                  const mine = bed === TENANT.bed;
-                  const taken = ["G01", "G02", "G03", "G04"].includes(bed);
-                  return (
-                    <div
-                      className={`flex h-20 flex-col items-center justify-center gap-1.5 rounded-sm border ${
-                        mine
-                          ? "border-brand-500 bg-brand-500 text-white shadow-xs"
-                          : taken
-                            ? "border-slate-200 bg-slate-100 text-slate-500"
-                            : "border-dashed border-success-500 bg-success-50 text-success-600"
-                      }`}
-                      key={bed}
-                    >
-                      <Icon name="bed" className="size-5" />
-                      <span className="font-mono text-xs font-medium">{bed}</span>
-                    </div>
-                  );
-                })}
+                <p className="text-xs text-slate-500">Chưa có dữ liệu sơ đồ giường.</p>
               </div>
             </div>
           </article>
@@ -188,7 +137,7 @@ export function RoomPage({
                 Bạn cùng phòng
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                3 thành viên cùng phòng với bạn
+                {roommates.length} thành viên cùng phòng với bạn
               </p>
             </div>
             <table className="w-full border-collapse text-left">
@@ -200,7 +149,7 @@ export function RoomPage({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {roommates.map((mate) => (
-                  <tr className="hover:bg-slate-50" key={mate.name}>
+                  <tr className="hover:bg-slate-50" key={mate.id}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <span className="grid size-8 place-items-center rounded-sm bg-slate-100 font-mono text-xs font-semibold text-slate-600">
@@ -231,23 +180,15 @@ export function RoomPage({
               <h2 className="font-heading text-lg font-bold text-slate-900">
                 Hợp đồng
               </h2>
-              {pendingDeposit ? (
-                <span className="status-label status-label-warning">
-                  <Icon name="clock" className="size-3.5" />
-                  Chờ kích hoạt
-                </span>
-              ) : (
-                <span className="status-label status-label-success">
-                  <span className="size-1.5 rounded-sm bg-current" />
-                  Đang hiệu lực
-                </span>
-              )}
+              <span className="status-label status-label-success">
+                {tenant.status}
+              </span>
             </div>
             <dl className="space-y-4 text-sm">
               {[
-                ["Mã hợp đồng", TENANT.contract, true],
-                ["Thời hạn", "01/09/2026 – 01/09/2027", false],
-                ["Còn lại", pendingDeposit ? "—" : "312 ngày", false],
+                ["Mã hợp đồng", ownedContract?.id ?? "Chưa có thông tin", true],
+                ["Thời hạn", tenant.start && tenant.end ? `${tenant.start} – ${tenant.end}` : "Chưa có thông tin", false],
+                ["Còn lại", daysRemaining === null ? "Chưa có thông tin" : `${daysRemaining} ngày`, false],
               ].map(([label, value, mono]) => (
                 <div
                   className="flex justify-between gap-4"
@@ -264,15 +205,17 @@ export function RoomPage({
                 </div>
               ))}
             </dl>
-            <Button
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-sm border border-brand-200 bg-brand-50/50 py-2.5 text-xs font-semibold text-brand-700 hover:bg-brand-50 active:translate-y-[1px]"
-              onClick={() => setDocsOpen(true)}
-            >
-              <Icon name="file" className="size-3.5" />
-              Xem tài liệu hợp đồng đã ký ({contractDocuments.length} tệp)
-            </Button>
+            {contractDocuments.length > 0 ? (
+              <Button
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-sm border border-brand-200 bg-brand-50/50 py-2.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                onClick={() => setDocsOpen(true)}
+              >
+                <Icon name="file" className="size-3.5" />
+                Xem tài liệu hợp đồng ({contractDocuments.length} tệp)
+              </Button>
+            ) : <p className="mt-3 text-xs text-slate-500">Chưa có tài liệu hợp đồng.</p>}
             <p className="mt-4 text-xs text-slate-500 leading-relaxed rounded-sm border border-slate-200 bg-slate-50 p-3">
-              * Khi có nhu cầu gia hạn hoặc trả phòng, vui lòng liên hệ trực tiếp Ban Quản lý KTX trước 15 ngày để tiến hành kiểm tra phòng và ký kết văn bản.
+              Khi có nhu cầu gia hạn hoặc trả phòng, vui lòng liên hệ Ban Quản lý KTX.
             </p>
           </Card>
 
@@ -312,7 +255,7 @@ export function RoomPage({
         <Modal
           wide
           title="Tài liệu & Minh chứng hợp đồng"
-          description={`Mã hợp đồng: ${TENANT.contract} · Ký kết ngày 01/09/2026`}
+          description={`Mã hợp đồng: ${ownedContract?.id ?? "Chưa có thông tin"}`}
           onClose={() => setDocsOpen(false)}
         >
           <div className="space-y-4 p-6">
@@ -338,8 +281,8 @@ export function RoomPage({
                         <span className="rounded-sm bg-white px-1.5 py-0.5 border border-slate-200 font-medium text-slate-700">
                           {doc.category}
                         </span>
-                        <span>{doc.size}</span>
-                        <span>· {doc.date}</span>
+                        <span>{doc.size} byte</span>
+                        <span>· {doc.uploadedAt}</span>
                       </div>
                     </div>
                   </div>
@@ -347,18 +290,21 @@ export function RoomPage({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Button
                       className="h-8 rounded-sm border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 active:translate-y-[1px]"
+                      disabled={!doc.content && !doc.url}
                       onClick={() => {
-                        if (doc.type === "image") {
-                          setPreviewImage(doc.url);
+                        const source = doc.content || doc.url;
+                        if (!source) return;
+                        if (doc.type.startsWith("image/")) {
+                          setPreviewImage(source);
                         } else {
-                          window.open(doc.url, "_blank", "noopener,noreferrer");
+                          window.open(source, "_blank", "noopener,noreferrer");
                         }
                       }}
                     >
-                      {doc.type === "image" ? "Xem ảnh" : "Mở tệp PDF"}
+                      {doc.type.startsWith("image/") ? "Xem ảnh" : "Mở tệp"}
                     </Button>
                     <a
-                      href={doc.url}
+                      href={doc.content || doc.url}
                       download={doc.name}
                       className="grid size-8 place-items-center rounded-sm border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                       title="Tải tệp xuống"

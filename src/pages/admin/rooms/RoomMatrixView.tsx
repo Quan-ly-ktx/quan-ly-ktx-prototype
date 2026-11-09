@@ -69,7 +69,7 @@ export function RoomMatrixView({
               <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 {floorRooms.map((room) => (
                   <RoomCard
-                    key={room.code}
+                    key={room.id}
                     room={room}
                     onSelect={() => onSelectRoom(room)}
                     onQuickOnboard={onQuickOnboard}
@@ -87,7 +87,7 @@ export function RoomMatrixView({
     <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
       {filteredRooms.map((room) => (
         <RoomCard
-          key={room.code}
+          key={room.id}
           room={room}
           onSelect={() => onSelectRoom(room)}
           onQuickOnboard={onQuickOnboard}

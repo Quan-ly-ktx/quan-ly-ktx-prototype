@@ -15,10 +15,10 @@ export function RoomCard({
   onSelect: () => void;
   onQuickOnboard?: (roomCode: string, bedCode: string) => void;
 }) {
-  const percent = Math.round(
-    (room.occupancy.occupied / room.occupancy.total) * 100,
-  );
-  const remainingSlots = room.occupancy.total - room.occupancy.occupied;
+  const percent = room.occupancy.total > 0
+    ? Math.round((room.occupancy.occupied / room.occupancy.total) * 100)
+    : 0;
+  const remainingSlots = room.occupancy.available;
 
   return (
     <article
@@ -51,7 +51,7 @@ export function RoomCard({
         <span className="font-semibold text-slate-800">
           {room.occupancy.occupied}/{room.occupancy.total} giường
           <span className="ml-1 text-xs font-normal text-slate-500">
-            ({remainingSlots === 0 ? "Kín chỗ" : `còn ${remainingSlots} chỗ`})
+            (còn {remainingSlots} giường sẵn sàng)
           </span>
         </span>
       </div>
@@ -84,8 +84,8 @@ export function RoomCard({
               }`}
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
-                if (!isOccupied && !isMaint && onQuickOnboard) {
-                  onQuickOnboard(room.code, b.bedCode);
+                if (!isOccupied && !isMaint && onQuickOnboard && room.bedOverrides?.[b.bedCode]?.id) {
+                  onQuickOnboard(room.id, room.bedOverrides[b.bedCode].id);
                 } else {
                   onSelect();
                 }
@@ -103,8 +103,8 @@ export function RoomCard({
                     <Icon name="tools" className="size-3 text-warning-600" />
                     Bảo trì
                   </>
-                ) : isOccupied && b.tenant ? (
-                  b.tenant.name.split(" ").slice(-1)[0]
+                ) : isOccupied ? (
+                  b.tenant ? b.tenant.name.split(" ").slice(-1)[0] : "Đang ở"
                 ) : (
                   "+ Trống"
                 )}

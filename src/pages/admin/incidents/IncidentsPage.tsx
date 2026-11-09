@@ -7,66 +7,19 @@ import {
   PageHeader,
   PriorityPicker,
   PriorityTag,
-  ViolationFields,
 } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
-import { TECHNICIANS } from "../../../services/mock/mockData.ts";
 import type { Priority, Ticket } from "../../../types/index.ts";
 import { card, th, rowCls, inputCls, Badge, type Toast } from "../common.tsx";
 import { technicianService } from "../../../services/technicianService.ts";
+import { useDormData } from "../../../hooks/index.ts";
+import { getViolations, recordViolation, type IncidentViolation } from "../../../services/mock/incidentStore.ts";
+import type { TechnicianResponse } from "../../../types/api/endpoints.ts";
+import { env } from "../../../config/env.ts";
 
-type Violation = {
-  id: string;
-  tenant: string;
-  room: string;
-  type: string;
-  note: string;
-  date: string;
-  level: string;
-  fine?: number;
-};
+const violationTypes = ["Về muộn", "Gây ồn", "Vệ sinh", "Khách ngoài", "Hút thuốc / cháy nổ", "Khác"];
 
-const initialViolations: Violation[] = [
-  {
-    id: "KL-0231",
-    tenant: "Hồ Minh Khoa",
-    room: "P.312",
-    type: "Về muộn",
-    note: "Về lúc 00:40, quá giờ đóng cổng 23:30 (lần 3 trong tháng).",
-    date: "05/10/2026",
-    level: "Phạt tiền",
-    fine: 100000,
-  },
-  {
-    id: "KL-0230",
-    tenant: "Phạm Đức Anh",
-    room: "P.103",
-    type: "Gây ồn",
-    note: "Mở loa lớn sau 22:00, phòng bên phản ánh.",
-    date: "03/10/2026",
-    level: "Cảnh cáo",
-  },
-  {
-    id: "KL-0229",
-    tenant: "Bùi Khánh Linh",
-    room: "P.210",
-    type: "Vệ sinh",
-    note: "Để rác ngoài hành lang qua đêm.",
-    date: "29/09/2026",
-    level: "Nhắc nhở",
-  },
-  {
-    id: "KL-0227",
-    tenant: "Võ Thị Mai",
-    room: "P.108",
-    type: "Khách ngoài",
-    note: "Đưa người ngoài vào phòng không đăng ký.",
-    date: "24/09/2026",
-    level: "Cảnh cáo",
-  },
-];
-
-const lvlTone = (l: Violation["level"]) =>
+const lvlTone = (l: IncidentViolation["level"]) =>
   l === "Phạt tiền" ? "danger" : l === "Cảnh cáo" ? "warning" : "slate";
 const parseDeadlineToDateInput = (d?: string): string => {
   if (!d) return new Date().toISOString().split("T")[0];
@@ -95,33 +48,34 @@ export function IncidentsPage({
   showToast,
 }: Toast & {
   tickets: Ticket[];
-  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => void;
+  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => Promise<void>;
 }) {
+  const { tenants } = useDormData();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [dispatchTech, setDispatchTech] = useState("");
   const [dispatchPriority, setDispatchPriority] = useState<Priority>("Bình thường");
   const [dispatchDeadline, setDispatchDeadline] = useState("");
-  const [activeTechnicians, setActiveTechnicians] = useState<string[]>([]);
+  const [activeTechnicians, setActiveTechnicians] = useState<TechnicianResponse[]>([]);
 
   useEffect(() => {
     technicianService
       .getTechnicians({ active: true })
       .then((res) => {
         const items = Array.isArray(res) ? res : res.items || [];
-        const names = items.filter((t) => t.active).map((t) => t.fullName);
-        setActiveTechnicians(names.length > 0 ? names : [TECHNICIANS[0]]);
+        setActiveTechnicians(items.filter((t) => t.active));
       })
       .catch(() => {
-        setActiveTechnicians([TECHNICIANS[0]]);
+        setActiveTechnicians([]);
+        showToast("Không thể tải danh sách kỹ thuật viên đang hoạt động.");
       });
   }, []);
-  const [viol, setViol] = useState<Violation | null>(null);
+  const [viol, setViol] = useState<IncidentViolation | null>(null);
   const [tab, setTab] = useState<"repair" | "discipline">("repair");
-  const [violations, setViolations] = useState(initialViolations);
+  const [violations, setViolations] = useState<IncidentViolation[]>(() => env.USE_MOCK ? getViolations() : []);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    tenant: "",
-    room: "",
+    tenantId: "",
+    date: "",
     type: "Về muộn",
     level: "Nhắc nhở",
     fine: "",
@@ -138,8 +92,9 @@ export function IncidentsPage({
           : "slate";
 
   const submit = () => {
-    if (!form.tenant.trim() || !form.room.trim()) {
-      showToast("Vui lòng nhập người thuê và phòng");
+    const tenant = tenants.find((item) => item.id === form.tenantId && item.status !== "Đã trả phòng");
+    if (!tenant || !form.date) {
+      showToast("Vui lòng chọn người thuê đang cư trú và ngày xảy ra");
       return;
     }
     if (!form.type.trim() || !form.level.trim()) {
@@ -147,33 +102,28 @@ export function IncidentsPage({
       return;
     }
     const isFine = form.level.trim().toLowerCase() === "phạt tiền";
-    if (isFine && Number(form.fine) <= 0) {
+    if (isFine && (!Number.isSafeInteger(Number(form.fine)) || Number(form.fine) <= 0)) {
       showToast("Vui lòng nhập số tiền phạt");
       return;
     }
-    setViolations([
-      {
-        id: `KL-0${232 + violations.length - 4}`,
-        tenant: form.tenant,
-        room: form.room,
-        type: form.type,
-        note: form.note || "—",
-        date: "06/10/2026",
-        level: form.level,
-        fine: isFine ? Number(form.fine) : undefined,
-      },
-      ...violations,
-    ]);
+    try {
+      if (!env.USE_MOCK) throw new Error("API vi phạm chưa được tích hợp.");
+      recordViolation(tenant, { type: form.type, note: form.note, date: formatDateInputToDisplay(form.date), level: form.level, fine: isFine ? Number(form.fine) : undefined });
+      setViolations(getViolations());
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể ghi nhận vi phạm.");
+      return;
+    }
     setOpen(false);
     setForm({
-      tenant: "",
-      room: "",
+      tenantId: "",
+      date: "",
       type: "Về muộn",
       level: "Nhắc nhở",
       fine: "",
       note: "",
     });
-    showToast("Đã ghi nhận vi phạm");
+    showToast("Đã ghi nhận vi phạm và tạo thông báo cá nhân.");
   };
 
   return (
@@ -247,7 +197,7 @@ export function IncidentsPage({
                   className={`${rowCls} cursor-pointer`}
                   onClick={() => {
                     setTicket(t);
-                    setDispatchTech(t.assignee || activeTechnicians[0] || TECHNICIANS[0]);
+                    setDispatchTech(t.assigneeStaffId || "");
                     setDispatchPriority(t.priority);
                     setDispatchDeadline(parseDeadlineToDateInput(t.deadline));
                   }}
@@ -391,10 +341,9 @@ export function IncidentsPage({
                     value={dispatchTech}
                     onChange={(e) => setDispatchTech(e.target.value)}
                   >
-                    {activeTechnicians.map((n) => (
-                       <option key={n} value={n}>
-                         {n}
-                       </option>
+                    <option value="">Chọn kỹ thuật viên</option>
+                    {activeTechnicians.map((technician) => (
+                       <option key={technician.id} value={technician.id}>{technician.fullName}</option>
                      ))}
                    </select>
                  </label>
@@ -416,18 +365,20 @@ export function IncidentsPage({
                  <Button
                    label="Xác nhận giao việc"
                    className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-                   onClick={() => {
+                   onClick={async () => {
+                    const technician = activeTechnicians.find((item) => item.id === dispatchTech);
+                    if (!technician || !dispatchDeadline) {
+                      showToast("Vui lòng chọn kỹ thuật viên đang hoạt động và hạn xử lý.");
+                      return;
+                    }
                     const finalDeadline = formatDateInputToDisplay(dispatchDeadline);
-                    const nextStatus = "Mới giao" as const;
-                    onAssign(ticket.id, dispatchTech, dispatchPriority, finalDeadline);
-                    setTicket({
-                      ...ticket,
-                      assignee: dispatchTech,
-                      priority: dispatchPriority,
-                      deadline: finalDeadline,
-                      status: nextStatus,
-                    });
-                    showToast(`Đã giao việc ${ticket.id} cho ${dispatchTech} (Hạn: ${finalDeadline})`);
+                    try {
+                      await onAssign(ticket.id, dispatchTech, dispatchPriority, finalDeadline);
+                      setTicket({ ...ticket, assigneeStaffId: dispatchTech, assignee: technician.fullName, priority: dispatchPriority, deadline: finalDeadline, status: ticket.status === "Chưa phân công" ? "Mới giao" : ticket.status });
+                      showToast(`Đã giao việc ${ticket.id} cho ${technician.fullName}`);
+                    } catch {
+                      showToast("Không thể giao việc. Vui lòng thử lại.");
+                    }
                    }}
                  >
                    <Icon name="check" className="size-4" />
@@ -452,8 +403,8 @@ export function IncidentsPage({
           <dl className="mt-5 divide-y divide-slate-100 rounded-sm border border-slate-200 text-sm">
             {[
               ["Loại vi phạm", viol.type],
-              ["Ngày lập", viol.date],
-              ["Người lập", "Thu Lan · Quản lý"],
+              ["Ngày xảy ra", viol.date],
+              ["Người thuê", viol.tenantId],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-4 px-4 py-4">
                 <dt className="text-slate-500">{k}</dt>
@@ -465,13 +416,6 @@ export function IncidentsPage({
             {viol.note}
           </p>
           <div className="mt-6 grid gap-2">
-            <Button
-              label="In biên bản"
-              className="h-10 rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-              onClick={() => showToast(`Đã xuất biên bản ${viol.id}`)}
-            >
-              In biên bản
-            </Button>
             <Button
               label="Đóng"
               className="h-10 rounded-sm border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
@@ -486,36 +430,41 @@ export function IncidentsPage({
       {open && (
         <Modal
           title="Ghi nhận vi phạm"
-          description="Hồ sơ được lưu vào lịch sử cư trú của người thuê."
+          description="Ghi nhận vi phạm và thông báo cho người thuê. Tiền phạt không tạo khoản thu."
           onClose={() => setOpen(false)}
         >
           <div className="grid gap-4 p-6">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Người thuê
-              <input
-                className={inputCls}
-                value={form.tenant}
-                onChange={(e) => setForm({ ...form, tenant: e.target.value })}
-                placeholder="VD: Hồ Minh Khoa"
-              />
+              <select className={inputCls} value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })}>
+                <option value="">Chọn người thuê đang cư trú</option>
+                {tenants.filter((tenant) => tenant.status !== "Đã trả phòng").map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>{tenant.name} · {tenant.id} · {tenant.room}</option>
+                ))}
+              </select>
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Phòng
-              <input
-                className={inputCls}
-                value={form.room}
-                onChange={(e) => setForm({ ...form, room: e.target.value })}
-                placeholder="VD: P.312"
-              />
+              Ngày xảy ra
+              <input type="date" className={inputCls} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </label>
-            <ViolationFields
-              type={form.type}
-              level={form.level}
-              fine={form.fine}
-              onType={(type) => setForm({ ...form, type })}
-              onLevel={(level) => setForm({ ...form, level })}
-              onFine={(fine) => setForm({ ...form, fine })}
-            />
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Loại vi phạm
+              <select className={inputCls} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                {violationTypes.map((type) => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Hình thức xử lý
+              <select className={inputCls} value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
+                {["Nhắc nhở", "Cảnh cáo", "Phạt tiền"].map((level) => <option key={level}>{level}</option>)}
+              </select>
+            </label>
+            {form.level === "Phạt tiền" && (
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Số tiền phạt (chỉ ghi nhận)
+                <input type="number" min="1" step="1" className={inputCls} value={form.fine} onChange={(e) => setForm({ ...form, fine: e.target.value })} />
+              </label>
+            )}
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               Ghi chú
               <textarea
@@ -537,7 +486,7 @@ export function IncidentsPage({
                 className="h-10 rounded-sm bg-brand-500 px-5 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
                 onClick={submit}
               >
-                Lưu hồ sơ
+                Ghi nhận vi phạm
               </Button>
             </div>
           </div>

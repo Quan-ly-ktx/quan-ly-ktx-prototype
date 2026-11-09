@@ -2,10 +2,9 @@ import { createContext, useState, useEffect, type ReactNode } from "react";
 import type { Role, UserProfile, LoginRequest } from "../types/index.ts";
 import { authService } from "../services/authService.ts";
 import { tokenStorage } from "../services/api/tokenStorage.ts";
-import {
-  toFrontendRole,
-  toFrontendUserProfile,
-} from "../services/api/adapters/authAdapter.ts";
+import { env } from "../config/env.ts";
+import { demoLogin, demoLogout } from "../services/mock/mockAuth.ts";
+import { toFrontendUserProfile } from "../services/api/adapters/authAdapter.ts";
 
 export type AuthContextType = {
   role: Role | null;
@@ -42,6 +41,7 @@ export function AuthProvider({
 
   // Initialize from token if available on mount
   useEffect(() => {
+    if (env.USE_MOCK) return;
     const token = tokenStorage.getAccessToken();
     if (token && !role) {
       let isMounted = true;
@@ -77,20 +77,23 @@ export function AuthProvider({
   const loginWithCredentials = async (credentials: LoginRequest): Promise<void> => {
     setIsLoading(true);
     try {
-      const authData = await authService.login(credentials);
-      const frontendRole = toFrontendRole(authData.user.role);
-      setRole(frontendRole);
-
-      // Attempt to load full profile
+      if (env.USE_MOCK) {
+        const profile = await demoLogin(credentials);
+        setCurrentUser(profile);
+        setRole(profile.role);
+        return;
+      }
       try {
-        const profileRes = await authService.getMe();
-        setCurrentUser(toFrontendUserProfile(profileRes));
-      } catch {
-        setCurrentUser({
-          name: authData.user.username,
-          email: authData.user.email,
-          role: frontendRole,
-        });
+        const authData = await authService.login(credentials);
+        const profile = toFrontendUserProfile(await authService.getMe());
+        if (profile.userId !== authData.user.id) throw new Error("Thông tin phiên không khớp.");
+        setCurrentUser(profile);
+        setRole(profile.role);
+      } catch (error) {
+        tokenStorage.clearTokens();
+        setCurrentUser(null);
+        setRole(null);
+        throw error;
       }
     } finally {
       setIsLoading(false);
@@ -101,25 +104,15 @@ export function AuthProvider({
     if (isLoginRequest(roleOrCredentials)) {
       return loginWithCredentials(roleOrCredentials);
     }
-    // Backward compatibility with demo buttons and test suites
-    setRole(roleOrCredentials);
-    setCurrentUser({
-      name:
-        roleOrCredentials === "manager"
-          ? "Quản lý KTX"
-          : roleOrCredentials === "technician"
-            ? "Kỹ thuật viên"
-            : "Người thuê",
-      email: `${roleOrCredentials}@ktxhub.vn`,
-      role: roleOrCredentials,
-    });
+    throw new Error("Vui lòng đăng nhập bằng thông tin tài khoản.");
   };
 
   const logout = (): Promise<void> | void => {
+    if (env.USE_MOCK) demoLogout();
     setRole(null);
     setCurrentUser(null);
-    return authService.logout().catch(() => {
-      // Ignored: tokenStorage is cleared in authService.logout() finally block
+    if (!env.USE_MOCK) return authService.logout().catch(() => {
+      // Local session is cleared even when server logout fails.
     });
   };
 

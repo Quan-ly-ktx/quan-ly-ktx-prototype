@@ -1,12 +1,6 @@
-import { useContext } from "react";
-import { Button, Icon } from "../../components/common/index.ts";
+import { Icon } from "../../components/common/index.ts";
 import { money } from "../../utils/formatters.ts";
-import {
-  BANK,
-  Card,
-  TenantCtx,
-  type TenantInvoice,
-} from "./tenantConstants.tsx";
+import { Card, type TenantInvoice } from "./tenantConstants.tsx";
 import { PaymentProofPanel } from "./PaymentProofPanel.tsx";
 
 function InvoiceArt() {
@@ -72,62 +66,22 @@ function InvoiceArt() {
   );
 }
 
-function CopyRow({
-  label,
-  value,
-  mono,
-  onCopy,
-  copyLabel,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  onCopy: () => void;
-  copyLabel: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-sm bg-slate-50 px-3.5 py-2.5">
-      <div className="min-w-0">
-        <div className="text-xs text-slate-500">{label}</div>
-        <div
-          className={`mt-0.5 truncate text-sm font-semibold text-slate-900 ${
-            mono ? "font-mono" : ""
-          }`}
-        >
-          {value}
-        </div>
-      </div>
-      <Button
-        className="flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-slate-200 bg-white px-2.5 text-xs font-medium text-brand-700 hover:bg-slate-50 active:translate-y-[1px]"
-        onClick={onCopy}
-      >
-        <Icon name="copy" className="size-3.5" />
-        {copyLabel}
-      </Button>
-    </div>
-  );
-}
 
 export function TenantInvoicesPage({
   invoices,
   onSubmitProof,
   showToast,
 }: {
-  invoices: TenantInvoice[];
-  onSubmitProof: (id: string) => void;
+  invoices: (TenantInvoice & { paymentMethod?: string; proof?: { fileName: string; submittedAt: string } })[];
+  onSubmitProof: (id: string, file: File) => Promise<void>;
   showToast: (message: string) => void;
 }) {
-  const TENANT = useContext(TenantCtx);
   const unpaid = invoices.filter((item) => item.status === "Chưa thanh toán");
   const pending = invoices.filter((item) => item.status === "Chờ xác nhận");
   const paid = invoices.filter((item) => item.status === "Đã thanh toán");
   const unpaidTotal = unpaid.reduce((sum, item) => sum + item.amount, 0);
   const paidTotal = paid.reduce((sum, item) => sum + item.amount, 0);
 
-  const copy = (text: string, message: string) => {
-    navigator.clipboard?.writeText(text).catch(() => undefined);
-    showToast(message);
-  };
 
   return (
     <>
@@ -193,7 +147,6 @@ export function TenantInvoicesPage({
 
       <div className="space-y-6">
         {[...unpaid, ...pending].map((inv) => {
-          const memo = `KTXHUB ${inv.id} ${TENANT.room} ${TENANT.bed}`;
           return (
             <article
               className="overflow-hidden rounded-sm border border-slate-200 bg-white shadow-xs"
@@ -260,31 +213,10 @@ export function TenantInvoicesPage({
                     <b className="font-semibold text-slate-900">{inv.due}</b>
                   </div>
 
-                  <div className="mt-6 space-y-3">
-                    <CopyRow
-                      label={`${BANK.name} · ${BANK.holder}`}
-                      value={BANK.account}
-                      mono
-                      copyLabel="Sao chép STK"
-                      onCopy={() =>
-                        copy(BANK.account, "Đã sao chép số tài khoản")
-                      }
-                    />
-                    <CopyRow
-                      label="Nội dung thanh toán"
-                      value={memo}
-                      mono
-                      copyLabel="Sao chép nội dung"
-                      onCopy={() =>
-                        copy(memo, "Đã sao chép nội dung thanh toán")
-                      }
-                    />
-                  </div>
                 </div>
 
                 <PaymentProofPanel
                   inv={inv}
-                  memo={memo}
                   onSubmitProof={onSubmitProof}
                   showToast={showToast}
                 />
@@ -307,6 +239,7 @@ export function TenantInvoicesPage({
                 <tr>
                   <th className="px-6 py-3">Hóa đơn</th>
                   <th className="px-6 py-3">Ngày thanh toán</th>
+                  <th className="px-6 py-3">Phương thức</th>
                   <th className="px-6 py-3">Số tiền</th>
                   <th className="px-6 py-3">Trạng thái</th>
                 </tr>
@@ -325,6 +258,7 @@ export function TenantInvoicesPage({
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {item.paidAt}
                     </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">{item.paymentMethod ?? "Không có dữ liệu"}</td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-900">
                       {money(item.amount)}
                     </td>

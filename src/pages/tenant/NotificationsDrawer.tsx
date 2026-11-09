@@ -30,7 +30,7 @@ export function NotificationsDrawer({
   return (
     <Drawer
       title="Hộp thư thông báo & Kỷ luật"
-      subtitle="Thông báo từ Ban Quản lý & Lịch sử vi phạm cá nhân (FR-27)"
+      subtitle="Thông báo hệ thống và lịch sử vi phạm cá nhân"
       onClose={onClose}
     >
       {/* Tabs */}
@@ -44,9 +44,9 @@ export function NotificationsDrawer({
           }`}
           onClick={() => setTab("notices")}
         >
-          Thông báo chung
+          Thông báo cá nhân
           {unreadNotices > 0 && (
-            <span className="ml-1.5 rounded-full bg-danger-500 px-1.5 py-0.2 text-[10px] font-bold text-white">
+            <span className="ml-1.5 rounded-sm bg-danger-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
               {unreadNotices}
             </span>
           )}
@@ -62,7 +62,7 @@ export function NotificationsDrawer({
         >
           Biên bản vi phạm
           {violations.length > 0 && (
-            <span className="ml-1.5 rounded-full bg-slate-200 px-1.5 py-0.2 text-[10px] font-bold text-slate-700">
+            <span className="ml-1.5 rounded-sm bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
               {violations.length}
             </span>
           )}

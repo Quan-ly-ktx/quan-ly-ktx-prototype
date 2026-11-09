@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import { Modal } from "../../../components/common/Modal.tsx";
 import { Button } from "../../../components/common/Button.tsx";
 import { Icon } from "../../../components/common/Icon.tsx";
@@ -57,9 +58,10 @@ export function AddEditRoomModal({
   tenants: TenantRecord[];
   activeRooms: RoomRecord[];
   availableFloors: number[];
-  onSave: (room: RoomRecord, isEdit: boolean) => void;
+  onSave: (room: RoomRecord, isEdit: boolean) => Promise<boolean>;
   showToast: (message: string) => void;
 }) {
+  const { contracts } = useDormData();
   const [formCode, setFormCode] = useState("");
   const [formFloor, setFormFloor] = useState<number>(1);
   const [formType, setFormType] = useState<RoomType>("6 giường");
@@ -135,13 +137,26 @@ export function AddEditRoomModal({
     formPrice || 1500000,
   );
 
-  const isGenderLocked =
-    editingRoom !== null && !canChangeGenderPolicy(editingRoom.code, tenants);
+  const isGenderLocked = editingRoom !== null &&
+    (!canChangeGenderPolicy(editingRoom.id, contracts) ||
+      getRoomOccupancy(editingRoom, tenants, contracts).occupied > 0);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmedCode = formCode.trim().toUpperCase();
     if (!trimmedCode) {
       showToast("Vui lòng nhập số phòng (Ví dụ: P.305)");
+      return;
+    }
+    if (activeRooms.some((room) => room.id !== editingRoom?.id && room.code.toUpperCase() === trimmedCode)) {
+      showToast(`Số phòng ${trimmedCode} đã tồn tại hoặc đang lưu trữ`);
+      return;
+    }
+    if (!Number.isInteger(formFloor) || formFloor < 1 || !Number.isFinite(formPrice)) {
+      showToast("Tầng và đơn giá phải hợp lệ");
+      return;
+    }
+    if (formAmenities.some((item) => !Number.isInteger(item.quantity) || item.quantity <= 0)) {
+      showToast("Số lượng tiện nghi phải là số nguyên dương");
       return;
     }
     if (formPrice <= 0) {
@@ -152,19 +167,13 @@ export function AddEditRoomModal({
     const totalBeds = bedCountForType(formType);
 
     if (editingRoom) {
-      const occ = getRoomOccupancy(editingRoom, tenants);
+      const occ = getRoomOccupancy(editingRoom, tenants, contracts);
       if (
-        editingRoom.gender !== formGender &&
-        !canChangeGenderPolicy(editingRoom.code, tenants)
+        (editingRoom.gender !== formGender || editingRoom.code !== trimmedCode) &&
+        isGenderLocked
       ) {
         showToast(
-          `Không thể đổi giới tính: phòng đang có ${occ.occupied} người ở.`,
-        );
-        return;
-      }
-      if (totalBeds < occ.occupied) {
-        showToast(
-          `Sức chứa không thể giảm xuống dưới ${occ.occupied} giường đang có người ở.`,
+          `Không thể đổi mã hoặc giới tính: phòng đang có ${occ.occupied} giường đã chiếm.`,
         );
         return;
       }
@@ -172,20 +181,16 @@ export function AddEditRoomModal({
       const updated: RoomRecord = {
         ...editingRoom,
         code: trimmedCode,
-        floor: formFloor,
-        type: formType,
+        floor: editingRoom.floor,
+        type: editingRoom.type,
         gender: formGender,
-        total: totalBeds,
+        total: editingRoom.total,
         basePrice: formPrice,
         amenities: formAmenities,
       };
 
-      onSave(updated, true);
+      if (await onSave(updated, true)) onClose();
     } else {
-      if (activeRooms.some((r) => r.code === trimmedCode)) {
-        showToast(`Số phòng ${trimmedCode} đã tồn tại trên hệ thống`);
-        return;
-      }
 
       const newRoom: RoomRecord = {
         id: `RM-${Date.now().toString().slice(-4)}`,
@@ -198,10 +203,8 @@ export function AddEditRoomModal({
         amenities: formAmenities,
       };
 
-      onSave(newRoom, false);
+      if (await onSave(newRoom, false)) onClose();
     }
-
-    onClose();
   };
 
   return (
@@ -223,6 +226,7 @@ export function AddEditRoomModal({
           <input
             className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 font-mono text-sm outline-none focus:border-brand-500"
             value={formCode}
+            disabled={isGenderLocked}
             onChange={(e) => setFormCode(e.target.value.toUpperCase())}
             placeholder="VD: P.305"
           />
@@ -235,6 +239,7 @@ export function AddEditRoomModal({
           <input
             type="number"
             min={1}
+            disabled={Boolean(editingRoom)}
             className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 font-mono text-sm outline-none focus:border-brand-500"
             value={formFloor}
             onChange={(e) => setFormFloor(Math.max(1, Number(e.target.value)))}
@@ -247,6 +252,7 @@ export function AddEditRoomModal({
           </span>
           <select
             className="focus-ring h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500"
+            disabled={Boolean(editingRoom)}
             value={formType}
             onChange={(e) => setFormType(e.target.value as RoomType)}
           >

@@ -1,55 +1,46 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button, Drawer, Icon, Modal, PageHeader } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
 import type { Invoice, Ticket, FacilityExpense, FacilityExpenseCategory } from "../../../types/index.ts";
-import { calculateFinancialSummary } from "../../../utils/financialCalculations.ts";
-import { initialFacilityExpenses } from "../../../services/mock/mockData.ts";
+import { completionMonth, expenseMonth, reportForPeriod } from "../../../utils/reportForPeriod.ts";
+import { createReportPdf, createReportSpreadsheet } from "../../../utils/reportExport.ts";
+import fontUrl from "../../../assets/NotoSans-Regular.ttf?url";
+import { env } from "../../../config/env.ts";
 import { card, th, rowCls, inputCls, Stat, Badge } from "../common.tsx";
 
-const categoryTones: Record<FacilityExpenseCategory, "brand" | "info" | "warning" | "neutral"> = {
+const categoryTones: Record<FacilityExpenseCategory, "brand" | "warning" | "slate"> = {
   "Điện EVN": "warning",
-  "Nước": "info",
+  "Nước": "brand",
   "Internet": "brand",
-  "Khác": "neutral",
+  "Khác": "slate",
 };
 
 export function FinancialPage({
   records,
   tickets,
-  facilityExpenses: externalExpenses,
-  onFacilityExpensesChange,
+  facilityExpenses: expenses,
+  onCreateExpense,
+  onUpdateExpense,
+  onDeleteExpense,
   showToast,
 }: {
   records: Invoice[];
   tickets: Ticket[];
-  facilityExpenses?: FacilityExpense[];
-  onFacilityExpensesChange?: (expenses: FacilityExpense[]) => void;
+  facilityExpenses: FacilityExpense[];
+  onCreateExpense: (expense: FacilityExpense) => Promise<void>;
+  onUpdateExpense: (id: string, expense: FacilityExpense) => Promise<void>;
+  onDeleteExpense: (id: string) => Promise<void>;
   showToast?: (m: string) => void;
 }) {
-  const [internalExpenses, setInternalExpenses] = useState<FacilityExpense[]>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const saved = window.localStorage.getItem("dorm_facility_expenses");
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return initialFacilityExpenses;
-  });
+  const [saveError, setSaveError] = useState("");
+  const receiptReadId = useRef(0);
 
-  const expenses = externalExpenses ?? internalExpenses;
-
-  const updateExpenses = (next: FacilityExpense[]) => {
-    if (onFacilityExpensesChange) onFacilityExpensesChange(next);
-    setInternalExpenses(next);
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        window.localStorage.setItem("dorm_facility_expenses", JSON.stringify(next));
-      } catch {}
-    }
-  };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<FacilityExpense | null>(null);
+  const [editingExpense, setEditingExpense] = useState<FacilityExpense | null>(null);
+  const [period, setPeriod] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit" }).format(new Date()));
+  const [categoryFilter, setCategoryFilter] = useState("Tất cả");
 
   // Form state
   const [category, setCategory] = useState<FacilityExpenseCategory>("Điện EVN");
@@ -59,39 +50,39 @@ export function FinancialPage({
   const [invoiceCode, setInvoiceCode] = useState("");
   const [note, setNote] = useState("");
   const [receiptImage, setReceiptImage] = useState("");
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState("");
 
-  const summary = calculateFinancialSummary(records, tickets, expenses);
+  const filteredExpenses = expenses.filter((expense) =>
+    (!period || expenseMonth(expense.expenseDate) === period) &&
+    (categoryFilter === "Tất cả" || expense.category === categoryFilter),
+  );
+  const report = reportForPeriod(records, tickets, expenses, period);
+  const categories = expenses.filter((expense) => expenseMonth(expense.expenseDate) === period).reduce(
+    (totals, expense) => ({ ...totals, [expense.category]: totals[expense.category] + expense.amount }),
+    { "Điện EVN": 0, "Nước": 0, "Internet": 0, "Khác": 0 } satisfies Record<FacilityExpenseCategory, number>,
+  );
+  const paid = records.filter((invoice) => invoice.status === "Đã thu" && invoice.billingPeriod === `${period}-01`);
+  const repairs = tickets.filter((ticket) => ticket.status === "Hoàn thành" && completionMonth(ticket.completedAt) === period);
 
-  const paid = [
-    ...new Map(
-      records
-        .filter((invoice) => invoice.payment)
-        .map((invoice) => [invoice.id, invoice]),
-    ).values(),
-  ];
-
-  const repairs = [
-    ...new Map(
-      tickets
-        .filter((ticket) => ticket.status === "Hoàn thành" && ticket.cost)
-        .map((ticket) => [ticket.id, ticket]),
-    ).values(),
-  ];
-
-  const handleCreateExpense = (e: React.FormEvent) => {
+  const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (receiptLoading || receiptError) {
+      showToast?.(receiptLoading ? "Vui lòng chờ đọc ảnh chứng từ." : "Vui lòng chọn lại ảnh chứng từ hoặc bỏ ảnh bị lỗi.");
+      return;
+    }
     const numAmount = Number(amount.replace(/\D/g, ""));
     if (!title.trim()) {
       showToast?.("Vui lòng nhập tiêu đề hóa đơn tiện ích");
       return;
     }
-    if (!numAmount || numAmount <= 0) {
+    if (!Number.isSafeInteger(numAmount) || numAmount <= 0) {
       showToast?.("Vui lòng nhập số tiền chi phí hợp lệ");
       return;
     }
 
     const newExpense: FacilityExpense = {
-      id: `EXP-${Date.now().toString().slice(-6)}`,
+      id: editingExpense?.id ?? `EXP-${crypto.randomUUID()}`,
       category,
       title: title.trim(),
       amount: numAmount,
@@ -99,10 +90,18 @@ export function FinancialPage({
       invoiceCode: invoiceCode.trim() || undefined,
       receiptImage: receiptImage || undefined,
       note: note.trim() || undefined,
-      createdAt: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) + " " + new Date().toLocaleDateString("vi-VN"),
+      createdAt: editingExpense?.createdAt ?? new Date().toLocaleString("vi-VN"),
     };
 
-    updateExpenses([newExpense, ...expenses]);
+    try {
+      if (editingExpense) await onUpdateExpense(editingExpense.id, newExpense);
+      else await onCreateExpense(newExpense);
+      setSaveError("");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Không thể lưu chi phí. Vui lòng thử lại.");
+      return;
+    }
+    setEditingExpense(null);
     setModalOpen(false);
     setTitle("");
     setAmount("");
@@ -112,67 +111,57 @@ export function FinancialPage({
     showToast?.(`Đã ghi nhận hóa đơn ${category}: ${money(numAmount)}`);
   };
 
-  const handleExport = (format: "Excel" | "PDF") => {
-    showToast?.(`Đã xuất báo cáo tài chính ${format} (Lợi nhuận ròng: ${money(summary.profit)})`);
+  const exportUnavailable = "Chưa thể tổng hợp: cần kỳ hóa đơn hợp lệ và thời điểm hoàn thành cùng vật tư của mọi phiếu hoàn thành.";
+  const exportReport = async (format: "xlsx" | "pdf") => {
+    if (!report) { showToast?.(exportUnavailable); return; }
+    try {
+      const data = { period, ...report, categories, demo: env.USE_MOCK };
+      const buffer = format === "xlsx"
+        ? await createReportSpreadsheet(data)
+        : await createReportPdf(data, new Uint8Array(await (await fetch(fontUrl)).arrayBuffer()));
+      const bytes = new Uint8Array(buffer);
+      const url = URL.createObjectURL(new Blob([bytes.buffer], { type: format === "xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `thu-chi-${period}.${format}`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      showToast?.("Không thể xuất báo cáo. Vui lòng thử lại.");
+    }
   };
 
   return (
     <>
       <PageHeader
         eyebrow="Tài chính"
-        title="Báo cáo tài chính & Lợi nhuận ròng"
-        description="Tổng hợp doanh thu tiền phòng thực thu, chi phí sửa chữa và hóa đơn tiện ích tổng cơ sở (BR-03 / FR-14)."
+        title="Báo cáo thu – chi ghi nhận"
+        description="Chênh lệch thu – chi ghi nhận không phải lợi nhuận ròng kế toán."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              label="Xuất Excel"
-              className="h-10 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={() => handleExport("Excel")}
-            >
-              <Icon name="file" className="mr-1.5 size-4 text-slate-500" />
-              Xuất Excel
+            <Button label="Xuất XLSX" className="h-10 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700" onClick={() => void exportReport("xlsx")}>
+              <Icon name="file" className="mr-1.5 size-4 text-slate-500" />Xuất XLSX
             </Button>
-            <Button
-              label="Xuất PDF"
-              className="h-10 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={() => handleExport("PDF")}
-            >
-              <Icon name="file" className="mr-1.5 size-4 text-slate-500" />
-              Xuất PDF
+            <Button label="Xuất PDF" className="h-10 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700" onClick={() => void exportReport("pdf")}>
+              <Icon name="file" className="mr-1.5 size-4 text-slate-500" />Xuất PDF
             </Button>
           </div>
         }
       />
 
+      {!report && <p className="mb-4 text-sm text-slate-600" role="status">{exportUnavailable}</p>}
+      {saveError && <p className="mb-4 text-sm text-danger-600" role="alert">{saveError}</p>}
+      <div className="mb-6 flex flex-wrap gap-4">
+        <label className="text-sm">Tháng chi phí <input type="month" className={`${inputCls} ml-2`} value={period} onChange={(event) => setPeriod(event.target.value)} /></label>
+        <label className="text-sm">Loại chi phí <select className={`${inputCls} ml-2`} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <option>Tất cả</option><option>Điện EVN</option><option>Nước</option><option>Internet</option><option>Khác</option>
+        </select></label>
+      </div>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          icon="wallet"
-          tone="success"
-          label="Doanh thu thực thu"
-          value={money(summary.collectedRevenue)}
-          hint={`${paid.length} khoản đã gạch nợ`}
-        />
-        <Stat
-          icon="tools"
-          tone="warning"
-          label="Chi phí sửa chữa"
-          value={money(summary.repairExpenses)}
-          hint={`${repairs.length} phiếu hoàn thành`}
-        />
-        <Stat
-          icon="invoice"
-          tone="danger"
-          label="Tiện ích tổng cơ sở"
-          value={money(summary.facilityTotal)}
-          hint={`${expenses.length} hóa đơn điện nước/mạng`}
-        />
-        <Stat
-          icon="trend"
-          tone={summary.profit >= 0 ? "brand" : "danger"}
-          label="Lợi nhuận ròng thực tế"
-          value={money(summary.profit)}
-          hint="Doanh thu − Sửa chữa − Điện nước tổng"
-        />
+        <Stat icon="wallet" tone="success" label="Doanh thu theo kỳ" value={report ? money(report.revenue) : "Chưa đủ dữ liệu"} hint={`Theo kỳ hóa đơn ${period}`} />
+        <Stat icon="tools" tone="warning" label="Chi phí sửa chữa theo kỳ" value={report ? money(report.repairs) : "Chưa đủ dữ liệu"} hint="Phiếu hoàn thành theo giờ Việt Nam" />
+        <Stat icon="invoice" tone="danger" label="Chi phí cơ sở theo kỳ" value={report ? money(report.facility) : "Chưa đủ dữ liệu"} hint={`${filteredExpenses.length} khoản đang lọc`} />
+        <Stat icon="trend" tone="brand" label="Chênh lệch thu – chi ghi nhận" value={report ? money(report.difference) : "Chưa đủ dữ liệu"} hint="Không phải lợi nhuận ròng" />
       </div>
 
       {/* Facility Expenses Table */}
@@ -183,13 +172,13 @@ export function FinancialPage({
               Hóa đơn chi phí tiện ích cơ sở (Điện tổng, Nước tổng, Internet)
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Chi phí định kỳ trả cho nhà cung cấp (EVN, Cấp nước, Viễn thông) để trừ vào doanh thu tính Lợi nhuận ròng.
+              Chi phí theo ngày ghi nhận, lọc theo tháng và loại.
             </p>
           </div>
           <Button
             label="Thêm chi phí"
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-sm border border-brand-200 bg-brand-50 px-3 text-xs font-semibold text-brand-700 hover:bg-brand-100"
-            onClick={() => setModalOpen(true)}
+            onClick={() => { receiptReadId.current++; setReceiptLoading(false); setEditingExpense(null); setCategory("Điện EVN"); setTitle(""); setAmount(""); setExpenseDate(new Date().toISOString().split("T")[0]); setInvoiceCode(""); setNote(""); setReceiptImage(""); setReceiptError(""); setModalOpen(true); }}
           >
             + Nhập hóa đơn tổng
           </Button>
@@ -207,7 +196,7 @@ export function FinancialPage({
               </tr>
             </thead>
             <tbody>
-              {expenses.map((exp) => (
+              {filteredExpenses.map((exp) => (
                 <tr
                   className={`${rowCls} cursor-pointer`}
                   key={exp.id}
@@ -232,7 +221,7 @@ export function FinancialPage({
                   </td>
                 </tr>
               ))}
-              {expenses.length === 0 && (
+              {filteredExpenses.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
                     Chưa có hóa đơn chi phí cơ sở nào. Bấm "+ Ghi nhận chi phí cơ sở" để thêm mới.
@@ -249,10 +238,10 @@ export function FinancialPage({
         <section className={`${card} overflow-hidden`}>
           <div className="border-b border-slate-200 p-6">
             <h2 className="font-heading text-lg font-bold text-slate-950">
-              Khoản thu tiền phòng đã thực nhận
+              Hóa đơn có ghi nhận thanh toán
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Doanh thu tiền phòng trọn gói đã gạch nợ qua VietQR hoặc tiền mặt.
+              Hóa đơn đã thu thuộc kỳ hóa đơn được chọn.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -290,10 +279,10 @@ export function FinancialPage({
         <section className={`${card} overflow-hidden`}>
           <div className="border-b border-slate-200 p-6">
             <h2 className="font-heading text-lg font-bold text-slate-950">
-              Chi phí vật tư sửa chữa hoàn thành
+              Phiếu sửa chữa hoàn thành
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Linh kiện và phụ tùng thay thế được kỹ thuật viên nghiệm thu.
+              Phiếu hoàn thành trong kỳ theo múi giờ Việt Nam.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -319,7 +308,7 @@ export function FinancialPage({
                       {ticket.room}
                     </td>
                     <td className="px-6 py-4 text-right text-sm font-semibold text-danger-600">
-                      {money(ticket.cost ?? 0)}
+                      {ticket.cost == null ? "Chưa có dữ liệu" : money(ticket.cost)}
                     </td>
                   </tr>
                 ))}
@@ -340,10 +329,11 @@ export function FinancialPage({
       {modalOpen && (
         <Modal
           title="Ghi nhận hóa đơn chi phí cơ sở"
-          description="Nhập hóa đơn tiện ích phát sinh trong tháng của cả cơ sở để hạch toán Lợi nhuận ròng (FR-14)."
+          description="Ghi nhận chi phí cơ sở trong dữ liệu hiện có."
           onClose={() => setModalOpen(false)}
         >
           <form className="space-y-4 p-6" onSubmit={handleCreateExpense}>
+            {saveError && <p role="alert" className="text-sm text-danger-600">{saveError}</p>}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-slate-700">
@@ -429,8 +419,26 @@ export function FinancialPage({
                   className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-sm file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-brand-700 hover:file:bg-brand-100"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
+                    const readId = ++receiptReadId.current;
+                    setReceiptImage("");
+                    setReceiptError("");
                     if (file) {
-                      setReceiptImage(URL.createObjectURL(file));
+                      setReceiptLoading(true);
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (readId !== receiptReadId.current) return;
+                        if (typeof reader.result === "string") setReceiptImage(reader.result);
+                        else setReceiptError("Không thể đọc ảnh chứng từ. Vui lòng chọn lại.");
+                        setReceiptLoading(false);
+                      };
+                      reader.onerror = () => {
+                        if (readId !== receiptReadId.current) return;
+                        setReceiptError("Không thể đọc ảnh chứng từ. Vui lòng chọn lại.");
+                        setReceiptLoading(false);
+                      };
+                      reader.readAsDataURL(file);
+                    } else {
+                      setReceiptLoading(false);
                     }
                   }}
                 />
@@ -440,6 +448,8 @@ export function FinancialPage({
                   </span>
                 )}
               </div>
+              {receiptLoading && <p className="mt-1 text-xs text-slate-500">Đang đọc ảnh chứng từ...</p>}
+              {receiptError && <p role="alert" className="mt-1 text-xs text-danger-600">{receiptError}</p>}
             </label>
 
             <label className="block">
@@ -481,6 +491,7 @@ export function FinancialPage({
           subtitle={`${selectedExpense.id} · ${selectedExpense.category}`}
           onClose={() => setSelectedExpense(null)}
         >
+          {saveError && <p role="alert" className="mb-4 text-sm text-danger-600">{saveError}</p>}
           <div className="flex items-center justify-between">
             <Badge tone={categoryTones[selectedExpense.category]}>
               {selectedExpense.category}
@@ -521,11 +532,32 @@ export function FinancialPage({
           )}
 
           <div className="mt-6 flex flex-col gap-2">
+            <Button label="Sửa chi phí" className="h-10 rounded-sm border border-slate-200 text-sm font-semibold" onClick={() => {
+              receiptReadId.current++;
+              setReceiptLoading(false);
+              setEditingExpense(selectedExpense);
+              setCategory(selectedExpense.category);
+              setTitle(selectedExpense.title);
+              setAmount(String(selectedExpense.amount));
+              setExpenseDate(selectedExpense.expenseDate);
+              setInvoiceCode(selectedExpense.invoiceCode ?? "");
+              setNote(selectedExpense.note ?? "");
+              setReceiptImage(selectedExpense.receiptImage ?? "");
+              setReceiptError("");
+              setSelectedExpense(null);
+              setModalOpen(true);
+            }}>Sửa chi phí</Button>
             <Button
               label="Xóa hóa đơn chi phí"
               className="h-10 rounded-sm border border-danger-200 text-sm font-semibold text-danger-600 hover:bg-danger-50"
-              onClick={() => {
-                updateExpenses(expenses.filter((x) => x.id !== selectedExpense.id));
+              onClick={async () => {
+                try {
+                  await onDeleteExpense(selectedExpense.id);
+                  setSaveError("");
+                } catch (error) {
+                  setSaveError(error instanceof Error ? error.message : "Không thể xóa chi phí. Vui lòng thử lại.");
+                  return;
+                }
                 setSelectedExpense(null);
                 showToast?.(`Đã xóa hóa đơn ${selectedExpense.id}`);
               }}

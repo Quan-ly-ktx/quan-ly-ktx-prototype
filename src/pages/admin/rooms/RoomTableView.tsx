@@ -1,4 +1,5 @@
 import { Button } from "../../../components/common/Button.tsx";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import { money } from "../../../utils/formatters.ts";
 import type { RoomRecord, TenantRecord } from "../../../types/index.ts";
 import { canDeleteRoom, getRoomOccupancy } from "../../../utils/roomCalculations.ts";
@@ -18,6 +19,7 @@ export function RoomTableView({
   onEditRoom: (room: RoomRecord) => void;
   onDeleteRoom: (room: RoomRecord) => void;
 }) {
+  const { contracts } = useDormData();
   return (
     <section className="overflow-hidden rounded-sm border border-slate-200 bg-white shadow-xs">
       <div className="overflow-x-auto">
@@ -37,17 +39,17 @@ export function RoomTableView({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredRooms.map((room) => {
-              const occ = getRoomOccupancy(room, tenants);
-              const isDeletable = canDeleteRoom(room.code, tenants);
+              const occ = getRoomOccupancy(room, tenants, contracts);
+              const isDeletable = canDeleteRoom(room.id, contracts) && occ.occupied === 0;
               const maintCount = occ.beds.filter(
                 (b) => b.status === "MAINTENANCE",
               ).length;
-              const vacantCount = occ.total - occ.occupied - maintCount;
+              const vacantCount = occ.available;
 
               return (
                 <tr
                   className="cursor-pointer hover:bg-slate-50"
-                  key={room.code}
+                  key={room.id}
                   onClick={() => onSelectRoom(room)}
                 >
                   <td className="px-5 py-4 font-mono text-sm font-bold text-brand-700">

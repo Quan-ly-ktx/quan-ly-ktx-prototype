@@ -1,18 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Icon } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
-import { person, initialInvoices } from "../../../services/mock/mockData.ts";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import type { Invoice } from "../../../types/invoice.ts";
 import type { IconName } from "../../../types/shared.ts";
 
-const tenantList = [
-  { name: "Nguyễn Hoàng Nam", room: "P.302" },
-  { name: "Lê Hoàng Nam", room: "P.401" },
-  { name: "Trần Quốc Bảo", room: "P.205" },
-  { name: "Phạm Đức Anh", room: "P.103" },
-  { name: "Đỗ Anh Tuấn", room: "P.204" },
-  { name: "Hồ Minh Khoa", room: "P.312" },
-].map((s) => ({ ...s, ...person(s.name) }));
 
 type Hit = {
   group: string;
@@ -24,11 +16,12 @@ type Hit = {
 
 export function GlobalSearch({
   onNavigate,
-  invoices = initialInvoices,
+  invoices = [],
 }: {
   onNavigate: (label: string) => void;
   invoices?: Invoice[];
 }) {
+  const { tenants, rooms } = useDormData();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,17 +52,17 @@ export function GlobalSearch({
 
   const hits = useMemo(() => {
     const all: Hit[] = [
-      ...tenantList.map((s) => ({
+      ...tenants.map((s) => ({
         group: "Người thuê",
         icon: "user" as IconName,
         title: s.name,
         sub: `${s.email} · ${s.room}`,
         nav: "Người thuê",
       })),
-      ...["P.102", "P.201", "P.205", "P.302", "P.401"].map((r) => ({
+      ...rooms.filter((room) => !room.deletedAt).map((room) => ({
         group: "Phòng",
         icon: "bed" as IconName,
-        title: `Phòng ${r}`,
+        title: `Phòng ${room.code}`,
         sub: "Xem sơ đồ giường",
         nav: "Phòng & giường",
       })),
@@ -91,7 +84,7 @@ export function GlobalSearch({
         items: list.filter((h) => h.group === g).slice(0, 3),
       }))
       .filter((x) => x.items.length);
-  }, [q]);
+  }, [q, tenants, rooms, invoices]);
 
   const pick = (h: Hit) => {
     setOpen(false);

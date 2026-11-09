@@ -6,36 +6,43 @@ import {
   Modal,
   PageHeader,
   Select,
-  QrCode,
 } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
-import { person } from "../../../services/mock/mockData.ts";
 import type { Invoice } from "../../../types/invoice.ts";
-import { confirmCashPayment, totalInvoiceDue } from "../../../utils/invoiceCalculations.ts";
+import type { TenantRecord } from "../../../types/tenant.ts";
+import { totalInvoiceDue } from "../../../utils/invoiceCalculations.ts";
 import { card, th, rowCls, Badge, SearchBox, Stat, type Toast } from "../common.tsx";
 
-const invTone = (s: Invoice["status"]) =>
-  s === "Đã thu" ? "success" : s === "Chờ xác nhận" ? "warning" : "danger";
+const invTone = (s: Invoice["status"], late?: number) =>
+  s === "Đã thu" ? "success" : s === "Chờ xác nhận" ? "brand" : late ? "danger" : "warning";
 
 export function InvoicesPage({
   records,
-  onRecordsChange,
+  onRejectInvoiceProof,
+  onConfirmInvoiceProof,
+  managerStaffId,
+  tenants,
   onConfirmPayment,
   showToast,
 }: Toast & {
   records: Invoice[];
-  onRecordsChange: (records: Invoice[]) => void;
-  onConfirmPayment?: (invoiceId: string, manager: string) => Promise<Invoice>;
+  onRejectInvoiceProof: (id: string) => Promise<void>;
+  onConfirmInvoiceProof: (id: string, managerStaffId: string) => Promise<void>;
+  managerStaffId?: string;
+  tenants: TenantRecord[];
+  onConfirmPayment: (invoiceId: string, manager: string) => Promise<Invoice>;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("Tất cả trạng thái");
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [cashInvoice, setCashInvoice] = useState<Invoice | null>(null);
+  const [saving, setSaving] = useState(false);
+  const person = (id: string | undefined) => tenants.find((tenant) => tenant.id === id);
 
   const rows = records.filter(
     (i) =>
       (filter === "Tất cả trạng thái" || i.status === filter) &&
-      `${i.id} ${i.tenant} ${i.room} ${person(i.tenant).cccd} ${person(i.tenant).email}`
+      `${i.id} ${i.tenant} ${i.room} ${person(i.tenantId)?.cccd ?? ""} ${person(i.tenantId)?.email ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -44,20 +51,17 @@ export function InvoicesPage({
     .reduce((total, invoice) => total + (invoice.payment?.amount ?? 0), 0);
 
   const confirmCash = async () => {
-    if (!cashInvoice) return;
+    if (!cashInvoice || saving) return;
+    const current = records.find((invoice) => invoice.id === cashInvoice.id);
+    if (!current || current.status !== "Nợ" || current.payment) {
+      showToast("Hóa đơn không còn ở trạng thái Nợ");
+      setCashInvoice(null);
+      return;
+    }
+    setSaving(true);
     try {
-      if (onConfirmPayment) {
-        await onConfirmPayment(cashInvoice.id, "Thu Lan");
-      } else {
-        const paid = confirmCashPayment(
-          cashInvoice,
-          "Thu Lan",
-          new Date().toLocaleString("vi-VN"),
-        );
-        onRecordsChange(
-          records.map((invoice) => (invoice.id === paid.id ? paid : invoice)),
-        );
-      }
+      if (!managerStaffId) throw new Error("Không xác định được nhân viên xác nhận thanh toán");
+      await onConfirmPayment(cashInvoice.id, managerStaffId);
       setCashInvoice(null);
       setSelected(null);
       showToast(`Đã xác nhận ${cashInvoice.id} thanh toán tiền mặt`);
@@ -67,6 +71,8 @@ export function InvoicesPage({
           ? error.message
           : "Không thể xác nhận thanh toán",
       );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -161,7 +167,7 @@ export function InvoicesPage({
                       {i.tenant}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {person(i.tenant).phone}
+                      {person(i.tenantId)?.phone ?? ""}
                     </p>
                   </td>
                   <td className="px-6 py-4 font-mono text-sm text-slate-600">
@@ -171,7 +177,7 @@ export function InvoicesPage({
                     {money(i.amount)}
                   </td>
                   <td className="px-6 py-4">
-                    <Badge tone={invTone(i.status)}>
+                    <Badge tone={invTone(i.status, i.late)}>
                       {i.status}
                       {i.late ? ` · trễ ${i.late} ngày` : ""}
                     </Badge>
@@ -189,9 +195,13 @@ export function InvoicesPage({
                         Xác nhận
                       </Button>
                     ) : i.status === "Chờ xác nhận" ? (
-                      <span className="text-xs font-semibold text-warning-600">
+                      <Button
+                        label={`Xem minh chứng ${i.id}`}
+                        className="text-xs font-semibold text-warning-600"
+                        onClick={() => setSelected(i)}
+                      >
                         Xem minh chứng
-                      </span>
+                      </Button>
                     ) : (
                       <span className="text-xs text-slate-500">
                         {i.payment?.method === "Tiền mặt" ? "Tiền mặt" : "—"}
@@ -222,7 +232,7 @@ export function InvoicesPage({
           onClose={() => setSelected(null)}
         >
           <div className="flex items-center justify-between">
-            <Badge tone={invTone(selected.status)}>{selected.status}</Badge>
+            <Badge tone={invTone(selected.status, selected.late)}>{selected.status}</Badge>
             <span className="text-sm text-slate-500">
               Hạn chót {selected.due}
             </span>
@@ -230,8 +240,8 @@ export function InvoicesPage({
           <dl className="mt-5 divide-y divide-slate-100 rounded-sm border border-slate-200 text-sm">
             {[
               ["Phòng / Giường", `${selected.room} · ${selected.bed}`],
-              ["CCCD", person(selected.tenant).cccd],
-              ["Email", person(selected.tenant).email],
+              ["CCCD", person(selected.tenantId)?.cccd ?? ""],
+              ["Email", person(selected.tenantId)?.email ?? ""],
               ["Khoản thu", selected.kind ?? "Tiền phòng tháng 10"],
               ["Số tiền", money(selected.amount)],
             ].map(([k, v]) => (
@@ -272,29 +282,19 @@ export function InvoicesPage({
                     </p>
                   </div>
                 </div>
-                <div className="mt-3 grid aspect-video place-items-center rounded-sm border border-warning-100 bg-white">
-                  <div className="text-center text-warning-600">
-                    <Icon name="receipt" className="mx-auto size-8" />
-                    <p className="mt-2 text-xs font-semibold">
-                      Ảnh biên lai thanh toán
-                    </p>
-                  </div>
-                </div>
+                {"dataUrl" in selected.proof && typeof selected.proof.dataUrl === "string" ? (
+                  <img src={selected.proof.dataUrl} alt={`Minh chứng ${selected.proof.fileName}`} className="mt-3 max-h-80 w-full rounded-sm object-contain" />
+                ) : (
+                  <p className="mt-3 text-sm text-slate-600">Không có tệp minh chứng để xem.</p>
+                )}
               </div>
             </div>
           ) : (
-            <div className="mt-5 flex flex-col items-center rounded-sm border border-slate-200 p-5">
-              <p className="mb-4 text-sm font-semibold text-slate-700">
-                Quét mã VietQR để thanh toán
-              </p>
-              <QrCode seed={selected.id} />
-              <p className="mt-4 text-center text-xs text-slate-500">
-                Nội dung CK:{" "}
-                <span className="font-mono font-medium text-slate-800">
-                  {selected.id.replace(/-/g, "")}
-                </span>
-              </p>
-            </div>
+            <p className="mt-5 text-sm text-slate-600">
+              {selected.status === "Chờ xác nhận"
+                ? "Không có tệp minh chứng để xem."
+                : "Chưa có mã VietQR hợp lệ cho hóa đơn này."}
+            </p>
           )}
           <div className="mt-6 flex flex-col gap-2">
             {selected.status === "Chờ xác nhận" && (
@@ -302,26 +302,27 @@ export function InvoicesPage({
                 <Button
                   label="Xác nhận đã nhận tiền"
                   className="h-10 rounded-sm bg-success-500 text-sm font-semibold text-white hover:bg-success-600 active:translate-y-[1px]"
-                  onClick={() => {
-                    const confirmed: Invoice = {
-                      ...selected,
-                      status: "Đã thu",
-                      payment: {
-                        amount: selected.amount,
-                        method: "Trực tuyến",
-                        paidAt: new Date().toLocaleString("vi-VN"),
-                        confirmedBy: "Thu Lan (Quản lý)",
-                      },
-                    };
-                    onRecordsChange(
-                      records.map((invoice) =>
-                        invoice.id === selected.id ? confirmed : invoice,
-                      ),
-                    );
-                    setSelected(null);
-                    showToast(
-                      `Đã xác nhận ${selected.id} và gửi thông báo cho người thuê`,
-                    );
+                  disabled={saving}
+                  onClick={async () => {
+                    if (saving) return;
+                    const current = records.find((invoice) => invoice.id === selected.id);
+                    if (!current || current.status !== "Chờ xác nhận" || current.payment) {
+                      showToast("Hóa đơn không còn chờ xác nhận");
+                      setSelected(null);
+                      return;
+                    }
+                    if (!window.confirm(`Xác nhận đã nhận đủ ${money(current.amount)} qua chuyển khoản cho ${current.id} (${current.tenant})?`)) return;
+                    setSaving(true);
+                    try {
+                      if (!managerStaffId) throw new Error("Không xác định được nhân viên xác nhận thanh toán");
+                      await onConfirmInvoiceProof(current.id, managerStaffId);
+                      setSelected(null);
+                      showToast(`Đã xác nhận ${current.id} đã nhận tiền`);
+                    } catch (error) {
+                      showToast(error instanceof Error ? error.message : "Không thể xác nhận thanh toán");
+                    } finally {
+                      setSaving(false);
+                    }
                   }}
                 >
                   Xác nhận Đã nhận tiền
@@ -329,16 +330,25 @@ export function InvoicesPage({
                 <Button
                   label="Yêu cầu gửi lại minh chứng"
                   className="h-10 rounded-sm border border-danger-200 text-sm font-semibold text-danger-600 hover:bg-danger-50 active:translate-y-[1px]"
-                  onClick={() => {
-                    onRecordsChange(
-                      records.map((invoice) =>
-                        invoice.id === selected.id
-                          ? { ...invoice, status: "Nợ", proof: undefined }
-                          : invoice,
-                      ),
-                    );
-                    setSelected(null);
-                    showToast("Đã yêu cầu người thuê gửi lại minh chứng");
+                  disabled={saving}
+                  onClick={async () => {
+                    if (saving) return;
+                    const current = records.find((invoice) => invoice.id === selected.id);
+                    if (!current || current.status !== "Chờ xác nhận" || current.payment) {
+                      showToast("Hóa đơn không còn chờ xác nhận");
+                      setSelected(null);
+                      return;
+                    }
+                    setSaving(true);
+                    try {
+                      await onRejectInvoiceProof(current.id);
+                      setSelected(null);
+                      showToast("Đã yêu cầu người thuê gửi lại minh chứng");
+                    } catch (error) {
+                      showToast(error instanceof Error ? error.message : "Không thể từ chối minh chứng");
+                    } finally {
+                      setSaving(false);
+                    }
                   }}
                 >
                   Từ chối / Yêu cầu gửi lại
@@ -394,6 +404,7 @@ export function InvoicesPage({
               <Button
                 label="Xác nhận đã nhận tiền"
                 className="h-10 rounded-sm bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
+                disabled={saving}
                 onClick={confirmCash}
               >
                 Xác nhận đã nhận tiền

@@ -1,29 +1,18 @@
 import { useState, type ReactNode } from "react";
 import { Button, Icon, Modal, PageHeader } from "../../../components/common/index.ts";
 import type { TenantRecord, TenantVehicle } from "../../../types/tenant.ts";
-import { initialVehicles } from "../../../services/mock/mockData.ts";
 
 type Vehicle = TenantVehicle;
-import { card, th, rowCls, inputCls, Badge, SearchBox, type Toast } from "../common.tsx";
+import { card, th, rowCls, Badge, SearchBox, type Toast } from "../common.tsx";
 
 
-const CARD_STATUS_TONES: Record<Vehicle["cardStatus"], "success" | "warning" | "neutral"> = {
+const CARD_STATUS_TONES: Record<Vehicle["cardStatus"], "success" | "warning" | "slate"> = {
   "Đã cấp thẻ": "success",
   "Chưa cấp thẻ": "warning",
-  "Đã thu hồi": "neutral",
+  "Đã thu hồi": "slate",
 };
 
 
-const emptyVehicle = {
-  tenantId: "",
-  plate: "",
-  type: "Xe tay ga" as Vehicle["type"],
-  brand: "",
-  color: "",
-  registration: "Đủ 2 mặt" as Vehicle["registration"],
-  cardStatus: "Chưa cấp thẻ" as Vehicle["cardStatus"],
-  cardCode: "",
-};
 
 function VehicleDetail({
   vehicle,
@@ -75,7 +64,7 @@ function VehicleDetail({
             </div>
           </div>
           <dl>
-            {infoRow("Biển số", vehicle.plate, true)}
+            {infoRow("Biển số", vehicle.plate || "Không có", true)}
             {infoRow("Loại xe", vehicle.type)}
             {infoRow("Hãng / Dòng xe", vehicle.brand)}
             {infoRow("Màu sắc", vehicle.color)}
@@ -120,28 +109,11 @@ function VehicleDetail({
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          {["Mặt trước", "Mặt sau"].map((side) => (
+          {[["Mặt trước", vehicle.registrationFront], ["Mặt sau", vehicle.registrationBack]].map(([side, image]) => (
             <div key={side}>
               <p className="mb-2 text-sm font-semibold text-slate-700">{side}</p>
               <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-sm border border-slate-200 bg-slate-50">
-                {vehicle.registration === "Đủ 2 mặt" ? (
-                  <div className="text-center text-brand-700">
-                    <span className="mx-auto grid size-12 place-items-center rounded-sm bg-brand-50">
-                      <Icon name="image" className="size-7" />
-                    </span>
-                    <p className="mt-3 text-sm font-semibold">
-                      Ảnh cà vẹt · {side}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Đã xác thực hợp lệ
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center text-slate-400">
-                    <Icon name="image" className="mx-auto size-8" />
-                    <p className="mt-2 text-sm">Chưa có ảnh</p>
-                  </div>
-                )}
+                {image ? <img src={image} alt={`Giấy đăng ký ${side}`} className="h-full w-full object-contain" /> : <p className="text-sm text-slate-400">Chưa có ảnh</p>}
               </div>
             </div>
           ))}
@@ -154,33 +126,26 @@ function VehicleDetail({
 export function VehiclesPage({
   tenants,
   vehicles: externalVehicles,
-  onVehiclesChange,
+  onIssueVehicleCard,
+  onRevokeVehicle,
   showToast,
 }: Toast & {
   tenants: TenantRecord[];
   vehicles?: TenantVehicle[];
-  onVehiclesChange?: (vehicles: TenantVehicle[]) => void;
+  onIssueVehicleCard: (id: string, cardCode: string) => Promise<void>;
+  onRevokeVehicle: (id: string) => Promise<void>;
 }) {
-  const [internalVehicles, setInternalVehicles] = useState<Vehicle[]>(initialVehicles);
-  const vehicles = externalVehicles ?? internalVehicles;
-  const setVehicles = onVehiclesChange ?? setInternalVehicles;
+  const vehicles = externalVehicles ?? [];
   const [statusTab, setStatusTab] = useState<"ALL" | "PENDING" | "ACTIVE" | "REVOKED">("ALL");
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<Vehicle | null>(null);
   const [viewing, setViewing] = useState<Vehicle | null>(null);
   const [issuingVehicle, setIssuingVehicle] = useState<Vehicle | null>(null);
   const [cardCodeInput, setCardCodeInput] = useState("");
   const [actionMenu, setActionMenu] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyVehicle);
 
   const tenantName = (id?: string) =>
     tenants.find((tenant) => tenant.id === id)?.name ?? "Không xác định";
 
-  const tenantsWithVehicle = new Set(
-    vehicles.filter((v) => v.cardStatus !== "Đã thu hồi").map((v) => v.tenantId),
-  );
 
   const pendingCount = vehicles.filter((v) => v.cardStatus === "Chưa cấp thẻ").length;
   const activeCount = vehicles.filter((v) => v.cardStatus === "Đã cấp thẻ").length;
@@ -196,83 +161,6 @@ export function VehiclesPage({
       .includes(query.trim().toLowerCase());
   });
 
-  const startCreate = () => {
-    const availableTenant = tenants.find(
-      (tenant) => tenant.status !== "Đã trả phòng" && !tenantsWithVehicle.has(tenant.id),
-    );
-    setEditingId(null);
-    setForm({
-      ...emptyVehicle,
-      tenantId: availableTenant?.id ?? "",
-    });
-    setOpen(true);
-  };
-
-  const startEdit = (vehicle: Vehicle) => {
-    setEditingId(vehicle.id);
-    setForm({
-      tenantId: vehicle.tenantId ?? "",
-      plate: vehicle.plate,
-      type: vehicle.type,
-      brand: vehicle.brand,
-      color: vehicle.color,
-      registration: vehicle.registration,
-      cardStatus: vehicle.cardStatus,
-      cardCode: vehicle.cardCode ?? "",
-    });
-    setOpen(true);
-  };
-
-  const save = () => {
-    const plate = form.plate.trim().toUpperCase();
-    if (!form.tenantId || !plate || !form.brand.trim() || !form.color.trim()) {
-      showToast("Vui lòng nhập đủ thông tin phương tiện");
-      return;
-    }
-    if (!editingId && form.tenantId && tenantsWithVehicle.has(form.tenantId)) {
-      showToast("Khách thuê này đã có 01 phương tiện gửi hầm. Mỗi khách chỉ được cấp 01 xe.");
-      return;
-    }
-    if (!/^[0-9A-Z.-]{6,14}$/.test(plate)) {
-      showToast("Biển số xe không hợp lệ");
-      return;
-    }
-    if (
-      vehicles.some(
-        (vehicle) =>
-          vehicle.plate.toUpperCase() === plate && vehicle.id !== editingId,
-      )
-    ) {
-      showToast("Biển số xe đã tồn tại");
-      return;
-    }
-
-    const cardStatus = form.cardCode.trim() ? "Đã cấp thẻ" as const : form.cardStatus;
-
-    if (editingId) {
-      setVehicles(
-        vehicles.map((vehicle) =>
-          vehicle.id === editingId
-            ? { ...vehicle, ...form, plate, cardStatus, cardCode: form.cardCode.trim() || undefined }
-            : vehicle,
-        ),
-      );
-      showToast("Đã cập nhật phương tiện");
-    } else {
-      setVehicles([
-        {
-          id: `XE-${String(vehicles.length + 1).padStart(3, "0")}`,
-          ...form,
-          plate,
-          cardStatus,
-          cardCode: form.cardCode.trim() || undefined,
-        },
-        ...vehicles,
-      ]);
-      showToast("Đã thêm phương tiện");
-    }
-    setOpen(false);
-  };
 
   return (
     <>
@@ -280,15 +168,6 @@ export function VehiclesPage({
         eyebrow="Phương tiện"
         title="Quản lý phương tiện hầm xe"
         description="Quản lý biển số, cấp phát mã thẻ từ vật lý, ảnh cà vẹt xe và kiểm soát trật tự an ninh hầm KTX."
-        actions={
-          <Button
-            label="Thêm phương tiện"
-            className="h-10 rounded-sm bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-            onClick={startCreate}
-          >
-            + Thêm phương tiện
-          </Button>
-        }
       />
 
       <section className={card}>
@@ -382,7 +261,7 @@ export function VehiclesPage({
                           className="rounded-sm border border-brand-300 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-100"
                           onClick={() => {
                             setIssuingVehicle(vehicle);
-                            setCardCodeInput(`THE-0${Math.floor(100 + Math.random() * 900)}`);
+                            setCardCodeInput("");
                           }}
                         >
                           + Cấp thẻ
@@ -419,47 +298,30 @@ export function VehiclesPage({
                               className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-xs font-medium text-brand-700 hover:bg-brand-50"
                               onClick={() => {
                                 setIssuingVehicle(vehicle);
-                                setCardCodeInput(`THE-0${Math.floor(100 + Math.random() * 900)}`);
+                                setCardCodeInput("");
                                 setActionMenu(null);
                               }}
                             >
                               <Icon name="check" className="size-3.5" /> Cấp thẻ từ
                             </Button>
                           )}
-                          {vehicle.cardStatus === "Đã cấp thẻ" && (
+                          {vehicle.cardStatus !== "Đã thu hồi" && (
                             <Button
                               className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-xs font-medium text-warning-700 hover:bg-warning-50"
-                              onClick={() => {
-                                setVehicles(
-                                  vehicles.map((v) =>
-                                    v.id === vehicle.id ? { ...v, cardStatus: "Đã thu hồi" as const } : v,
-                                  ),
-                                );
-                                showToast(`Đã thu hồi thẻ từ của xe ${vehicle.plate}`);
+                              onClick={async () => {
+                                try {
+                                  await onRevokeVehicle(vehicle.id);
+                                } catch (error) {
+                                  showToast(error instanceof Error ? error.message : "Không thể thu hồi thẻ");
+                                  return;
+                                }
+                                showToast(`Đã thu hồi phương tiện ${vehicle.plate || vehicle.id}`);
                                 setActionMenu(null);
                               }}
                             >
                               <Icon name="close" className="size-3.5" /> Thu hồi thẻ
                             </Button>
                           )}
-                          <Button
-                            className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            onClick={() => {
-                              startEdit(vehicle);
-                              setActionMenu(null);
-                            }}
-                          >
-                            <Icon name="file" className="size-3.5" /> Sửa thông tin
-                          </Button>
-                          <Button
-                            className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-xs font-medium text-danger-600 hover:bg-danger-50"
-                            onClick={() => {
-                              setDeleting(vehicle);
-                              setActionMenu(null);
-                            }}
-                          >
-                            <Icon name="close" className="size-3.5" /> Xóa xe
-                          </Button>
                         </div>
                       )}
                     </div>
@@ -500,7 +362,7 @@ export function VehiclesPage({
       {issuingVehicle && (
         <Modal
           title={`Cấp thẻ từ gửi xe · ${issuingVehicle.plate}`}
-          description="Gán mã thẻ từ vật lý của hầm KTX để khách thuê quét ra vào barrier miễn phí."
+          description="Gán mã thẻ vật lý cho phương tiện."
           onClose={() => setIssuingVehicle(null)}
         >
           <div className="space-y-4 p-6">
@@ -513,28 +375,7 @@ export function VehiclesPage({
               </p>
             </div>
 
-            {/* Ảnh cà vẹt xe đối soát */}
-            <div>
-              <p className="mb-2 text-xs font-semibold text-slate-700">
-                Ảnh cà vẹt xe đối soát (Giấy đăng ký xe):
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {["Mặt trước", "Mặt sau"].map((side) => (
-                  <div key={side}>
-                    <span className="mb-1 block text-[11px] font-medium text-slate-500">
-                      {side}
-                    </span>
-                    <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-sm border border-slate-200 bg-slate-50 text-center text-brand-700">
-                      <span className="grid size-8 place-items-center rounded-sm bg-brand-50">
-                        <Icon name="image" className="size-4" />
-                      </span>
-                      <span className="mt-1 text-[11px] font-semibold">Cà vẹt · {side}</span>
-                      <span className="text-[10px] text-slate-400">Đã xác thực</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <VehicleDetail vehicle={issuingVehicle} tenant={tenants.find((tenant) => tenant.id === issuingVehicle.tenantId)} />
 
             <label className="grid gap-1.5 text-xs font-semibold text-slate-700">
               Mã thẻ từ gửi xe vật lý (bắt buộc)
@@ -558,19 +399,32 @@ export function VehiclesPage({
               </Button>
               <Button
                 className="h-10 rounded-sm bg-brand-500 px-5 text-sm font-semibold text-white hover:bg-brand-600"
-                onClick={() => {
+                onClick={async () => {
                   const code = cardCodeInput.trim().toUpperCase();
                   if (!code) {
                     showToast("Vui lòng nhập mã thẻ từ");
                     return;
                   }
-                  setVehicles(
-                    vehicles.map((v) =>
-                      v.id === issuingVehicle.id
-                        ? { ...v, cardCode: code, cardStatus: "Đã cấp thẻ" as const }
-                        : v,
-                    ),
-                  );
+                  if (!vehicles.some((v) => v.id === issuingVehicle.id && v.cardStatus === "Chưa cấp thẻ")) {
+                    showToast("Phương tiện không còn chờ cấp thẻ.");
+                    return;
+                  }
+                  const current = vehicles.find((v) => v.id === issuingVehicle.id);
+                  if (current && current.type !== "Xe đạp" && current.type !== "Xe đạp điện" &&
+                    (!current.plate.trim() || !current.registrationFront || !current.registrationBack)) {
+                    showToast("Phương tiện cần biển số và ảnh giấy đăng ký hai mặt trước khi cấp thẻ.");
+                    return;
+                  }
+                  if (vehicles.some((v) => v.id !== issuingVehicle.id && v.cardStatus !== "Đã thu hồi" && v.cardCode?.trim().toUpperCase() === code)) {
+                    showToast("Mã thẻ đang được sử dụng bởi phương tiện chưa thu hồi.");
+                    return;
+                  }
+                  try {
+                    await onIssueVehicleCard(issuingVehicle.id, code);
+                  } catch (error) {
+                    showToast(error instanceof Error ? error.message : "Không thể cấp thẻ");
+                    return;
+                  }
                   showToast(`Đã cấp thẻ từ ${code} cho xe ${issuingVehicle.plate}`);
                   setIssuingVehicle(null);
                 }}
@@ -582,147 +436,6 @@ export function VehiclesPage({
         </Modal>
       )}
 
-      {/* Modal Thêm / Cập nhật phương tiện */}
-      {open && (
-        <Modal
-          title={editingId ? "Cập nhật phương tiện" : "Thêm phương tiện mới"}
-          description="Phương tiện phải được liên kết với một người thuê đang cư trú."
-          onClose={() => setOpen(false)}
-        >
-          <div className="grid gap-4 p-6 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-medium text-slate-700 sm:col-span-2">
-              Người thuê (Mỗi khách tối đa 01 xe)
-              <select
-                className={inputCls}
-                value={form.tenantId}
-                onChange={(event) =>
-                  setForm({ ...form, tenantId: event.target.value })
-                }
-              >
-                {tenants
-                  .filter((tenant) => tenant.status !== "Đã trả phòng")
-                  .map((tenant) => {
-                    const hasV = tenantsWithVehicle.has(tenant.id) && editingId !== tenant.id;
-                    return (
-                      <option key={tenant.id} value={tenant.id} disabled={hasV}>
-                        {tenant.name} · {tenant.room}-{tenant.bed} {hasV ? "(Đã có 1 xe)" : ""}
-                      </option>
-                    );
-                  })}
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Biển số xe
-              <input
-                className={`${inputCls} font-mono uppercase`}
-                value={form.plate}
-                onChange={(event) =>
-                  setForm({ ...form, plate: event.target.value })
-                }
-                placeholder="59X3-123.45"
-              />
-            </label>
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Phân loại xe
-              <select
-                className={inputCls}
-                value={form.type}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    type: event.target.value as Vehicle["type"],
-                  })
-                }
-              >
-                {["Xe tay ga", "Xe số", "Xe máy điện", "Xe côn tay", "Xe đạp"].map((type) => (
-                  <option key={type}>{type}</option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Hãng / Dòng xe
-              <input
-                className={inputCls}
-                value={form.brand}
-                placeholder="Honda Vision, Yamaha Grande..."
-                onChange={(event) =>
-                  setForm({ ...form, brand: event.target.value })
-                }
-              />
-            </label>
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              Màu sơn
-              <input
-                className={inputCls}
-                value={form.color}
-                placeholder="Đen, Trắng, Đỏ..."
-                onChange={(event) =>
-                  setForm({ ...form, color: event.target.value })
-                }
-              />
-            </label>
-            <label className="grid gap-2 text-sm font-medium text-slate-700 sm:col-span-2">
-              Mã thẻ từ (nếu đã cấp thẻ vật lý)
-              <input
-                className={`${inputCls} font-mono uppercase`}
-                value={form.cardCode}
-                placeholder="THE-0187 (để trống nếu chưa cấp)"
-                onChange={(event) =>
-                  setForm({ ...form, cardCode: event.target.value })
-                }
-              />
-            </label>
-            <div className="flex justify-end gap-2 sm:col-span-2 pt-2 border-t border-slate-100">
-              <Button
-                label="Hủy"
-                className="h-10 rounded-sm border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-                onClick={() => setOpen(false)}
-              >
-                Hủy
-              </Button>
-              <Button
-                label="Lưu phương tiện"
-                className="h-10 rounded-sm bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-                onClick={save}
-              >
-                Lưu phương tiện
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal Xóa xe */}
-      {deleting && (
-        <Modal
-          title="Xóa phương tiện?"
-          description={`${deleting.plate} sẽ được gỡ khỏi hồ sơ người thuê.`}
-          onClose={() => setDeleting(null)}
-        >
-          <div className="flex justify-end gap-2 p-6">
-            <Button
-              label="Hủy"
-              className="h-10 rounded-sm border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={() => setDeleting(null)}
-            >
-              Hủy
-            </Button>
-            <Button
-              label="Xác nhận xóa"
-              className="h-10 rounded-sm bg-danger-500 px-4 text-sm font-semibold text-white hover:bg-danger-600 active:translate-y-[1px]"
-              onClick={() => {
-                setVehicles(
-                  vehicles.filter((vehicle) => vehicle.id !== deleting.id),
-                );
-                setDeleting(null);
-                showToast("Đã xóa phương tiện");
-              }}
-            >
-              Xóa phương tiện
-            </Button>
-          </div>
-        </Modal>
-      )}
     </>
   );
 }

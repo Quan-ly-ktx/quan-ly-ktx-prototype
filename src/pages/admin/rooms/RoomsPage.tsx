@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import { Button } from "../../../components/common/Button.tsx";
 import { Icon } from "../../../components/common/Icon.tsx";
 import { PageHeader } from "../../../components/common/PageHeader.tsx";
@@ -28,7 +29,7 @@ export function RoomsPage({
   showToast,
 }: {
   rooms: RoomRecord[];
-  onRoomsChange: (next: RoomRecord[]) => void;
+  onRoomsChange: (next: RoomRecord[]) => void | Promise<void>;
   onCreateRoom?: (room: RoomRecord) => Promise<RoomRecord>;
   onUpdateRoom?: (id: string, room: RoomRecord) => Promise<RoomRecord>;
   onDeleteRoom?: (id: string) => Promise<void>;
@@ -37,6 +38,7 @@ export function RoomsPage({
   onQuickOnboard?: (roomCode: string, bedCode: string) => void;
   showToast: (message: string) => void;
 }) {
+  const { contracts } = useDormData();
   const [viewMode, setViewMode] = useState<"matrix" | "table">("matrix");
   const [floor, setFloor] = useState("Tất cả");
   const [gender, setGender] = useState("Tất cả");
@@ -57,7 +59,7 @@ export function RoomsPage({
 
   const roomsWithOccupancy = activeRooms.map((room) => ({
     ...room,
-    occupancy: getRoomOccupancy(room, tenants),
+    occupancy: getRoomOccupancy(room, tenants, contracts),
   }));
 
   const filteredRooms = roomsWithOccupancy.filter((item) => {
@@ -67,12 +69,12 @@ export function RoomsPage({
     if (occupancyFilter !== "Tất cả sức chứa") {
       if (
         occupancyFilter === "Còn giường trống" &&
-        item.occupancy.occupied >= item.occupancy.total
+        item.occupancy.available === 0
       )
         return false;
       if (
         occupancyFilter === "Đã kín chỗ" &&
-        item.occupancy.occupied < item.occupancy.total
+        item.occupancy.available > 0
       )
         return false;
     }
@@ -94,7 +96,7 @@ export function RoomsPage({
   });
 
   const selectedRoomWithOcc = selectedRoom
-    ? roomsWithOccupancy.find((r) => r.code === selectedRoom.code) ?? null
+    ? roomsWithOccupancy.find((r) => r.id === selectedRoom.id) ?? null
     : null;
 
   const handleOpenAdd = () => {
@@ -107,37 +109,45 @@ export function RoomsPage({
     setAddEditOpen(true);
   };
 
-  const handleSaveRoom = async (savedRoom: RoomRecord, isEdit: boolean) => {
+  const handleSaveRoom = async (savedRoom: RoomRecord, isEdit: boolean): Promise<boolean> => {
     try {
       if (isEdit) {
         if (onUpdateRoom) {
-          await onUpdateRoom(savedRoom.id, savedRoom);
+          const updated = await onUpdateRoom(savedRoom.id, savedRoom);
+          if (updated.code !== savedRoom.code || updated.gender !== savedRoom.gender ||
+              updated.basePrice !== savedRoom.basePrice ||
+              JSON.stringify(updated.amenities) !== JSON.stringify(savedRoom.amenities)) {
+            showToast("Dữ liệu trả về chưa phản ánh đầy đủ thay đổi; cần đồng bộ dịch vụ phòng.");
+            return false;
+          }
         } else {
           const updated = rooms.map((r) => (r.id === savedRoom.id ? savedRoom : r));
-          onRoomsChange(updated);
+          await onRoomsChange(updated);
         }
         showToast(`Đã cập nhật cấu hình phòng ${savedRoom.code}`);
       } else {
         if (onCreateRoom) {
           await onCreateRoom(savedRoom);
         } else {
-          onRoomsChange([savedRoom, ...rooms]);
+          await onRoomsChange([savedRoom, ...rooms]);
         }
         showToast(
           `Đã tạo phòng ${savedRoom.code} và tự động sinh ${savedRoom.total} vị trí giường`,
         );
       }
+      return true;
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         showToast(err.message);
       } else {
         showToast(isEdit ? "Cập nhật phòng thất bại" : "Tạo phòng thất bại");
       }
+      return false;
     }
   };
 
   const handleConfirmArchive = async (roomToArchive: RoomRecord) => {
-    if (!canDeleteRoom(roomToArchive.code, tenants)) {
+    if (!canDeleteRoom(roomToArchive.id, contracts) || getRoomOccupancy(roomToArchive, tenants, contracts).occupied > 0) {
       showToast("Phòng đang có khách ở nên không thể đưa vào lưu trữ");
       return;
     }
@@ -150,7 +160,7 @@ export function RoomsPage({
             ? { ...r, deletedAt: new Date().toISOString() }
             : r,
         );
-        onRoomsChange(updated);
+        await onRoomsChange(updated);
       }
       showToast(`Đã đưa phòng ${roomToArchive.code} vào lưu trữ`);
       setDeleteRoom(null);
@@ -171,11 +181,10 @@ export function RoomsPage({
     bedCode: string,
     newStatus: "AVAILABLE" | "MAINTENANCE",
   ) => {
-    if (
-      newStatus === "MAINTENANCE" &&
-      !canToggleBedMaintenance(room.code, bedCode, tenants)
-    ) {
-      showToast("Giường đang có người ở, không thể đưa vào bảo trì");
+    const currentBed = getRoomOccupancy(room, tenants, contracts).beds.find((bed) => bed.bedCode === bedCode);
+    if (!currentBed || currentBed.status === "OCCUPIED" || currentBed.status === newStatus ||
+        !room.bedOverrides?.[bedCode]?.id || !canToggleBedMaintenance(room.id, room.bedOverrides[bedCode].id, contracts)) {
+      showToast("Chỉ có thể chuyển giường trống giữa sẵn sàng và bảo trì");
       return;
     }
 
@@ -190,13 +199,17 @@ export function RoomsPage({
 
     try {
       if (onUpdateBedStatus) {
-        const bedId = room.bedOverrides?.[bedCode]?.id || bedCode;
+        const bedId = room.bedOverrides?.[bedCode]?.id;
+        if (!bedId) {
+          showToast("Không có định danh giường để cập nhật; cần đồng bộ dữ liệu giường.");
+          return;
+        }
         await onUpdateBedStatus(bedId, newStatus);
       } else {
         const updatedRooms = rooms.map((r) =>
           r.id === room.id ? { ...r, bedOverrides: nextOverrides } : r,
         );
-        onRoomsChange(updatedRooms);
+        await onRoomsChange(updatedRooms);
       }
       showToast(
         newStatus === "MAINTENANCE"
@@ -405,7 +418,7 @@ export function RoomsPage({
         onClose={() => setAddEditOpen(false)}
         editingRoom={editingRoom}
         tenants={tenants}
-        activeRooms={activeRooms}
+        activeRooms={rooms}
         availableFloors={availableFloors}
         onSave={handleSaveRoom}
         showToast={showToast}

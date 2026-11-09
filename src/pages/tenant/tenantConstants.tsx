@@ -5,7 +5,7 @@ import type { TenantVehicle } from "../../types/tenant.ts";
 export type { TenantVehicle };
 
 export type Page = "room" | "invoices" | "vehicles" | "report";
-export type RequestKind = "extend" | "transfer" | "checkout";
+export type RequestKind = "extend" | "checkout";
 
 const ME = person("Nguyễn Hoàng Nam");
 
@@ -74,22 +74,6 @@ export const initialTenantNotifications: TenantNotification[] = [
     read: false,
     type: "billing",
   },
-  {
-    id: "NOTI-02",
-    title: "Lịch bảo trì hệ thống cấp nước tầng 3",
-    body: "Ban Quản lý thông báo bảo trì van nước tổng tầng 3 từ 13:30 đến 15:30 ngày Chủ Nhật 26/10/2026.",
-    time: "24/10/2026 09:00",
-    read: false,
-    type: "maintenance",
-  },
-  {
-    id: "NOTI-03",
-    title: "Thông báo hiệu lực hợp đồng lưu trú",
-    body: "Hợp đồng HD-2026-0187 của bạn có hiệu lực đến ngày 01/09/2027 (còn 312 ngày cư trú).",
-    time: "01/09/2026 08:00",
-    read: true,
-    type: "contract",
-  },
 ];
 
 export const initialPersonalViolations: PersonalViolation[] = [
@@ -104,18 +88,6 @@ export const initialPersonalViolations: PersonalViolation[] = [
 
 
 
-export const initialTenantVehicles: TenantVehicle[] = [
-  {
-    id: "XE-001",
-    plate: "59-X3 789.12",
-    type: "Xe tay ga",
-    brand: "Honda Air Blade 150cc",
-    color: "Xanh xám đen",
-    cardStatus: "Đã cấp thẻ",
-    status: "Đã cấp thẻ xe",
-    cardCode: "THE-0187",
-  },
-];
 
 export const roommates = [
   { name: "Phạm Văn Hùng", bed: "G01" },
@@ -177,16 +149,6 @@ export const requestConfig: Record<
     options: ["Gia hạn thêm 1 năm (01/09/2027 – 01/09/2028)"],
     cta: "Gửi yêu cầu gia hạn",
     done: "Đã gửi yêu cầu gia hạn cho quản lý",
-  },
-  transfer: {
-    title: "Yêu cầu chuyển phòng",
-    intro: "Chỉ hiển thị các phòng Nam còn chỗ trống:",
-    options: [
-      "P.303 · Tầng 3 · còn 2 giường · 1.700.000 đ",
-      "P.201 · Tầng 2 · còn 1 giường · 1.400.000 đ",
-    ],
-    cta: "Gửi yêu cầu chuyển phòng",
-    done: "Yêu cầu chuyển phòng đang chờ duyệt",
   },
   checkout: {
     title: "Đăng ký trả phòng",

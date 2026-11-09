@@ -9,7 +9,7 @@ import {
   QrCode,
 } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
-import { person, TECHNICIANS } from "../../../services/mock/mockData.ts";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import type { Priority, Ticket, QuickKind } from "../../../types/index.ts";
 import { technicianService } from "../../../services/technicianService.ts";
 export type { QuickKind };
@@ -20,14 +20,6 @@ const primary =
 const ghost =
   "h-10 rounded-sm border border-slate-200 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px] transition-all";
 
-const tenantList = [
-  { name: "Nguyễn Hoàng Nam", room: "P.302" },
-  { name: "Lê Hoàng Nam", room: "P.401" },
-  { name: "Trần Quốc Bảo", room: "P.205" },
-  { name: "Phạm Đức Anh", room: "P.103" },
-  { name: "Đỗ Anh Tuấn", room: "P.204" },
-  { name: "Hồ Minh Khoa", room: "P.312" },
-].map((s) => ({ ...s, ...person(s.name) }));
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -63,10 +55,6 @@ function Success({
   );
 }
 
-const techInfo: Record<string, { load: number }> = {
-  "Võ Văn Thịnh": { load: 3 },
-  "Lâm Quốc Huy": { load: 1 },
-};
 
 function DispatchBody({
   tickets,
@@ -74,30 +62,34 @@ function DispatchBody({
   onClose,
 }: {
   tickets: Ticket[];
-  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => void;
+  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => Promise<void>;
   onClose: () => void;
 }) {
   const open = tickets.filter((t) => t.status !== "Hoàn thành");
   const [ticketId, setTicketId] = useState(
-    open.find((t) => !t.assignee)?.id ?? open[0]?.id ?? "",
+    open.find((t) => !t.assigneeStaffId)?.id ?? open[0]?.id ?? "",
   );
-  const [tech, setTech] = useState(TECHNICIANS[0]);
-  const [activeTechs, setActiveTechs] = useState<string[]>([]);
+  const [tech, setTech] = useState("");
+  const [activeTechs, setActiveTechs] = useState<{ id: string; fullName: string }[]>([]);
 
   useEffect(() => {
     technicianService
       .getTechnicians({ active: true })
       .then((res) => {
         const items = Array.isArray(res) ? res : res.items || [];
-        const names = items.filter((t) => t.active).map((t) => t.fullName);
-        setActiveTechs(names.length > 0 ? names : [TECHNICIANS[0]]);
-        if (names.length > 0) setTech(names[0]);
+        const active = items.filter((t) => t.active);
+        setActiveTechs(active);
+        setTech(active[0]?.id ?? "");
       })
       .catch(() => {
-        setActiveTechs([TECHNICIANS[0]]);
+        setActiveTechs([]);
+        setError("Không thể tải danh sách kỹ thuật viên.");
       });
   }, []);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const [deadline, setDeadline] = useState("");
   const [prio, setPrio] = useState<Priority | null>(null);
   const cur = open.find((t) => t.id === ticketId);
   const prioValue = prio ?? cur?.priority ?? "Bình thường";
@@ -106,7 +98,7 @@ function DispatchBody({
     return (
       <Success
         title="Đã giao việc"
-        text={`Phiếu ${ticketId} được giao cho ${tech}. Kỹ thuật viên sẽ nhận thông báo ngay.`}
+        text={`Phiếu ${ticketId} được giao cho ${activeTechs.find((item) => item.id === tech)?.fullName ?? ""}.`}
         onClose={onClose}
       />
     );
@@ -160,24 +152,25 @@ function DispatchBody({
         <div className="grid grid-cols-2 gap-2">
           {activeTechs.map((n) => (
             <Button
-              key={n}
-              label={n}
+              key={n.id}
+              label={n.fullName}
               className={`rounded-sm border p-3.5 text-left transition-colors ${
-                tech === n
+                tech === n.id
                   ? "border-brand-500 bg-brand-50"
                   : "border-slate-200 hover:bg-slate-50"
               }`}
-              onClick={() => setTech(n)}
+              onClick={() => setTech(n.id)}
             >
-              <span className="block text-sm font-semibold text-slate-900">{n}</span>
+              <span className="block text-sm font-semibold text-slate-900">{n.fullName}</span>
               <span className="block text-xs text-slate-500">Kỹ thuật viên</span>
-              <span className="mt-2 block text-xs font-medium text-brand-700">
-                {techInfo[n]?.load} việc đang làm
-              </span>
             </Button>
           ))}
         </div>
       </div>
+      <Field label="Hạn hoàn thành">
+        <input className={inputCls} type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+      </Field>
+      {error && <p role="alert" className="text-sm text-danger-600">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button label="Hủy" className={ghost} onClick={onClose}>
           Hủy bỏ
@@ -185,9 +178,18 @@ function DispatchBody({
         <Button
           label="Giao việc"
           className={primary}
-          onClick={() => {
-            onAssign(ticketId, tech, prioValue);
-            setDone(true);
+          disabled={pending || !activeTechs.some((item) => item.id === tech) || !deadline}
+          onClick={async () => {
+            setPending(true);
+            setError("");
+            try {
+              await onAssign(ticketId, tech, prioValue, deadline);
+              setDone(true);
+            } catch {
+              setError("Không thể giao việc. Vui lòng thử lại.");
+            } finally {
+              setPending(false);
+            }
           }}
         >
           Giao việc
@@ -198,13 +200,15 @@ function DispatchBody({
 }
 
 function ReceiptBody({ onClose }: { onClose: () => void }) {
-  const [who, setWho] = useState(tenantList[0].cccd);
+  const { tenants: tenantList } = useDormData();
+  const [who, setWho] = useState(tenantList[0]?.id ?? "");
   const [kind, setKind] = useState("Tiền phòng tháng 11");
   const [amount, setAmount] = useState("1200000");
   const [qr, setQr] = useState(false);
-  const tenant = tenantList.find((s) => s.cccd === who)!;
+  const tenant = tenantList.find((s) => s.id === who);
   const value = Number(amount.replace(/\D/g, "")) || 0;
-  const memo = `PT${tenant.cccd.slice(-6)}`;
+  const memo = `PT${tenant?.cccd.slice(-6) ?? ""}`;
+  if (!tenant) return <div className="p-6">Không có người thuê.</div>;
 
   if (qr)
     return (
@@ -241,7 +245,7 @@ function ReceiptBody({ onClose }: { onClose: () => void }) {
           onChange={(e) => setWho(e.target.value)}
         >
           {tenantList.map((s) => (
-            <option key={s.cccd} value={s.cccd}>
+            <option key={s.id} value={s.id}>
               {s.name} · {s.room}
             </option>
           ))}
@@ -290,7 +294,8 @@ function ReceiptBody({ onClose }: { onClose: () => void }) {
 }
 
 function ReportBody({ onClose }: { onClose: () => void }) {
-  const [who, setWho] = useState(tenantList[0].cccd);
+  const { tenants: tenantList } = useDormData();
+  const [who, setWho] = useState(tenantList[0]?.id ?? "");
   const [type, setType] = useState("Về muộn");
   const [level, setLevel] = useState("Nhắc nhở");
   const [fine, setFine] = useState("");
@@ -306,7 +311,8 @@ function ReportBody({ onClose }: { onClose: () => void }) {
     };
   }, [preview]);
 
-  const tenant = tenantList.find((s) => s.cccd === who)!;
+  const tenant = tenantList.find((s) => s.id === who);
+  if (!tenant) return <div className="p-6">Không có người thuê.</div>;
 
   if (done)
     return (
@@ -326,7 +332,7 @@ function ReportBody({ onClose }: { onClose: () => void }) {
           onChange={(e) => setWho(e.target.value)}
         >
           {tenantList.map((s) => (
-            <option key={s.cccd} value={s.cccd}>
+            <option key={s.id} value={s.id}>
               {s.name} · {s.room}
             </option>
           ))}
@@ -430,7 +436,7 @@ export function QuickModals({
 }: {
   kind: QuickKind;
   tickets: Ticket[];
-  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => void;
+  onAssign: (id: string, tech?: string, priority?: Priority, deadline?: string) => Promise<void>;
   onClose: () => void;
 }) {
   return (

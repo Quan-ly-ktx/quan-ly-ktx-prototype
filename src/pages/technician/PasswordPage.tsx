@@ -1,5 +1,9 @@
 import { useState } from "react";
 import { Button, Icon } from "../../components/common/index.ts";
+import { authService } from "../../services/authService.ts";
+import { demoChangePassword } from "../../services/mock/mockAuth.ts";
+import { env } from "../../config/env.ts";
+import { useAuth } from "../../hooks/useAuth.ts";
 
 function PwInput({
   label,
@@ -59,6 +63,9 @@ export function PasswordPage({
 }) {
   const [f, setF] = useState({ old: "", next: "", confirm: "" });
   const [tried, setTried] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const [pending, setPending] = useState(false);
+  const { logout } = useAuth();
   const errors = {
     old: f.old ? "" : "Vui lòng nhập mật khẩu cũ",
     next:
@@ -78,11 +85,22 @@ export function PasswordPage({
   return (
     <form
       className="flex flex-1 flex-col"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
         setTried(true);
-        if (!errors.old && !errors.next && !errors.confirm)
-          onDone("Đã đổi mật khẩu thành công");
+        if (errors.old || errors.next || errors.confirm || pending) return;
+        setServerError("");
+        setPending(true);
+        try {
+          if (env.USE_MOCK) demoChangePassword(f.old, f.next);
+          else await authService.changePassword({ oldPassword: f.old, newPassword: f.next, confirmPassword: f.confirm });
+          await logout();
+          onDone("Đã đổi mật khẩu. Vui lòng đăng nhập lại.");
+        } catch {
+          setServerError("Không thể đổi mật khẩu. Kiểm tra mật khẩu cũ và thử lại.");
+        } finally {
+          setPending(false);
+        }
       }}
     >
       <div className="sticky top-0 z-20 flex items-center gap-1 border-b border-slate-200 bg-white/95 px-2 backdrop-blur">
@@ -120,6 +138,7 @@ export function PasswordPage({
           onChange={(v) => setF({ ...f, confirm: v })}
           error={tried ? errors.confirm : ""}
         />
+        {serverError && <p role="alert" className="text-sm text-danger-600">{serverError}</p>}
         <ul className="space-y-2 rounded-sm bg-slate-100 p-3 text-xs">
           {rules.map(([label, ok]) => (
             <li
@@ -143,6 +162,7 @@ export function PasswordPage({
       <div className="sticky bottom-0 border-t border-slate-200 bg-white/95 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur">
         <button
           type="submit"
+          disabled={pending}
           className="focus-ring flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
         >
           Cập nhật mật khẩu

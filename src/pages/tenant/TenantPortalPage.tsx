@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AccountMenu, Button, Icon, type IconName } from "../../components/common/index.ts";
 import type { Ticket } from "../../types/incident.ts";
 import type { Invoice } from "../../types/invoice.ts";
+import type { ContractRecord, TenantRecord } from "../../types/tenant.ts";
+import { invoicesForTenant } from "../../utils/invoiceOwnership.ts";
+import { getIncidentNotifications, getViolations, markIncidentNotificationRead, subscribeIncidentStore } from "../../services/mock/incidentStore.ts";
+import { env } from "../../config/env.ts";
 import {
   DEMO_TENANT,
-  demoInvoices,
-  initialTenantVehicles,
-  initialTenantNotifications,
-  initialPersonalViolations,
+  initialsOf,
   TenantCtx,
   type Page,
   type RequestKind,
@@ -25,38 +26,65 @@ import { ReportPage } from "./ReportPage.tsx";
 import { RequestModal } from "./RequestModal.tsx";
 
 export function TenantPortal({
+  tenant,
+  tenants,
+  contracts,
   tickets,
   invoices: externalInvoices,
-  onInvoicesChange,
+  onSubmitInvoiceProof,
   vehicles: externalVehicles,
-  onVehiclesChange,
+  onCreateVehicle,
   onCreateTicket,
   onLogout,
   showToast,
 }: {
+  tenant: TenantRecord;
+  tenants: TenantRecord[];
+  contracts?: ContractRecord[];
   tickets: Ticket[];
   invoices?: Invoice[];
-  onInvoicesChange?: (invoices: Invoice[]) => void;
+  onSubmitInvoiceProof?: (id: string, tenantId: string, proof: NonNullable<Invoice["proof"]>) => Promise<void>;
   vehicles?: TenantVehicle[];
-  onVehiclesChange?: (vehicles: TenantVehicle[]) => void;
-  onCreateTicket: (ticket: Ticket) => void;
+  onCreateVehicle?: (vehicle: TenantVehicle) => Promise<void>;
+  onCreateTicket: (ticket: Ticket) => Promise<Ticket>;
   onLogout: () => void;
   showToast: (message: string) => void;
 }) {
-  const TENANT: TenantInfo = DEMO_TENANT;
-  const [proofSubmitted, setProofSubmitted] = useState<string[]>([]);
+  const activeContract = contracts?.find((item) => item.tenantId === tenant.id && item.status !== "Đã thanh lý");
+  const TENANT: TenantInfo = {
+    ...DEMO_TENANT,
+    name: tenant.name,
+    gender: tenant.gender,
+    cccd: tenant.cccd,
+    email: tenant.email,
+    phone: tenant.phone,
+    address: tenant.address,
+    room: tenant.room,
+    bed: tenant.bed,
+    initials: initialsOf(tenant.name),
+    floor: "Chưa có thông tin tầng",
+    contract: activeContract?.id ?? "Chưa có thông tin",
+    deposit: tenant.deposit,
+  };
+  const roommates = tenants
+    .filter((person) => tenant.status !== "Đã trả phòng" && Boolean(activeContract?.roomId) && person.id !== tenant.id && person.status !== "Đã trả phòng" && contracts?.some((item) => item.tenantId === person.id && item.status !== "Đã thanh lý" && item.roomId === activeContract?.roomId))
+    .map(({ id, name, bed }) => ({ id, name, bed }));
+  const isResident = tenant.status !== "Đã trả phòng";
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<TenantNotification[]>(initialTenantNotifications);
-  const [violations, setViolations] = useState<PersonalViolation[]>(initialPersonalViolations);
+  const [, setIncidentVersion] = useState(0);
+  useEffect(() => env.USE_MOCK ? subscribeIncidentStore(() => setIncidentVersion((version) => version + 1)) : undefined, []);
+  const notifications: TenantNotification[] = env.USE_MOCK && tenant.id ? getIncidentNotifications(tenant.id) : [];
+  const violations: PersonalViolation[] = env.USE_MOCK && tenant.id ? getViolations(tenant.id).flatMap((item) => {
+    if (!["Về muộn", "Gây ồn", "Vệ sinh", "Khách ngoài", "Hút thuốc / cháy nổ", "Khác"].includes(item.type) ||
+        !["Nhắc nhở", "Cảnh cáo", "Phạt tiền"].includes(item.level)) return [];
+    return [{ ...item, type: item.type as PersonalViolation["type"], level: item.level as PersonalViolation["level"] }];
+  }) : [];
   const unreadNoticesCount = notifications.filter((n) => !n.read).length;
-  const myDormInvoices = externalInvoices?.filter(
-    (inv) => inv.tenant === TENANT.name || inv.tenant === "Nguyễn Hoàng Nam",
-  );
-  const invoices: TenantInvoice[] =
-    myDormInvoices && myDormInvoices.length > 0
+  const myDormInvoices = invoicesForTenant(externalInvoices ?? [], tenant.id, contracts ?? []);
+  const invoices: (TenantInvoice & { paymentMethod?: string; proof?: Invoice["proof"] })[] =
+    myDormInvoices
       ? myDormInvoices.map((inv) => {
-          const isPending =
-            inv.status === "Chờ xác nhận" || proofSubmitted.includes(inv.id);
+          const isPending = inv.status === "Chờ xác nhận";
           const status =
             inv.status === "Đã thu"
               ? ("Đã thanh toán" as const)
@@ -73,57 +101,42 @@ export function TenantPortal({
             due: inv.due,
             status,
             paidAt: inv.payment?.paidAt ?? "",
+            paymentMethod: inv.payment?.method,
+            proof: inv.proof,
           };
         })
-      : demoInvoices.map((i) =>
-          proofSubmitted.includes(i.id)
-            ? { ...i, status: "Chờ xác nhận" as const }
-            : i,
-        );
-  const [internalVehicles, setInternalVehicles] = useState<TenantVehicle[]>(initialTenantVehicles);
-  const allVehicles = externalVehicles ?? internalVehicles;
-  const myVehicles = allVehicles.filter(
-    (v) => v.tenantId === TENANT.id || v.tenantId === "NT-0187" || !v.tenantId,
-  );
+      : [];
+  const allVehicles = externalVehicles ?? [];
+  const myVehicles = allVehicles.filter((vehicle) => vehicle.tenantId === tenant.id);
 
-  const handleUpdateVehicles = (nextMyVehicles: TenantVehicle[]) => {
-    if (onVehiclesChange && externalVehicles) {
-      const otherVehicles = externalVehicles.filter(
-        (v) => v.tenantId !== TENANT.id && v.tenantId !== "NT-0187" && v.tenantId,
-      );
-      onVehiclesChange([...nextMyVehicles, ...otherVehicles]);
-    } else {
-      setInternalVehicles(nextMyVehicles);
-    }
+  const handleCreateVehicle = async (vehicle: TenantVehicle) => {
+    if (!onCreateVehicle) throw new Error("Chưa có nơi lưu phương tiện");
+    await onCreateVehicle(vehicle);
   };
   const pendingDeposit = false;
-  const submitProof = (id: string) => {
-    setProofSubmitted((submitted) =>
-      submitted.includes(id) ? submitted : [...submitted, id],
-    );
-    if (onInvoicesChange && externalInvoices) {
-      const now = new Date();
-      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} ${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
-      onInvoicesChange(
-        externalInvoices.map((inv) =>
-          inv.id === id
-            ? {
-                ...inv,
-                status: "Chờ xác nhận",
-                proof: {
-                  fileName: "bien-lai-chuyen-khoan.png",
-                  submittedAt: timeStr,
-                },
-              }
-            : inv,
-        ),
-      );
+  const submitProof = async (id: string, file: File) => {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Không đọc được tệp minh chứng"));
+      reader.onerror = () => reject(new Error("Không đọc được tệp minh chứng"));
+      reader.readAsDataURL(file);
+    });
+    if (externalInvoices) {
+      const invoice = myDormInvoices?.find((item) => item.id === id);
+      if (!onSubmitInvoiceProof || !invoice || invoice.status !== "Nợ" || invoice.payment) {
+        throw new Error("Không thể gửi minh chứng cho hóa đơn này");
+      }
+      const proof = { fileName: file.name, submittedAt: new Date().toLocaleString("vi-VN"), dataUrl };
+      await onSubmitInvoiceProof(id, tenant.id, proof);
+    } else {
+      throw new Error("Chưa có nơi lưu minh chứng; vui lòng liên hệ Ban Quản lý");
     }
-    showToast("Đã gửi minh chứng cho Quản lý");
   };
   const [page, setPage] = useState<Page>("room");
   const [request, setRequest] = useState<RequestKind | null>(null);
-  const myTickets = tickets.filter((ticket) => ticket.room === TENANT.room);
+  const myTickets: Ticket[] = tickets.filter((ticket) => ticket.reporterTenantId === tenant.id);
   const openCount = myTickets.filter(
     (ticket) => ticket.status !== "Hoàn thành",
   ).length;
@@ -263,8 +276,14 @@ export function TenantPortal({
           </header>
 
           <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-8 sm:py-8 lg:pb-8">
-            {page === "room" && (
+            {page === "room" && !isResident && (
+              <p>Không có hợp đồng cư trú hiện hành. Bạn có thể xem hóa đơn cũ trong mục Hóa đơn.</p>
+            )}
+            {page === "room" && isResident && (
               <RoomPage
+                tenant={tenant}
+                contract={activeContract}
+                roommates={roommates}
                 vehicles={myVehicles}
                 myTickets={myTickets}
                 onReport={() => setPage("report")}
@@ -273,6 +292,32 @@ export function TenantPortal({
                 pendingDeposit={pendingDeposit}
                 onPay={() => setPage("invoices")}
               />
+            )}
+            {page === "room" && (
+              <section className="mt-6 rounded-sm border border-slate-200 bg-white p-6">
+                <h2 className="font-heading text-lg font-bold text-slate-900">Lịch sử hợp đồng</h2>
+                {!contracts && <p className="mt-3 text-sm text-slate-500">Chưa có dữ liệu hợp đồng.</p>}
+                {contracts && contracts.filter((item) => item.tenantId === tenant.id).length === 0 && (
+                  <p className="mt-3 text-sm text-slate-500">Chưa có hợp đồng.</p>
+                )}
+                {contracts?.filter((item) => item.tenantId === tenant.id).map((item) => (
+                  <article key={item.id} className="mt-4 border-t border-slate-100 pt-4 text-sm">
+                    <h3 className="font-semibold">{item.id} · {item.status}</h3>
+                    <p className="mt-1 text-slate-600">{item.startDate} – {item.endDate} · {item.room} · {item.bed}</p>
+                    {item.renewals?.filter((renewal) => renewal.contractId === item.id).map((renewal) => (
+                      <p key={renewal.id} className="mt-1 text-slate-600">Gia hạn: {renewal.startDate} – {renewal.endDate}</p>
+                    ))}
+                    {(item.documents?.filter((doc) => doc.contractId === item.id) ?? []).map((doc) => (
+                      <div key={doc.id} className="mt-2">
+                        {doc.content || doc.url ? (
+                          <a className="text-brand-700 underline" href={doc.content || doc.url} download={doc.name}>{doc.name}</a>
+                        ) : <span>{doc.name} — Chưa có tệp</span>}
+                      </div>
+                    ))}
+                    {!item.documents?.some((doc) => doc.contractId === item.id) && <p className="mt-2 text-slate-500">Chưa có tài liệu hợp đồng.</p>}
+                  </article>
+                ))}
+              </section>
             )}
             {page === "invoices" && (
               <TenantInvoicesPage
@@ -284,13 +329,22 @@ export function TenantPortal({
             {page === "vehicles" && (
               <TenantVehiclesPage
                 vehicles={myVehicles}
-                onVehiclesChange={handleUpdateVehicles}
+                tenantId={tenant.id}
+                canRegister={isResident}
+                onCreateVehicle={handleCreateVehicle}
                 showToast={showToast}
               />
             )}
-            {page === "report" && (
+            {page === "report" && !isResident && (
+              <p>Không thể gửi báo hỏng mới vì bạn đã trả phòng.</p>
+            )}
+            {page === "report" && isResident && (
               <ReportPage
-                myTickets={myTickets}
+                tenantId={tenant.id}
+                resident={isResident}
+                roomId={activeContract?.roomId}
+                bedId={activeContract?.bedId}
+                myTickets={tickets}
                 onCreate={onCreateTicket}
                 showToast={showToast}
               />
@@ -342,8 +396,12 @@ export function TenantPortal({
           notifications={notifications}
           violations={violations}
           onMarkAllRead={() => {
-            setNotifications(notifications.map((n) => ({ ...n, read: true })));
-            showToast("Đã đánh dấu tất cả thông báo là đã đọc");
+            try {
+              notifications.filter((item) => !item.read).forEach((item) => markIncidentNotificationRead(item.id, tenant.id));
+              showToast("Đã đánh dấu tất cả thông báo là đã đọc");
+            } catch (error) {
+              showToast(error instanceof Error ? error.message : "Không thể cập nhật thông báo");
+            }
           }}
         />
       </div>

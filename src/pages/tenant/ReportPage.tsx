@@ -3,17 +3,26 @@ import type React from "react";
 import { Button, Icon, PriorityPicker, PriorityTag } from "../../components/common/index.ts";
 import type { Priority, Ticket } from "../../types/incident.ts";
 import { TenantCtx, ticketTone } from "./tenantConstants.tsx";
+import { readIncidentImage } from "../../services/mock/incidentImages.ts";
 
-const categories = ["Điện", "Nước", "Điều hòa", "Nội thất", "Khác"];
+const categories = ["Điện", "Nước", "Internet", "Nội thất", "Tiện ích", "Khác"];
 
 export function ReportPage({
   myTickets,
   onCreate,
   showToast,
+  tenantId,
+  resident = false,
+  roomId,
+  bedId,
 }: {
   myTickets: Ticket[];
-  onCreate: (ticket: Ticket) => void;
+  onCreate: (ticket: Ticket) => Promise<unknown>;
   showToast: (m: string) => void;
+  tenantId?: string;
+  resident?: boolean;
+  roomId?: string;
+  bedId?: string;
 }) {
   const TENANT = useContext(TenantCtx);
   const [title, setTitle] = useState("");
@@ -21,35 +30,39 @@ export function ReportPage({
   const [location, setLocation] = useState("Tại giường ngủ cá nhân");
   const [priority, setPriority] = useState<Priority>("Bình thường");
   const [description, setDescription] = useState("");
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [pending, setPending] = useState(false);
   const valid = title.trim().length >= 3 && description.trim().length >= 10;
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!valid) return;
-    const text = description.trim();
-    onCreate({
-      id: `SC-${1050 + myTickets.length + Math.floor(Math.random() * 40)}`,
-      room: TENANT.room,
-      title: title.trim(),
-      description: `${location}: ${text}`,
-      category,
-      priority,
-      bed: TENANT.bed,
-      status: "Chưa phân công",
-      reporter: TENANT.name,
-      phone: TENANT.phone,
-      createdAt: "Vừa xong",
-      deadline: "Trong 3 ngày làm việc",
-      hasPhoto: photos.length > 0,
-    });
-    setTitle("");
-    setDescription("");
-    setPriority("Bình thường");
-    photos.forEach((photo) => URL.revokeObjectURL(photo));
-    setPhotos([]);
-    showToast("Đã gửi phiếu báo hỏng cho quản lý");
+    if (!valid || !tenantId || !roomId || !resident || !photo || pending) return;
+    setPending(true);
+    try {
+      const scenePhoto = await readIncidentImage(photo);
+      await onCreate({
+        id: `SC-${crypto.randomUUID()}`,
+        roomId,
+        bedId: location === "Tại giường ngủ cá nhân" ? bedId : undefined,
+        reporterTenantId: tenantId,
+        room: TENANT.room,
+        bed: location === "Tại giường ngủ cá nhân" ? TENANT.bed : undefined,
+        title: title.trim(), description: `${location}: ${description.trim()}`,
+        category, priority, status: "Chưa phân công", reporter: TENANT.name,
+        phone: TENANT.phone, createdAt: new Date().toISOString(), deadline: "",
+        hasPhoto: true, scenePhoto,
+      });
+      setTitle(""); setDescription(""); setPhoto(null);
+      showToast("Đã gửi phiếu báo hỏng.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể gửi phiếu báo hỏng.");
+    } finally {
+      setPending(false);
+    }
   };
+
+  const personalTickets = tenantId ? myTickets.filter((ticket) => ticket.reporterTenantId === tenantId) : [];
+
 
   return (
     <>
@@ -86,7 +99,7 @@ export function ReportPage({
               Tiêu đề
             </span>
             <input
-              className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-brand-500"
+              className="focus-ring h-10 w-full rounded-sm border border-slate-200 px-3 text-base sm:text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-brand-500"
               maxLength={80}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="VD: Quạt trần phát ra tiếng kêu"
@@ -118,7 +131,7 @@ export function ReportPage({
           <label className="grid gap-1.5 text-xs font-semibold text-slate-800">
             Vị trí hỏng hóc cụ thể
             <select
-              className="focus-ring h-10 rounded-sm border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-brand-500"
+              className="focus-ring h-10 rounded-sm border border-slate-200 bg-white px-3 text-base sm:text-sm font-normal outline-none focus:border-brand-500"
               value={location}
               onChange={(event) => setLocation(event.target.value)}
             >
@@ -148,77 +161,21 @@ export function ReportPage({
               </span>
             </span>
             <textarea
-              className="focus-ring min-h-28 w-full resize-none rounded-sm border border-slate-200 p-3 text-sm outline-none placeholder:text-slate-400 focus:border-brand-500"
+              className="focus-ring min-h-28 w-full resize-none rounded-sm border border-slate-200 p-3 text-base sm:text-sm outline-none placeholder:text-slate-400 focus:border-brand-500"
               onChange={(event) => setDescription(event.target.value)}
               placeholder="VD: Quạt trần phát ra tiếng kêu to khi chạy tốc độ 2 và 3..."
               value={description}
             />
           </label>
-          <div>
-            <div className="mb-3 flex items-center justify-between text-sm font-semibold text-slate-800">
-              <span>Hình ảnh hiện trạng</span>
-              <span className="text-xs font-medium text-slate-400">
-                {photos.length}/3 ảnh
-              </span>
-            </div>
-            {photos.length > 0 && (
-              <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {photos.map((photo, index) => (
-                  <div
-                    className="relative overflow-hidden rounded-sm border border-slate-200"
-                    key={photo}
-                  >
-                    <img
-                      alt={`Ảnh sự cố ${index + 1}`}
-                      className="h-24 w-full object-cover"
-                      src={photo}
-                    />
-                    <Button
-                      label={`Xóa ảnh ${index + 1}`}
-                      className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-sm bg-slate-900/80 text-white"
-                      onClick={() => {
-                        URL.revokeObjectURL(photo);
-                        setPhotos(photos.filter((item) => item !== photo));
-                      }}
-                    >
-                      <Icon name="close" className="size-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {photos.length < 3 && (
-              <label className="flex h-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-sm border border-dashed border-slate-300 text-slate-500 transition-colors hover:border-brand-500 hover:bg-brand-50 hover:text-brand-600">
-                <Icon name="camera" className="size-6" />
-                <span className="text-xs font-semibold">
-                  Thêm ảnh từ máy hoặc camera
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  JPG, PNG · tối đa 3 ảnh
-                </span>
-                <input
-                  accept="image/*"
-                  className="sr-only"
-                  multiple
-                  onChange={(event) => {
-                    const files = Array.from(event.target.files ?? []).slice(
-                      0,
-                      3 - photos.length,
-                    );
-                    setPhotos([
-                      ...photos,
-                      ...files.map((file) => URL.createObjectURL(file)),
-                    ]);
-                  }}
-                  type="file"
-                />
-              </label>
-            )}
-          </div>
+          <label className="block text-sm font-semibold">Ảnh hiện trường
+            <input className="mt-2 block w-full text-sm" type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
+          </label>
+          {!resident && <p className="text-sm text-warning-800">Chỉ người đang cư trú được báo hỏng.</p>}
+          {!tenantId && <p className="text-sm text-warning-800">Không xác định được người báo.</p>}
 
           <button
             className="focus-ring flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-sm bg-brand-500 text-sm font-semibold text-white shadow-xs transition-all hover:bg-brand-600 active:translate-y-[1px] disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={!valid}
+            disabled={!valid || !photo || !resident || !tenantId || pending}
             type="submit"
           >
             <Icon name="send" className="size-4" />
@@ -230,14 +187,14 @@ export function ReportPage({
           <section className="rounded-sm border border-slate-200 bg-white shadow-xs">
             <div className="border-b border-slate-100 px-6 py-5">
               <h2 className="font-heading text-lg font-bold text-slate-900">
-                Phiếu của phòng
+                Phiếu của tôi
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                {myTickets.length} phiếu gần đây
+                Các phiếu do bạn gửi.
               </p>
             </div>
             <ul className="divide-y divide-slate-100">
-              {myTickets.map((ticket) => {
+              {personalTickets.map((ticket) => {
                 const tone = ticketTone[ticket.status];
                 return (
                   <li className="p-5" key={ticket.id}>

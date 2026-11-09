@@ -17,14 +17,14 @@ export function DeleteRoomModal({
   return (
     <Modal
       title={`Đưa phòng ${room.code} vào lưu trữ?`}
-      description="Phòng sẽ ngừng hoạt động và ẩn khỏi sơ đồ (Soft Delete). Toàn bộ dữ liệu lịch sử hợp đồng và hóa đơn cũ vẫn được bảo lưu 100% để đối soát."
+      description="Phòng sẽ ngừng hoạt động và ẩn khỏi sơ đồ. Việc bảo toàn lịch sử cần được dịch vụ phòng bảo đảm."
       onClose={onClose}
     >
       <div className="space-y-4 p-5">
         <div className="rounded-sm border border-danger-200 bg-danger-50 p-3.5 text-xs text-danger-700">
           <span className="font-bold">Lưu ý quan trọng:</span> Sau khi lưu trữ,
           phòng này sẽ biến mất khỏi sơ đồ tầng và không thể tiếp nhận người thuê
-          mới. Bạn có thể khôi phục lại bất kỳ lúc nào trong danh sách lưu trữ.
+          mới. Chức năng khôi phục cần được dịch vụ phòng hỗ trợ.
         </div>
 
         <p className="text-sm text-slate-600">

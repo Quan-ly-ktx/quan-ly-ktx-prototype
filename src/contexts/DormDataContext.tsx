@@ -5,42 +5,60 @@ import type {
   Invoice,
   Ticket,
   BedStatus,
+  FacilityExpense,
 } from "../types/index.ts";
+import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle } from "../types/tenant.ts";
 import { dormService } from "../services/dormService.ts";
-import {
-  initialRooms,
-  initialTenants,
-  initialInvoices,
-  initialTickets,
-} from "../services/mock/mockData.ts";
+import { useToast } from "../hooks/useToast.ts";
 
 export type DormDataContextType = {
   rooms: RoomRecord[];
   tenants: TenantRecord[];
   invoices: Invoice[];
   tickets: Ticket[];
+  contracts: ContractRecord[];
+  vehicles: TenantVehicle[];
+  expenses: FacilityExpense[];
+  onCreateExpense: (expense: FacilityExpense) => Promise<void>;
+  onUpdateExpense: (id: string, expense: FacilityExpense) => Promise<void>;
+  onDeleteExpense: (id: string) => Promise<void>;
+  onRegisterVehicle: (vehicle: TenantVehicle) => Promise<void>;
+  onIssueVehicleCard: (id: string, cardCode: string) => Promise<void>;
+  onRevokeVehicle: (id: string) => Promise<void>;
+  onResetDemo: () => Promise<void>;
+  onOnboard: (input: OnboardingInput) => Promise<OnboardingResult>;
+  onRenewContract: (id: string, endDate: string) => Promise<void>;
+  onCheckoutContract: (id: string, status: "AVAILABLE" | "MAINTENANCE") => Promise<void>;
+  onAddContractDocuments: (id: string, documents: ContractDocumentRecord[]) => Promise<void>;
+  onDeleteContractDocument: (id: string, documentId: string) => Promise<void>;
+  onUpdateTenantProfile: (id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">) => Promise<TenantRecord>;
   loading: boolean;
   reload: () => Promise<void>;
   onCreateTicket: (ticket: Omit<Ticket, "id">) => Promise<Ticket>;
-  onUpdateTicket: (id: string, patch: Partial<Ticket>) => Promise<Ticket>;
+  onUpdateTicket: (id: string, patch: Partial<Ticket>, actorStaffId?: string) => Promise<Ticket>;
   onCreateRoom: (room: RoomRecord) => Promise<RoomRecord>;
   onUpdateRoom: (id: string, room: RoomRecord) => Promise<RoomRecord>;
   onDeleteRoom: (id: string) => Promise<void>;
   onUpdateBedStatus: (bedId: string, status: BedStatus) => Promise<void>;
   onRoomsChange: (rooms: RoomRecord[]) => Promise<void>;
-  onTenantsChange: (tenants: TenantRecord[]) => Promise<void>;
-  onInvoicesChange: (invoices: Invoice[]) => Promise<void>;
+  onSubmitInvoiceProof: (id: string, tenantId: string, proof: NonNullable<Invoice["proof"]>) => Promise<void>;
+  onRejectInvoiceProof: (id: string) => Promise<void>;
+  onConfirmInvoiceProof: (id: string, manager: string) => Promise<void>;
   onConfirmPayment: (invoiceId: string, manager: string) => Promise<Invoice>;
 };
 
 export const DormDataContext = createContext<DormDataContextType | undefined>(undefined);
 
 export function DormDataProvider({ children }: { children: ReactNode }) {
-  const [rooms, setRooms] = useState<RoomRecord[]>([...initialRooms]);
-  const [tenants, setTenants] = useState<TenantRecord[]>([...initialTenants]);
-  const [invoices, setInvoices] = useState<Invoice[]>([...initialInvoices]);
-  const [tickets, setTickets] = useState<Ticket[]>([...initialTickets]);
-  const [loading, setLoading] = useState(false);
+  const { showToast } = useToast();
+  const [rooms, setRooms] = useState<RoomRecord[]>([]);
+  const [tenants, setTenants] = useState<TenantRecord[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [contracts, setContracts] = useState<ContractRecord[]>([]);
+  const [vehicles, setVehicles] = useState<TenantVehicle[]>([]);
+  const [expenses, setExpenses] = useState<FacilityExpense[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const reload = async () => {
     setLoading(true);
@@ -55,8 +73,18 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
       setTenants(t);
       setInvoices(inv);
       setTickets(tck);
+      const [contractData, vehicleData, expenseData] = await Promise.allSettled([dormService.getContracts(), dormService.getVehicles(), dormService.getExpenses()]);
+      if (contractData.status === "fulfilled") setContracts(contractData.value);
+      else showToast(contractData.reason instanceof Error ? contractData.reason.message : "Không thể tải hợp đồng.");
+      if (vehicleData.status === "fulfilled") setVehicles(vehicleData.value);
+      else showToast(vehicleData.reason instanceof Error ? vehicleData.reason.message : "Không thể tải phương tiện.");
+      if (expenseData.status === "fulfilled") setExpenses(expenseData.value);
+      else {
+        setExpenses([]);
+        showToast(expenseData.reason instanceof Error ? expenseData.reason.message : "Không thể tải chi phí.");
+      }
     } catch {
-      // Keep existing data on network/fetch failure
+      showToast("Không thể tải dữ liệu. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -72,23 +100,22 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     return created;
   };
 
-  const onUpdateTicket = async (id: string, patch: Partial<Ticket>): Promise<Ticket> => {
-    let localUpdated: Ticket | undefined;
-    setTickets((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          localUpdated = { ...t, ...patch };
-          return localUpdated;
-        }
-        return t;
-      }),
-    );
-    try {
-      const persisted = await dormService.updateTicket(id, patch);
-      return persisted;
-    } catch {
-      return localUpdated || ({ id, ...patch } as Ticket);
-    }
+  const onUpdateTicket = async (id: string, patch: Partial<Ticket>, actorStaffId?: string): Promise<Ticket> => {
+    const persisted = await dormService.updateTicket(id, patch, actorStaffId);
+    setTickets((prev) => prev.map((ticket) => ticket.id === id ? persisted : ticket));
+    return persisted;
+  };
+  const onCreateExpense = async (expense: FacilityExpense) => {
+    const created = await dormService.createExpense(expense);
+    setExpenses((current) => [created, ...current]);
+  };
+  const onUpdateExpense = async (id: string, expense: FacilityExpense) => {
+    const updated = await dormService.updateExpense(id, expense);
+    setExpenses((current) => current.map((item) => item.id === id ? updated : item));
+  };
+  const onDeleteExpense = async (id: string) => {
+    await dormService.deleteExpense(id);
+    setExpenses((current) => current.filter((item) => item.id !== id));
   };
   const onCreateRoom = async (roomData: RoomRecord): Promise<RoomRecord> => {
     const created = await dormService.createRoom(roomData);
@@ -119,24 +146,75 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
   };
 
   const onRoomsChange = async (newRooms: RoomRecord[]): Promise<void> => {
-    setRooms(newRooms);
-    await dormService.saveRooms(newRooms);
+    const saved = await dormService.saveRooms(newRooms);
+    setRooms(saved);
   };
 
-  const onTenantsChange = async (newTenants: TenantRecord[]): Promise<void> => {
-    setTenants(newTenants);
-    await dormService.saveTenants(newTenants);
+  const onSubmitInvoiceProof = async (id: string, tenantId: string, proof: NonNullable<Invoice["proof"]>) => {
+    const updated = await dormService.submitInvoiceProof(id, tenantId, proof);
+    setInvoices((current) => current.map((invoice) => invoice.id === id ? updated : invoice));
   };
-
-  const onInvoicesChange = async (newInvoices: Invoice[]): Promise<void> => {
-    setInvoices(newInvoices);
-    await dormService.saveInvoices(newInvoices);
+  const onRejectInvoiceProof = async (id: string) => {
+    const updated = await dormService.rejectInvoiceProof(id);
+    setInvoices((current) => current.map((invoice) => invoice.id === id ? updated : invoice));
+  };
+  const onConfirmInvoiceProof = async (id: string, manager: string) => {
+    const updated = await dormService.confirmInvoiceProof(id, manager);
+    setInvoices((current) => current.map((invoice) => invoice.id === id ? updated : invoice));
   };
 
   const onConfirmPayment = async (invoiceId: string, manager: string): Promise<Invoice> => {
     const confirmed = await dormService.confirmPayment(invoiceId, manager);
     setInvoices((prev) => prev.map((inv) => (inv.id === invoiceId ? confirmed : inv)));
     return confirmed;
+  };
+  const refreshLifecycle = async () => {
+    const [nextRooms, nextTenants, nextInvoices, nextContracts, nextVehicles] = await Promise.all([
+      dormService.getRooms(), dormService.getTenants(), dormService.getInvoices(), dormService.getContracts(), dormService.getVehicles(),
+    ]);
+    setRooms(nextRooms); setTenants(nextTenants); setInvoices(nextInvoices); setContracts(nextContracts); setVehicles(nextVehicles);
+  };
+  const onOnboard = async (input: OnboardingInput) => {
+    const result = await dormService.onboard(input);
+    await refreshLifecycle();
+    return result;
+  };
+  const onRenewContract = async (id: string, endDate: string) => {
+    await dormService.renewContract(id, endDate);
+    await refreshLifecycle();
+  };
+  const onCheckoutContract = async (id: string, status: "AVAILABLE" | "MAINTENANCE") => {
+    await dormService.checkoutContract(id, status);
+    await refreshLifecycle();
+  };
+  const onRegisterVehicle = async (vehicle: TenantVehicle) => {
+    const created = await dormService.registerVehicle(vehicle);
+    setVehicles((current) => [...current, created]);
+  };
+  const onIssueVehicleCard = async (id: string, cardCode: string) => {
+    const updated = await dormService.issueVehicleCard(id, cardCode);
+    setVehicles((current) => current.map((vehicle) => vehicle.id === id ? updated : vehicle));
+  };
+  const onRevokeVehicle = async (id: string) => {
+    const updated = await dormService.revokeVehicle(id);
+    setVehicles((current) => current.map((vehicle) => vehicle.id === id ? updated : vehicle));
+  };
+  const onResetDemo = async () => {
+    await dormService.resetMockData();
+    await reload();
+  };
+  const onAddContractDocuments = async (id: string, documents: ContractDocumentRecord[]) => {
+    await dormService.addContractDocuments(id, documents);
+    setContracts(await dormService.getContracts());
+  };
+  const onDeleteContractDocument = async (id: string, documentId: string) => {
+    await dormService.deleteContractDocument(id, documentId);
+    setContracts(await dormService.getContracts());
+  };
+  const onUpdateTenantProfile = async (id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">) => {
+    const updated = await dormService.updateTenantProfile(id, profile);
+    setTenants((current) => current.map((tenant) => tenant.id === id ? updated : tenant));
+    return updated;
   };
 
   return (
@@ -146,6 +224,22 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         tenants,
         invoices,
         tickets,
+        contracts,
+        vehicles,
+        expenses,
+        onCreateExpense,
+        onUpdateExpense,
+        onDeleteExpense,
+        onRegisterVehicle,
+        onIssueVehicleCard,
+        onRevokeVehicle,
+        onResetDemo,
+        onOnboard,
+        onRenewContract,
+        onCheckoutContract,
+        onAddContractDocuments,
+        onDeleteContractDocument,
+        onUpdateTenantProfile,
         loading,
         reload,
         onCreateTicket,
@@ -155,8 +249,9 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         onDeleteRoom,
         onUpdateBedStatus,
         onRoomsChange,
-        onTenantsChange,
-        onInvoicesChange,
+        onSubmitInvoiceProof,
+        onRejectInvoiceProof,
+        onConfirmInvoiceProof,
         onConfirmPayment,
       }}
     >

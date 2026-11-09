@@ -2,6 +2,11 @@ import { useState } from "react";
 import { Button, Icon, PriorityTag } from "../../components/common/index.ts";
 import { PRIORITIES, priorityRank, type Priority, type Ticket, type TicketStatus } from "../../types/incident.ts";
 import { filters, prioBar, prioChip, statusStyle, where } from "./technicianConstants.ts";
+function creationTime(value: string): number {
+  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (match) return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]), Number(match[4] ?? 0), Number(match[5] ?? 0)).getTime();
+  return Date.parse(value) || 0;
+}
 
 export function TicketListPage({
   tickets,
@@ -11,7 +16,7 @@ export function TicketListPage({
 }: {
   tickets: Ticket[];
   onSelectTicket: (id: string) => void;
-  onUpdateTicket: (id: string, patch: Partial<Ticket>) => void;
+  onUpdateTicket: (id: string, patch: Partial<Ticket>) => Promise<unknown>;
   showToast: (message: string) => void;
 }) {
   const [filter, setFilter] = useState<(typeof filters)[number]>("Tất cả");
@@ -19,7 +24,8 @@ export function TicketListPage({
   const [query, setQuery] = useState("");
 
   const q = query.trim().toLowerCase();
-  const visible = tickets
+  const assignedTickets = tickets;
+  const visible = assignedTickets
     .filter((ticket) => filter === "Tất cả" || ticket.status === filter)
     .filter((ticket) => prio === "Tất cả" || ticket.priority === prio)
     .filter(
@@ -32,11 +38,12 @@ export function TicketListPage({
     .sort(
       (a, b) =>
         Number(a.status === "Hoàn thành") - Number(b.status === "Hoàn thành") ||
-        priorityRank[a.priority] - priorityRank[b.priority],
+        priorityRank[a.priority] - priorityRank[b.priority] ||
+        creationTime(a.createdAt) - creationTime(b.createdAt),
     );
 
   const count = (status: TicketStatus) =>
-    tickets.filter((ticket) => ticket.status === status).length;
+    assignedTickets.filter((ticket) => ticket.status === status).length;
   const hasFilter = filter !== "Tất cả" || prio !== "Tất cả" || q !== "";
 
   return (
@@ -173,10 +180,14 @@ export function TicketListPage({
                     {ticket.status === "Mới giao" ? (
                       <Button
                         className="flex h-10 w-full items-center justify-center gap-2 rounded-sm bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
-                        onClick={() => {
-                          onUpdateTicket(ticket.id, { status: "Đang xử lý" });
-                          onSelectTicket(ticket.id);
-                          showToast(`Đã nhận ${ticket.id} và bắt đầu xử lý`);
+                        onClick={async () => {
+                          try {
+                            await onUpdateTicket(ticket.id, { status: "Đang xử lý" });
+                            onSelectTicket(ticket.id);
+                            showToast(`Đã nhận ${ticket.id} và bắt đầu xử lý`);
+                          } catch {
+                            showToast("Không thể bắt đầu xử lý. Vui lòng thử lại.");
+                          }
                         }}
                       >
                         <Icon name="play" className="size-4" />

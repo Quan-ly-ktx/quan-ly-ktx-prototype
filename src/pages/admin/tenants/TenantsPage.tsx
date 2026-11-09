@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useDormData } from "../../../hooks/useDormData.ts";
 import {
   Button,
   Icon,
@@ -7,10 +8,11 @@ import {
   Select,
 } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
-import { rentalSlots, initialRooms } from "../../../services/mock/mockData.ts";
-import type { TenantRecord } from "../../../types/tenant.ts";
-import type { Invoice } from "../../../types/index.ts";
-import { isSlotAvailable, slotKey } from "../../../utils/roomCalculations.ts";
+import type { OnboardingInput, OnboardingResult, TenantRecord } from "../../../types/tenant.ts";
+import type { Invoice, RoomRecord } from "../../../types/index.ts";
+import { isSlotAvailable } from "../../../utils/roomCalculations.ts";
+import { getViolations } from "../../../services/mock/incidentStore.ts";
+import { env } from "../../../config/env.ts";
 
 const emptyTenantForm: {
   name: string;
@@ -31,28 +33,34 @@ const emptyTenantForm: {
   email: "",
   address: "",
   slot: "",
-  start: "2026-09-01",
-  end: "2027-09-01",
+  start: "",
+  end: "",
   deposit: "",
 };
 
 export function TenantsPage({
   tenants,
-  onTenantsChange,
+  rooms,
+  onOnboard,
+  onUpdateTenantProfile,
   invoices = [],
   initialSlot = null,
   onClearInitialSlot,
   showToast,
 }: {
   tenants: TenantRecord[];
-  onTenantsChange: (tenants: TenantRecord[]) => void;
+  rooms: RoomRecord[];
+  onOnboard: (input: OnboardingInput) => Promise<OnboardingResult>;
+  onUpdateTenantProfile: (id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">) => Promise<TenantRecord>;
   invoices?: Invoice[];
-  initialSlot?: { roomCode: string; bedCode: string } | null;
+  initialSlot?: { roomId: string; bedId: string } | null;
   onClearInitialSlot?: () => void;
   showToast: (message: string) => void;
 }) {
+  const { contracts } = useDormData();
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<TenantRecord | null>(null);
+  const [profileDraft, setProfileDraft] = useState<TenantRecord | null>(null);
   const [profileTab, setProfileTab] = useState("Thông tin cá nhân");
   const [query, setQuery] = useState("");
   const [roomFilter, setRoomFilter] = useState("Tất cả phòng");
@@ -60,6 +68,7 @@ export function TenantsPage({
   const [form, setForm] = useState(emptyTenantForm);
   const [createdAccountModal, setCreatedAccountModal] = useState<{
     name: string;
+    cccd: string;
     email: string;
     phone: string;
     roomBed: string;
@@ -68,17 +77,17 @@ export function TenantsPage({
 
   useEffect(() => {
     if (initialSlot) {
-      const room = initialRooms.find((r) => r.code === initialSlot.roomCode);
+      const room = rooms.find((r) => r.id === initialSlot.roomId);
       const gender = room?.gender ?? "Nam";
       setForm({
         ...emptyTenantForm,
         gender,
-        slot: slotKey(initialSlot.roomCode, initialSlot.bedCode),
+        slot: initialSlot.bedId,
       });
       setAddOpen(true);
       onClearInitialSlot?.();
     }
-  }, [initialSlot, onClearInitialSlot]);
+  }, [initialSlot, onClearInitialSlot, rooms]);
 
   const filtered = tenants.filter((tenant) => {
     if (roomFilter !== "Tất cả phòng" && tenant.room !== roomFilter) return false;
@@ -92,74 +101,36 @@ export function TenantsPage({
     return true;
   });
 
-  const availableSlots = rentalSlots.filter((slot) => {
-    if (slot.status !== "Sẵn sàng") return false;
-    if (!isSlotAvailable(tenants, slot.room, slot.bed)) return false;
-    const room = initialRooms.find((r) => r.code === slot.room);
-    return !room || room.gender === form.gender;
-  });
-
-  const chosenSlot = availableSlots.find(
-    (slot) => slotKey(slot.room, slot.bed) === form.slot,
+  const availableSlots = rooms.filter((room) => !room.deletedAt && room.gender === form.gender).flatMap((room) =>
+    Array.from({ length: room.total }, (_, index) => {
+      const bed = `G${String(index + 1).padStart(2, "0")}`;
+      return { room: room.code, roomId: room.id, bed, floor: room.floor, monthlyRent: room.basePrice, bedId: room.bedOverrides?.[bed]?.id, status: room.bedOverrides?.[bed]?.status };
+    }).filter((slot) => slot.bedId && slot.status === "AVAILABLE" && isSlotAvailable(contracts, slot.roomId, slot.bedId)),
   );
 
-  const createTenant = () => {
-    const phone = form.phone.replace(/\s/g, "");
-    if (form.name.trim().length < 2)
-      return showToast("Vui lòng nhập họ và tên");
-    if (!/^0\d{9}$/.test(phone))
-      return showToast("Số điện thoại cần đúng 10 chữ số");
-    if (!/^\d{12}$/.test(form.cccd))
-      return showToast("CCCD cần đúng 12 chữ số");
-    if (!/^\S+@\S+\.\S+$/.test(form.email))
-      return showToast("Email không hợp lệ");
-    if (!form.address.trim())
-      return showToast("Vui lòng nhập địa chỉ thường trú");
-    if (!chosenSlot) return showToast("Vui lòng chọn vị trí thuê còn trống");
-    if (new Date(form.end) <= new Date(form.start))
-      return showToast("Ngày kết thúc phải sau ngày bắt đầu");
-    if (Number(form.deposit) < 0) return showToast("Tiền cọc không hợp lệ");
-    if (tenants.some((tenant) => tenant.cccd === form.cccd))
-      return showToast("CCCD đã tồn tại");
-    if (
-      tenants.some(
-        (tenant) => tenant.email.toLowerCase() === form.email.toLowerCase(),
-      )
-    )
-      return showToast("Email đã tồn tại");
-    if (!isSlotAvailable(tenants, chosenSlot.room, chosenSlot.bed))
-      return showToast("Vị trí này vừa được gán cho người thuê khác");
+  const chosenSlot = availableSlots.find(
+    (slot) => slot.bedId === form.slot,
+  );
 
-    const tenant: TenantRecord = {
-      id: `NT-${String(187 + tenants.length).padStart(4, "0")}`,
-      name: form.name.trim(),
-      gender: form.gender,
-      phone,
-      cccd: form.cccd,
-      email: form.email.trim().toLowerCase(),
-      address: form.address.trim(),
-      room: chosenSlot.room,
-      bed: chosenSlot.bed,
-      start: new Date(form.start).toLocaleDateString("vi-VN"),
-      end: new Date(form.end).toLocaleDateString("vi-VN"),
-      monthlyRent: chosenSlot.monthlyRent,
-      deposit: Number(form.deposit) || chosenSlot.monthlyRent,
-      status: "Đang thuê",
-    };
-    const initialPassword = "Password123@";
-    onTenantsChange([tenant, ...tenants]);
-    setForm(emptyTenantForm);
-    setAddOpen(false);
-    setCreatedAccountModal({
-      name: tenant.name,
-      email: tenant.email,
-      phone: tenant.phone,
-      roomBed: `${tenant.room} · ${tenant.bed}`,
-      initialPassword,
-    });
-    showToast(
-      `Đã tạo hồ sơ và gán ${tenant.room}-${tenant.bed} cho ${tenant.name}`,
-    );
+  const createTenant = async () => {
+    if (!chosenSlot?.bedId) return showToast("Vui lòng chọn vị trí thuê còn trống");
+    try {
+      const result = await onOnboard({
+        name: form.name, gender: form.gender, phone: form.phone.replace(/\s/g, ""), cccd: form.cccd,
+        email: form.email, address: form.address, bedId: chosenSlot.bedId, startDate: form.start,
+        endDate: form.end, deposit: form.deposit ? Number(form.deposit) : chosenSlot.monthlyRent,
+      });
+      setForm(emptyTenantForm);
+      setAddOpen(false);
+      if (result.initialPassword) setCreatedAccountModal({
+        name: result.tenant.name, cccd: result.tenant.cccd, email: result.tenant.email,
+        phone: result.tenant.phone, roomBed: `${result.tenant.room} · ${result.tenant.bed}`,
+        initialPassword: result.initialPassword,
+      });
+      showToast("Đã tiếp nhận và phát hành hóa đơn tháng đầu.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể tiếp nhận người thuê.");
+    }
   };
 
   return (
@@ -175,13 +146,13 @@ export function TenantsPage({
               setForm({
                 ...emptyTenantForm,
                 slot: availableSlots[0]
-                  ? slotKey(availableSlots[0].room, availableSlots[0].bed)
+                  ? availableSlots[0].bedId ?? ""
                   : "",
               });
               setAddOpen(true);
             }}
           >
-            <Icon name="userPlus" className="size-4" /> Thêm người thuê
+            <Icon name="userPlus" className="size-4" /> Tiếp nhận người thuê
           </Button>
         }
       />
@@ -315,8 +286,8 @@ export function TenantsPage({
 
       {addOpen && (
         <Modal
-          title="Thêm người thuê và gán phòng"
-          description="Tạo hồ sơ sau khi khách đồng ý thuê và giữ ngay một vị trí còn trống."
+          title="Tiếp nhận và lập hợp đồng"
+          description="Chỉ tiếp nhận vào ngày 01; hợp đồng và hóa đơn tháng đầu được tạo cùng hồ sơ."
           onClose={() => setAddOpen(false)}
           wide
         >
@@ -363,13 +334,13 @@ export function TenantsPage({
               <input
                 className="focus-ring h-10 rounded-sm border border-slate-200 px-3 font-mono text-sm"
                 value={form.cccd}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    cccd: event.target.value.replace(/\D/g, "").slice(0, 12),
-                  })
-                }
+                onChange={(event) => {
+                  const cccd = event.target.value.replace(/\D/g, "").slice(0, 12);
+                  const existing = tenants.find((tenant) => tenant.cccd === cccd);
+                  setForm(existing ? { ...form, cccd, name: existing.name, gender: existing.gender, phone: existing.phone, email: existing.email, address: existing.address } : { ...form, cccd });
+                }}
               />
+              {tenants.some((tenant) => tenant.cccd === form.cccd) && <span>Khách đã có hồ sơ; tài khoản cũ sẽ được sử dụng lại.</span>}
             </label>
             <label className="grid gap-1.5 text-xs font-semibold text-slate-700">
               Email
@@ -406,8 +377,8 @@ export function TenantsPage({
                 )}
                 {availableSlots.map((slot) => (
                   <option
-                    key={slotKey(slot.room, slot.bed)}
-                    value={slotKey(slot.room, slot.bed)}
+                    key={slot.bedId}
+                    value={slot.bedId}
                   >
                     {slot.room} · {slot.bed} · Tầng {slot.floor} ·{" "}
                     {money(slot.monthlyRent)}/tháng
@@ -474,7 +445,7 @@ export function TenantsPage({
               className="h-10 rounded-sm bg-brand-500 px-5 text-sm font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
               onClick={createTenant}
             >
-              Tạo và gán phòng
+              Xác nhận tiếp nhận
             </Button>
           </div>
         </Modal>
@@ -512,28 +483,25 @@ export function TenantsPage({
             </div>
           </div>
           <div className="p-6">
-            {profileTab === "Thông tin cá nhân" && (
-              <dl className="grid gap-x-8 md:grid-cols-2">
-                {[
-                  ["Họ và tên", selected.name],
-                  ["Giới tính", selected.gender],
-                  ["Số điện thoại", selected.phone],
-                  ["CCCD", selected.cccd],
-                  ["Email", selected.email],
-                  ["Địa chỉ", selected.address],
-                ].map(([label, value]) => (
-                  <div
-                    className="flex justify-between gap-4 border-b border-slate-100 py-3"
-                    key={label}
-                  >
-                    <dt className="text-xs text-slate-500">{label}</dt>
-                    <dd className="text-right text-xs font-semibold text-slate-800">
-                      {value}
-                    </dd>
-                  </div>
+            {profileTab === "Thông tin cá nhân" && (profileDraft?.id === selected.id ? (
+              <div className="grid gap-3">
+                {(["name", "cccd", "email", "phone", "address"] as const).map((field) => (
+                  <label key={field}>{({ name: "Họ tên", cccd: "CCCD", email: "Email", phone: "Số điện thoại", address: "Địa chỉ" })[field]}
+                    <input className="block w-full border p-2" value={profileDraft[field]} onChange={(event) => setProfileDraft({ ...profileDraft, [field]: event.target.value })} />
+                  </label>
                 ))}
-              </dl>
-            )}
+                <label>Giới tính <select value={profileDraft.gender} onChange={(event) => setProfileDraft({ ...profileDraft, gender: event.target.value === "Nữ" ? "Nữ" : "Nam" })}><option>Nam</option><option>Nữ</option></select></label>
+                <Button onClick={() => { void (async () => { try { const updated = await onUpdateTenantProfile(selected.id, profileDraft); setSelected(updated); setProfileDraft(null); showToast("Đã lưu hồ sơ."); } catch (error) { showToast(error instanceof Error ? error.message : "Không thể lưu hồ sơ."); } })(); }}>Lưu hồ sơ</Button>
+                <Button onClick={() => setProfileDraft(null)}>Hủy</Button>
+              </div>
+            ) : (
+              <div><dl className="grid gap-x-8 md:grid-cols-2">
+                {[
+                  ["Họ và tên", selected.name], ["Giới tính", selected.gender], ["Số điện thoại", selected.phone],
+                  ["CCCD", selected.cccd], ["Email", selected.email], ["Địa chỉ", selected.address],
+                ].map(([label, value]) => <div className="flex justify-between gap-4 border-b border-slate-100 py-3" key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+              </dl><Button onClick={() => setProfileDraft(selected)}>Sửa hồ sơ</Button></div>
+            ))}
             {profileTab === "Hợp đồng & Cọc" && (
               <div className="space-y-4">
                 <div className="grid gap-3 rounded-sm border border-brand-200 bg-brand-50 p-4 sm:grid-cols-3">
@@ -543,7 +511,6 @@ export function TenantsPage({
                     ["Tiền cọc", money(selected.deposit)],
                     ["Ngày bắt đầu", selected.start],
                     ["Ngày kết thúc", selected.end],
-                    ["Thời hạn", "1 năm"],
                   ].map(([label, value]) => (
                     <div key={label}>
                       <div className="text-xs text-brand-700">{label}</div>
@@ -554,7 +521,7 @@ export function TenantsPage({
                   ))}
                 </div>
                 {(() => {
-                  const myInvoices = invoices.filter((i) => i.tenant === selected.name);
+                  const myInvoices = invoices.filter((i) => i.tenantId === selected.id);
                   const unpaidInvoice = myInvoices.find((i) => i.status === "Nợ");
                   const pendingInvoice = myInvoices.find((i) => i.status === "Chờ xác nhận");
 
@@ -595,18 +562,10 @@ export function TenantsPage({
               </div>
             )}
             {profileTab === "Kỷ luật & Vi phạm" && (
-              <div className="grid min-h-48 place-items-center rounded-sm border border-dashed border-slate-300 bg-slate-50 text-center">
-                <div>
-                  <span className="mx-auto grid size-10 place-items-center rounded-sm bg-success-50 text-success-600">
-                    <Icon name="activity" className="size-5" />
-                  </span>
-                  <h3 className="mt-2.5 font-heading text-sm font-bold">
-                    Không có vi phạm
-                  </h3>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Người thuê chưa có biên bản vi phạm nội quy.
-                  </p>
-                </div>
+              <div className="space-y-2">
+                {!env.USE_MOCK ? <p>API lịch sử vi phạm chưa được tích hợp.</p> : getViolations(selected.id).length === 0 ? <p>Không có biên bản vi phạm.</p> : getViolations(selected.id).map((item) => (
+                  <p key={item.id}>{item.date} · {item.type} · {item.level}{item.fine ? ` · ${money(item.fine)}` : ""}</p>
+                ))}
               </div>
             )}
           </div>
@@ -631,9 +590,9 @@ export function TenantsPage({
 
             <div className="rounded-sm border border-slate-200 bg-slate-50 p-4 space-y-3">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">Tên đăng nhập (Email):</span>
+                <span className="text-slate-500">Tên đăng nhập (CCCD):</span>
                 <span className="font-mono font-bold text-slate-900">
-                  {createdAccountModal.email}
+                  {createdAccountModal.cccd}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
@@ -658,9 +617,9 @@ export function TenantsPage({
               <Button
                 className="flex items-center gap-1.5 h-10 rounded-sm border border-slate-200 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 onClick={() => {
-                  const content = `[KTX Hub] Thông tin tài khoản của ${createdAccountModal.name}:\n- Tên đăng nhập: ${createdAccountModal.email}\n- Mật khẩu: ${createdAccountModal.initialPassword}\n- Vị trí: ${createdAccountModal.roomBed}\nVui lòng đăng nhập trên điện thoại để xem thẻ phòng và thanh toán hóa đơn.`;
-                  navigator.clipboard?.writeText(content);
-                  showToast("Đã sao chép thông tin tài khoản vào Clipboard!");
+                  const content = `[KTX Hub] Thông tin tài khoản của ${createdAccountModal.name}:\n- Tên đăng nhập: ${createdAccountModal.cccd}\n- Mật khẩu: ${createdAccountModal.initialPassword}\n- Vị trí: ${createdAccountModal.roomBed}`;
+                  if (!navigator.clipboard) { showToast("Trình duyệt không hỗ trợ sao chép."); return; }
+                  void navigator.clipboard.writeText(content).then(() => showToast("Đã sao chép thông tin tài khoản.")).catch(() => showToast("Không thể sao chép thông tin tài khoản."));
                 }}
               >
                 <Icon name="copy" className="size-3.5" />

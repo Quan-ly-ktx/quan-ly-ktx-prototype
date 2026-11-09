@@ -1,15 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, Icon, Modal } from "../../components/common/index.ts";
 import type { TenantVehicle } from "./tenantConstants.tsx";
 
 export function TenantVehiclesPage({
   vehicles,
-  onVehiclesChange,
+  onCreateVehicle,
   showToast,
+  tenantId,
+  canRegister,
 }: {
   vehicles: TenantVehicle[];
-  onVehiclesChange: (vehicles: TenantVehicle[]) => void;
+  onCreateVehicle: (vehicle: TenantVehicle) => Promise<void>;
   showToast: (message: string) => void;
+  tenantId: string | undefined;
+  canRegister: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [plate, setPlate] = useState("");
@@ -18,48 +22,47 @@ export function TenantVehiclesPage({
   const [color, setColor] = useState("");
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
+  const requiresRegistration = type !== "Xe đạp" && type !== "Xe đạp điện";
   const valid = Boolean(
-    /^[0-9A-Z .-]{8,14}$/.test(plate.trim().toUpperCase()) &&
-      brand.trim() &&
-      color.trim() &&
-      front &&
-      back,
+    (!plate.trim() || /^[0-9A-Z .-]{6,14}$/.test(plate.trim().toUpperCase())) &&
+      (!requiresRegistration || (plate.trim() && front && back)) &&
+      brand.trim() && color.trim(),
   );
 
   const activeVehicles = vehicles.filter((v) => v.cardStatus !== "Đã thu hồi");
   const hasVehicle = activeVehicles.length >= 1;
-  useEffect(() => {
-    return () => {
-      if (front) URL.revokeObjectURL(front);
-      if (back) URL.revokeObjectURL(back);
-    };
-  }, [front, back]);
+  const registrationAllowed = canRegister && Boolean(tenantId);
 
-  const submit = () => {
-    if (!valid || hasVehicle) {
-      if (hasVehicle) showToast("Mỗi khách thuê chỉ được đăng ký tối đa 01 phương tiện");
+  const submit = async () => {
+    if (!valid || hasVehicle || !registrationAllowed || !tenantId) {
+      showToast(hasVehicle ? "Mỗi khách thuê chỉ được đăng ký tối đa 01 phương tiện" : "Không thể đăng ký khi chưa xác định người thuê đang cư trú");
       return;
     }
-    onVehiclesChange([
-      {
-        id: `XE-${String(vehicles.length + 1).padStart(3, "0")}`,
-        tenantId: "NT-0187",
+    try {
+      await onCreateVehicle({
+        id: `XE-${crypto.randomUUID()}`,
+        tenantId,
         plate: plate.trim().toUpperCase(),
         type,
         brand: brand.trim(),
         color: color.trim(),
-        registration: "Đủ 2 mặt",
+        registration: front && back ? "Đủ 2 mặt" : "Chưa có",
+        registrationFront: front || undefined,
+        registrationBack: back || undefined,
         cardStatus: "Chưa cấp thẻ",
         status: "Chờ duyệt",
-      },
-    ]);
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể đăng ký phương tiện");
+      return;
+    }
     setOpen(false);
     setPlate("");
     setBrand("");
     setColor("");
     setFront("");
     setBack("");
-    showToast("Đã gửi đăng ký xe máy thành công!");
+    showToast("Đã lưu đăng ký xe trong dữ liệu demo.");
   };
 
   return (
@@ -73,21 +76,20 @@ export function TenantVehiclesPage({
             Quản lý phương tiện cá nhân
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Khai báo xe máy và tải ảnh cà vẹt để Ban quản lý đối soát, cấp thẻ
-            giữ xe.
+            Khai báo phương tiện và giấy đăng ký theo loại xe để Ban quản lý cấp thẻ giữ xe.
           </p>
         </div>
-        {hasVehicle ? (
+        {hasVehicle || !registrationAllowed ? (
           <div className="flex flex-col items-end gap-1">
             <Button
               className="h-10 rounded-sm border border-slate-200 bg-slate-100 px-4 text-xs font-semibold text-slate-400 cursor-not-allowed"
               disabled
               title="Mỗi khách thuê chỉ được đăng ký tối đa 01 phương tiện gửi hầm KTX"
             >
-              Đã đủ hạn mức (1 xe/người)
+              {hasVehicle ? "Đã đủ hạn mức (1 xe/người)" : "Không thể đăng ký xe"}
             </Button>
             <span className="text-[11px] text-slate-500">
-              * Quy định: Tối đa 01 xe/khách thuê
+              {hasVehicle ? "Tối đa 01 xe chưa thu hồi/khách thuê" : "Chỉ khách đang cư trú được đăng ký xe."}
             </span>
           </div>
         ) : (
@@ -120,12 +122,12 @@ export function TenantVehiclesPage({
           <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
             Mỗi khách thuê được đăng ký miễn phí 01 xe máy hoặc xe điện gửi hầm KTX. Bấm nút phía trên để khai báo thông tin xe.
           </p>
-          <Button
+          {registrationAllowed && <Button
             className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-sm bg-brand-500 px-4 text-xs font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
             onClick={() => setOpen(true)}
           >
-            + Khai báo xe máy ngay
-          </Button>
+            + Khai báo phương tiện
+          </Button>}
         </div>
       )}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -136,18 +138,16 @@ export function TenantVehiclesPage({
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="rounded-sm border border-slate-800 bg-white px-3 py-1 font-mono text-lg font-bold tracking-wide text-slate-900">
-                {vehicle.plate}
+                {vehicle.plate || "Không có biển số"}
               </div>
               <span
                 className={`status-label ${
-                  vehicle.cardStatus === "Đã cấp thẻ" || vehicle.status === "Đã cấp thẻ xe"
+                  vehicle.cardStatus === "Đã cấp thẻ"
                     ? "status-label-success"
-                    : "status-label-warning"
+                    : vehicle.cardStatus === "Đã thu hồi" ? "status-label-slate" : "status-label-warning"
                 }`}
               >
-                {vehicle.cardStatus === "Đã cấp thẻ" || vehicle.status === "Đã cấp thẻ xe"
-                  ? "Đã cấp thẻ xe"
-                  : "Chờ duyệt"}
+                {vehicle.cardStatus}
                 {vehicle.cardCode ? ` · ${vehicle.cardCode}` : ""}
               </span>
             </div>
@@ -175,7 +175,7 @@ export function TenantVehiclesPage({
               <div>
                 <dt className="text-slate-500">Cà vẹt xe</dt>
                 <dd className="mt-1 flex items-center gap-2 font-semibold text-brand-700">
-                  <Icon name="image" className="size-4" /> Đủ 2 mặt
+                  <Icon name="image" className="size-4" /> {vehicle.registration ?? "Chưa có"}
                 </dd>
               </div>
             </dl>
@@ -185,13 +185,13 @@ export function TenantVehiclesPage({
 
       {open && (
         <Modal
-          title="Khai báo xe máy mới"
-          description="Cung cấp đủ thông tin và ảnh cà vẹt hai mặt để được xét duyệt."
+          title="Khai báo phương tiện mới"
+          description="Xe tay ga, xe số và xe máy điện có đăng ký cần biển số và ảnh giấy đăng ký hai mặt."
           onClose={() => setOpen(false)}
         >
           <div className="max-h-[75vh] space-y-5 overflow-y-auto p-6">
             <label className="grid gap-1.5 text-xs font-semibold text-slate-700">
-              Biển số xe máy
+              Biển số {requiresRegistration ? "(bắt buộc)" : "(không bắt buộc)"}
               <input
                 className="focus-ring h-10 rounded-sm border border-slate-200 px-3 font-mono uppercase outline-none focus:border-brand-500"
                 placeholder="VD: 59-X3 789.12"
@@ -209,7 +209,8 @@ export function TenantVehiclesPage({
                     "Xe tay ga",
                     "Xe số",
                     "Xe máy điện",
-                    "Xe côn tay",
+                    "Xe đạp điện",
+                    "Xe đạp",
                   ] as const
                 ).map((item) => (
                   <Button
@@ -278,15 +279,19 @@ export function TenantVehiclesPage({
                     accept="image/*"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file) setter(URL.createObjectURL(file));
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => setter(typeof reader.result === "string" ? reader.result : "");
+                        reader.onerror = () => showToast("Không thể đọc ảnh giấy đăng ký.");
+                        reader.readAsDataURL(file);
+                      }
                     }}
                   />
                 </label>
               ))}
             </div>
             <p className="rounded-sm bg-info-50 p-2.5 text-xs leading-5 text-info-700 border border-info-100">
-              Ảnh cần rõ nét, không lóa sáng, nhìn rõ tên chủ xe, biển số, số
-              khung và số máy.
+              {requiresRegistration ? "Cần đủ hai mặt giấy đăng ký." : "Ảnh giấy đăng ký không bắt buộc."} Ảnh chỉ được lưu trong dữ liệu demo, không phải lưu trữ private của backend.
             </p>
             <div className="flex gap-2">
               <Button
