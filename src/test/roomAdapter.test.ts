@@ -42,10 +42,10 @@ test("roomAdapter converts BedSlotResponse to BedRecord correctly", () => {
     status: "MAINTENANCE",
   };
 
-  const bed = toFrontendBedRecord(bedSlot);
+  const bed = toFrontendBedRecord(bedSlot, "room-101");
   assert.equal(bed.bedCode, "G01");
   assert.equal(bed.slotKey, "P.101-G01");
-  assert.equal(bed.price, 1500000);
+  assert.equal(bed.roomId, "room-101");
   assert.equal(bed.status, "MAINTENANCE");
 });
 
@@ -118,12 +118,12 @@ test("roomAdapter converts RoomDetailResponse to RoomRecord with beds and bedOve
   assert.equal(room.amenities[0].name, "Máy lạnh");
   assert.equal(room.amenities[0].quantity, 1);
 
-  // bedOverrides: G02 has id b2, MAINTENANCE and price 1600000
+  // Each bed remains associated with its room; room price is not duplicated.
   assert.ok(room.bedOverrides);
   assert.deepEqual(room.bedOverrides["G02"], {
     id: "b2",
+    roomId: detail.id,
     status: "MAINTENANCE",
-    price: 1600000,
   });
   // G01 has id b1 and status OCCUPIED
   assert.equal(room.bedOverrides["G01"]?.id, "b1");

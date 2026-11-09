@@ -12,8 +12,9 @@ test("Canonical money formatter is identical across modules", () => {
 
 test("mockDormService.confirmPayment marks invoice as Đã thu and records payment", async () => {
   const invoices = await mockDormService.getInvoices();
-  const unpaid = invoices.find((i) => i.status !== "Đã thu") || invoices[0];
-  const confirmed = await mockDormService.confirmPayment(unpaid.id, "Test Manager");
+  const unpaid = invoices.find((invoice) => invoice.status === "Nợ");
+  assert.ok(unpaid, "fixture must include an unpaid invoice");
+  const confirmed = await mockDormService.confirmPayment(unpaid.id, "demo-manager-staff");
   assert.equal(confirmed.status, "Đã thu");
-  assert.equal(confirmed.payment?.confirmedBy, "Test Manager");
+  assert.equal(confirmed.payment?.confirmedByStaffId, "demo-manager-staff");
 });

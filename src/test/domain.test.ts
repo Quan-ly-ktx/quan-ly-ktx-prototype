@@ -13,10 +13,11 @@ import {
   slotKey,
   resolveRole,
 } from "../utils/index.ts";
-import type { Invoice, RoomRecord, TenantRecord, Ticket, FacilityExpense } from "../types/index.ts";
+import type { Invoice, RoomRecord, TenantRecord, ContractRecord, Ticket, FacilityExpense } from "../types/index.ts";
 
 const tenant = {
   id: "NT-1",
+  userId: "USER-1",
   name: "Người thuê A",
   email: "a@example.com",
   phone: "0900000000",
@@ -32,14 +33,23 @@ const tenant = {
   status: "Đang thuê",
 } satisfies TenantRecord;
 
+const contract: ContractRecord = {
+  id: "CONTRACT-1", tenantId: tenant.id, tenantName: tenant.name,
+  roomId: "RM-101", bedId: "BED-101-1", room: tenant.room, bed: tenant.bed,
+  startDate: "2026-01-01", endDate: "2026-12-31",
+  monthlyRent: 1000000, deposit: 1000000, status: "Hiệu lực",
+};
+
 test("prevents assigning an occupied room slot", () => {
-  assert.equal(isSlotAvailable([tenant], "P.101", "G01"), false);
-  assert.equal(isSlotAvailable([tenant], "P.101", "G02"), true);
+  assert.equal(isSlotAvailable([contract], "RM-101", "BED-101-1"), false);
+  assert.equal(isSlotAvailable([contract], "RM-101", "BED-101-2"), true);
 });
 
 test("cash confirmation records amount, method, timestamp and manager", () => {
   const invoice: Invoice = {
     id: "HD-1",
+    contractId: contract.id,
+    billingPeriod: "2026-10-01",
     tenant: tenant.name,
     room: tenant.room,
     bed: tenant.bed,
@@ -58,6 +68,8 @@ test("cash confirmation records amount, method, timestamp and manager", () => {
 test("financial summary uses unique received payments and repair costs", () => {
   const paid: Invoice = {
     id: "HD-1",
+    contractId: contract.id,
+    billingPeriod: "2026-10-01",
     tenant: tenant.name,
     room: tenant.room,
     bed: tenant.bed,
@@ -73,6 +85,8 @@ test("financial summary uses unique received payments and repair costs", () => {
   };
   const repair = {
     id: "SC-1",
+    reporterTenantId: tenant.id,
+    roomId: contract.roomId,
     room: "P.101",
     title: "Sửa vòi",
     description: "Thay vòi nước",
@@ -115,15 +129,15 @@ test("BR-01: generateBedsForRoom generates slots G01..G0n with unique slotKey", 
 });
 
 test("BR-02: canChangeGenderPolicy prevents changing gender policy when room has active tenants", () => {
-  assert.equal(canChangeGenderPolicy("P.101", [tenant]), false);
-  assert.equal(canChangeGenderPolicy("P.102", [tenant]), true);
+  assert.equal(canChangeGenderPolicy("RM-101", [contract]), false);
+  assert.equal(canChangeGenderPolicy("RM-102", [contract]), true);
   assert.equal(canAssignTenantToRoom("Nam", "Nam"), true);
   assert.equal(canAssignTenantToRoom("Nam", "Nữ"), false);
 });
 
 test("BR-08 / FR-04: canDeleteRoom prevents deleting room when room has active tenants", () => {
-  assert.equal(canDeleteRoom("P.101", [tenant]), false);
-  assert.equal(canDeleteRoom("P.999", [tenant]), true);
+  assert.equal(canDeleteRoom("RM-101", [contract]), false);
+  assert.equal(canDeleteRoom("RM-999", [contract]), true);
 });
 
 test("FR-01: getRoomOccupancy calculates real bed status and occupancy metrics", () => {
@@ -136,8 +150,9 @@ test("FR-01: getRoomOccupancy calculates real bed status and occupancy metrics",
     total: 4,
     basePrice: 1000000,
     amenities: [{ name: "Điều hòa", quantity: 1 }],
+    bedOverrides: { G01: { id: "BED-101-1", roomId: "RM-101", status: "OCCUPIED" } },
   };
-  const occupancy = getRoomOccupancy(room, [tenant]);
+  const occupancy = getRoomOccupancy(room, [tenant], [contract]);
   assert.equal(occupancy.occupied, 1);
   assert.equal(occupancy.total, 4);
   assert.equal(occupancy.beds[0].status, "OCCUPIED");
@@ -159,7 +174,7 @@ test("FR-01 / FR-02: getRoomOccupancy correctly flags newly created vacant room 
       { name: "Tủ cá nhân", quantity: 6 },
     ],
   };
-  const occupancy = getRoomOccupancy(newRoom, []);
+  const occupancy = getRoomOccupancy(newRoom, [], []);
   assert.equal(occupancy.occupied, 0);
   assert.equal(occupancy.total, 6);
   assert.equal(occupancy.beds.length, 6);
@@ -168,9 +183,9 @@ test("FR-01 / FR-02: getRoomOccupancy correctly flags newly created vacant room 
 });
 
 test("BR-01 Invariant: canToggleBedMaintenance prevents maintenance on occupied beds", () => {
-  assert.equal(canToggleBedMaintenance("P.101", "G01", [tenant]), false);
-  assert.equal(canToggleBedMaintenance("P.101", "G02", [tenant]), true);
-  assert.equal(canToggleBedMaintenance("P.201", "G01", [tenant]), true);
+  assert.equal(canToggleBedMaintenance("RM-101", "BED-101-1", [contract]), false);
+  assert.equal(canToggleBedMaintenance("RM-101", "BED-101-2", [contract]), true);
+  assert.equal(canToggleBedMaintenance("RM-201", "BED-201-1", [contract]), true);
 });
 
 test("BR-01: unified price and per-bed maintenance in getRoomOccupancy", () => {
@@ -184,11 +199,11 @@ test("BR-01: unified price and per-bed maintenance in getRoomOccupancy", () => {
     basePrice: 1400000,
     amenities: [],
     bedOverrides: {
-      G01: { status: "MAINTENANCE" },
-      G02: { status: "MAINTENANCE" },
+      G01: { id: "BED-304-1", roomId: "RM-304", status: "MAINTENANCE" },
+      G02: { id: "BED-304-2", roomId: "RM-304", status: "MAINTENANCE" },
     },
   };
-  const occupancy = getRoomOccupancy(room, []);
+  const occupancy = getRoomOccupancy(room, [], []);
   assert.equal(occupancy.total, 6);
   assert.equal(occupancy.occupied, 0);
   assert.equal(occupancy.beds[0].status, "MAINTENANCE");

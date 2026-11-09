@@ -37,6 +37,7 @@ test("authAdapter converts UserProfileResponse to UserProfile correctly", () => 
   assert.equal(staffFrontend.name, "Nguyễn Thu Lan");
   assert.equal(staffFrontend.email, "manager@ktxhub.vn");
   assert.equal(staffFrontend.role, "manager");
+  assert.equal(staffFrontend.staffId, "staff-1");
 
   const tenantProfile: UserProfileResponse = {
     id: "usr-2",

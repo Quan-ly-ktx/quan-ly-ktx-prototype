@@ -2,24 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mockDormService } from "../services/mock/mockDormService.ts";
 
-test("mockDormService provides seed data and handles ticket creation", async () => {
-  const rooms = await mockDormService.getRooms();
-  assert.ok(rooms.length > 0, "mock rooms should not be empty");
+test("created tickets are visible in the ticket list", async () => {
+  const contract = (await mockDormService.getContracts()).find((item) => item.status === "Hiệu lực");
+  assert.ok(contract);
 
   const newTicket = await mockDormService.createTicket({
+    reporterTenantId: contract.tenantId,
+    roomId: contract.roomId,
     title: "Sửa vòi sen P.102",
     room: "P.102",
-    category: "Điện nước",
+    category: "Nước",
     priority: "Bình thường",
-    status: "Mới giao",
-    reporter: "Nguyễn Văn A",
+    status: "Chưa phân công",
+    reporter: contract.tenantName,
     phone: "0900 123 456",
     createdAt: "Vừa xong",
     deadline: "Trong ngày",
     hasPhoto: false,
     description: "Vòi sen bị rỉ nước",
   });
-  assert.ok(newTicket.id.startsWith("SC-"));
+  assert.ok((await mockDormService.getTickets()).some((ticket) => ticket.id === newTicket.id && ticket.title === "Sửa vòi sen P.102"));
 });
 
 test("mockDormService handles room CRUD and bed status update", async () => {
@@ -45,7 +47,9 @@ test("mockDormService handles room CRUD and bed status update", async () => {
   });
   assert.equal(updated.basePrice, 1700000);
 
-  await mockDormService.updateBedStatus("G01", "MAINTENANCE");
+  const bedId = created.bedOverrides?.G01?.id;
+  assert.ok(bedId);
+  await mockDormService.updateBedStatus(bedId, "MAINTENANCE");
 
   await mockDormService.deleteRoom(created.id);
   const afterDelete = await mockDormService.getRooms();

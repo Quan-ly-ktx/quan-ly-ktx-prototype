@@ -66,7 +66,7 @@ test("apiDormService calls GET /admin/rooms/matrix and maps response via roomAda
   assert.equal(rooms[0].gender, "Nam");
   assert.equal(rooms[0].amenities[0].name, "Điều hòa");
   assert.equal(rooms[0].bedOverrides?.["G02"]?.status, "MAINTENANCE");
-  assert.equal(rooms[0].bedOverrides?.["G02"]?.price, 1600000);
+  assert.equal(rooms[0].bedOverrides?.["G02"]?.roomId, "rm-101");
 });
 
 test("apiDormService createRoom sends POST to /admin/rooms with mapped DTO", async (t) => {
