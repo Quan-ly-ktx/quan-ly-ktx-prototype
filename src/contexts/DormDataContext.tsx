@@ -10,6 +10,7 @@ import type {
 import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle } from "../types/tenant.ts";
 import { dormService } from "../services/dormService.ts";
 import { useToast } from "../hooks/useToast.ts";
+import { env } from "../config/env.ts";
 
 export type DormDataContextType = {
   rooms: RoomRecord[];
@@ -70,6 +71,9 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
+      if (env.USE_MOCK && dormService.checkDueReminders) {
+        await dormService.checkDueReminders();
+      }
       const [r, t, inv, tck] = await Promise.all([
         dormService.getRooms(),
         dormService.getTenants(),

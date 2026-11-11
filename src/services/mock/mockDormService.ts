@@ -5,7 +5,7 @@ import type { FacilityExpense, PaymentProof } from "../../types/invoice.ts";
 import { onboard, renew, checkout, getDemoDate, setDemoDate } from "./contractLifecycle.ts";
 import { demoEmailAvailable } from "./mockAuth.ts";
 import { getMockSnapshot, updateMockSnapshot, resetMockSnapshot, type MockSnapshot } from "./mockStore.ts";
-import { calculateOverdueDays } from "../../utils/invoiceCalculations.ts";
+import { calculateOverdueDays, parseDueDate } from "../../utils/invoiceCalculations.ts";
 
 function bedIds(room: RoomRecord): RoomRecord {
   return { ...room, bedOverrides: Object.fromEntries(Array.from({ length: room.total }, (_, index) => {
@@ -434,36 +434,24 @@ class MockDormServiceImpl implements DormService {
     let count = 0;
     const newNotis = [];
     for (const inv of debts) {
+      const dueDate = parseDueDate(inv.due);
+      if (!dueDate || dueDate > today) continue;
       const overdueDays = calculateOverdueDays(inv.due, inv.status, today);
-      if (overdueDays > 0) {
-        const notiId = `NOTI-OVERDUE-${inv.id}`;
-        if (!this.state.notifications.some((n) => n.id === notiId)) {
-          newNotis.push({
-            id: notiId,
-            tenantId: inv.tenantId!,
-            title: "Thông báo hóa đơn quá hạn",
-            body: `Hóa đơn ${inv.id} (${inv.amount.toLocaleString("vi-VN")} đ) đã quá hạn thanh toán ${overdueDays} ngày. Vui lòng thanh toán sớm nhất.`,
-            time: new Date().toISOString(),
-            read: false,
-            type: "general" as const,
-          });
-          count++;
-        }
-      } else {
-        const notiId = `NOTI-DUE-${inv.id}`;
-        if (!this.state.notifications.some((n) => n.id === notiId)) {
-          newNotis.push({
-            id: notiId,
-            tenantId: inv.tenantId!,
-            title: "Nhắc nhở hạn nộp tiền phòng",
-            body: `Hóa đơn ${inv.id} (${inv.amount.toLocaleString("vi-VN")} đ) có hạn thanh toán là ${inv.due}. Vui lòng thanh toán trước hạn.`,
-            time: new Date().toISOString(),
-            read: false,
-            type: "general" as const,
-          });
-          count++;
-        }
-      }
+      const isOverdue = overdueDays > 0;
+      const notiId = `${isOverdue ? "NOTI-OVERDUE" : "NOTI-DUE"}-${inv.id}`;
+      if (this.state.notifications.some((n) => n.id === notiId)) continue;
+      newNotis.push({
+        id: notiId,
+        tenantId: inv.tenantId!,
+        title: isOverdue ? "Thông báo hóa đơn quá hạn" : "Nhắc nhở hạn nộp tiền phòng",
+        body: isOverdue
+          ? `Hóa đơn ${inv.id} (${inv.amount.toLocaleString("vi-VN")} đ) đã quá hạn thanh toán ${overdueDays} ngày. Vui lòng thanh toán sớm nhất.`
+          : `Hóa đơn ${inv.id} (${inv.amount.toLocaleString("vi-VN")} đ) đến hạn thanh toán hôm nay (${inv.due}). Vui lòng thanh toán đúng hạn.`,
+        time: new Date().toISOString(),
+        read: false,
+        type: "general" as const,
+      });
+      count++;
     }
     if (newNotis.length) {
       this.commit({

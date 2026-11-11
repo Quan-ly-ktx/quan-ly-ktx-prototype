@@ -28,7 +28,7 @@ function AppContent() {
   const { role, currentUser, logout } = useAuth();
   const [simClock, setSimClock] = useState(() => dormService.getBusinessDate());
 
-  const handleSetSimDate = (target: "01" | "25" | "end") => {
+  const handleSetSimDate = async (target: "01" | "25" | "end") => {
     const base = new Date();
     const year = base.getFullYear();
     const month = base.getMonth() + 1;
@@ -45,6 +45,7 @@ function AppContent() {
     dormService.setBusinessDate(targetDate);
     setSimClock(targetDate);
     showToast(`Đã chuyển ngày mô phỏng sang ${targetDate}`);
+    await reload();
   };
   const { toast, showToast, closeToast } = useToast();
   const {
@@ -204,22 +205,24 @@ function AppContent() {
                   type="date"
                   className="h-6 rounded-sm border border-slate-200 px-1 font-mono text-[11px]"
                   value={simClock}
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     if (e.target.value) {
                       dormService.setBusinessDate(e.target.value);
                       setSimClock(e.target.value);
                       showToast(`Đã chuyển ngày mô phỏng sang ${e.target.value}`);
+                      await reload();
                     }
                   }}
                 />
                 <button
                   type="button"
                   className="text-xs text-brand-600 underline hover:text-brand-700"
-                  onClick={() => {
+                  onClick={async () => {
                     dormService.setBusinessDate(undefined);
                     const real = dormService.getBusinessDate();
                     setSimClock(real);
                     showToast("Đã đưa ngày mô phỏng về ngày thực tế.");
+                    await reload();
                   }}
                 >
                   Ngày thực tế
