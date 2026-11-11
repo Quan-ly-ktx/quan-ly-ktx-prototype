@@ -304,6 +304,7 @@ function AppContent() {
             <VehiclesPage
               tenants={tenants}
               vehicles={vehicles}
+              managerStaffId={currentUser?.staffId}
               onIssueVehicleCard={onIssueVehicleCard}
               onRevokeVehicle={onRevokeVehicle}
               onRejectVehicle={onRejectVehicle}

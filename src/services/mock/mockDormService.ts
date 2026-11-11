@@ -4,7 +4,7 @@ import { normalizeVehicleStatus, type ContractDocumentRecord, type ContractRecor
 import type { FacilityExpense, PaymentProof } from "../../types/invoice.ts";
 import { onboard, renew, checkout, getDemoDate, setDemoDate } from "./contractLifecycle.ts";
 import { demoEmailAvailable } from "./mockAuth.ts";
-import { getMockSnapshot, updateMockSnapshot, resetMockSnapshot, type MockSnapshot } from "./mockStore.ts";
+import { getMockSnapshot, updateMockSnapshot, resetMockSnapshot, type MockSnapshot, type MockStaff } from "./mockStore.ts";
 import { calculateOverdueDays, parseDueDate } from "../../utils/invoiceCalculations.ts";
 import { expenseMonth } from "../../utils/reportForPeriod.ts";
 
@@ -51,6 +51,12 @@ function managerFor(state: MockSnapshot, staffId: string) {
   const staff = state.staff.find((item) => item.id === staffId && item.active);
   if (!staff || !state.accounts.some((account) => account.id === staff.userId && account.role === "manager" && account.status !== "INACTIVE" && account.status !== "LOCKED")) throw new Error("Không tìm thấy quản lý đang hoạt động.");
   return staff;
+}
+function requireActiveManager(state: MockSnapshot, actorStaffId?: string): MockStaff {
+  if (!actorStaffId?.trim()) {
+    throw new Error("Thao tác quản trị yêu cầu quyền Quản lý đang hoạt động.");
+  }
+  return managerFor(state, actorStaffId.trim());
 }
 function validateExpense(expense: FacilityExpense): void {
   if (!expense.id || !expense.title.trim() || !expense.expenseDate || !Number.isSafeInteger(expense.amount) || expense.amount <= 0 || !["Điện EVN", "Nước", "Internet", "Lương nhân viên", "Khác"].includes(expense.category)) throw new Error("Thông tin chi phí không hợp lệ.");
@@ -205,12 +211,39 @@ class MockDormServiceImpl implements DormService {
     if (!vehicle || normalizeVehicleStatus(vehicle) !== "PENDING_CARD" || !cardCode.trim()) throw new Error("Phương tiện hoặc mã thẻ không hợp lệ.");
     return this.updateVehicle(id, { cardStatus: "Đã cấp thẻ", status: "Đã cấp thẻ xe", vehicleStatus: "ISSUED", cardCode: cardCode.trim() });
   }
-  async revokeVehicle(id: string) {
+  async revokeVehicle(id: string, actorStaffId?: string) {
+    if (actorStaffId) {
+      managerFor(this.state, actorStaffId);
+    }
     const vehicle = this.state.vehicles.find((item) => item.id === id);
-    if (!vehicle || normalizeVehicleStatus(vehicle) === "REVOKED") throw new Error("Phương tiện không tồn tại hoặc đã thu hồi.");
-    return this.updateVehicle(id, { cardStatus: "Đã thu hồi", status: "Đã thu hồi", vehicleStatus: "REVOKED", revokedAt: new Date().toISOString() });
+    if (!vehicle) throw new Error("Không tìm thấy phương tiện.");
+    const currentStatus = normalizeVehicleStatus(vehicle);
+    if (currentStatus !== "ISSUED") {
+      throw new Error(`Chỉ có thể thu hồi thẻ giữ xe đối với phương tiện đang có thẻ hiệu lực (ISSUED). Trạng thái hiện tại: ${vehicle.cardStatus}.`);
+    }
+    const now = new Date().toISOString();
+    const updatedRequests = (this.state.vehicleChangeRequests ?? []).map((req) => {
+      if (req.currentVehicleId === id && req.status === "PENDING") {
+        return { ...req, status: "CANCELLED" as const, processedAt: now, processedBy: actorStaffId || "manager" };
+      }
+      return req;
+    });
+    const updatedVehicle: TenantVehicle = {
+      ...vehicle,
+      cardStatus: "Đã thu hồi",
+      status: "Đã thu hồi",
+      vehicleStatus: "REVOKED",
+      revokedAt: now,
+    };
+    this.commit({
+      ...this.state,
+      vehicles: this.state.vehicles.map((v) => v.id === id ? updatedVehicle : v),
+      vehicleChangeRequests: updatedRequests,
+    });
+    return updatedVehicle;
   }
   async rejectVehicle(id: string, reason: string, actorStaffId?: string): Promise<TenantVehicle> {
+    const manager = requireActiveManager(this.state, actorStaffId);
     const vehicle = this.state.vehicles.find((item) => item.id === id);
     if (!vehicle) throw new Error("Không tìm thấy phương tiện.");
     if (normalizeVehicleStatus(vehicle) !== "PENDING_CARD") {
@@ -220,22 +253,22 @@ class MockDormServiceImpl implements DormService {
       throw new Error("Vui lòng nhập lý do từ chối đăng ký phương tiện.");
     }
     const cleanReason = reason.trim();
-    const manager = actorStaffId ? managerFor(this.state, actorStaffId) : undefined;
+    const now = new Date().toISOString();
     const updated: TenantVehicle = {
       ...vehicle,
       cardStatus: "Bị từ chối",
       status: "Bị từ chối",
       vehicleStatus: "REJECTED",
       rejectionReason: cleanReason,
-      rejectedAt: new Date().toISOString(),
-      rejectedBy: manager ? manager.id : (actorStaffId || "demo-manager"),
+      rejectedAt: now,
+      rejectedBy: manager.id,
     };
     const noti = {
       id: `NOTI-${crypto.randomUUID()}`,
       tenantId: vehicle.tenantId,
       title: "Đăng ký cấp thẻ xe bị từ chối",
       body: `Hồ sơ đăng ký phương tiện ${vehicle.plate || vehicle.brand} đã bị Ban Quản lý từ chối. Lý do: ${cleanReason}. Bạn có thể kiểm tra lại thông tin và nộp lại hồ sơ đăng ký mới.`,
-      time: new Date().toISOString(),
+      time: now,
       read: false,
       type: "general" as const,
     };
@@ -329,10 +362,16 @@ class MockDormServiceImpl implements DormService {
     if (!oldVehicle || oldVehicle.tenantId !== request.tenantId || normalizeVehicleStatus(oldVehicle) !== "ISSUED") {
       throw new Error("Phương tiện cũ không còn hiệu lực hoặc không hợp lệ để đổi xe.");
     }
-    const manager = actorStaffId ? managerFor(this.state, actorStaffId) : undefined;
+    const manager = requireActiveManager(this.state, actorStaffId);
     const now = new Date().toISOString();
     const newVehicleId = `XE-${crypto.randomUUID()}`;
-    const cardCode = oldVehicle.cardCode;
+    const cardCode = oldVehicle.cardCode?.trim();
+    if (!cardCode) {
+      throw new Error("Không tìm thấy mã thẻ vật lý hợp lệ của phương tiện cũ.");
+    }
+    if (this.state.vehicles.some((v) => v.id !== oldVehicle.id && normalizeVehicleStatus(v) === "ISSUED" && v.cardCode?.trim().toUpperCase() === cardCode.toUpperCase())) {
+      throw new Error("Mã thẻ giữ xe vật lý đang bị xung đột hoặc đang được sử dụng bởi phương tiện khác.");
+    }
     const updatedOldVehicle: TenantVehicle = {
       ...oldVehicle,
       cardStatus: "Đã thay thế",
@@ -361,7 +400,7 @@ class MockDormServiceImpl implements DormService {
       ...request,
       status: "APPROVED",
       processedAt: now,
-      processedBy: manager ? manager.id : (actorStaffId || "demo-manager"),
+      processedBy: manager.id,
       createdVehicleId: newVehicleId,
     };
     const noti = {
@@ -395,13 +434,13 @@ class MockDormServiceImpl implements DormService {
     }
     const now = new Date().toISOString();
     const cleanReason = reason.trim();
-    const manager = actorStaffId ? managerFor(this.state, actorStaffId) : undefined;
+    const manager = requireActiveManager(this.state, actorStaffId);
     const updatedRequest: VehicleChangeRequest = {
       ...request,
       status: "REJECTED",
       rejectionReason: cleanReason,
       processedAt: now,
-      processedBy: manager ? manager.id : (actorStaffId || "demo-manager"),
+      processedBy: manager.id,
     };
     const noti = {
       id: `NOTI-${crypto.randomUUID()}`,

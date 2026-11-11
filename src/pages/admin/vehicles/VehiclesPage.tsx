@@ -196,6 +196,7 @@ export function VehiclesPage({
   tenants,
   vehicles: externalVehicles,
   vehicleChangeRequests: externalChangeRequests,
+  managerStaffId,
   onIssueVehicleCard,
   onRevokeVehicle,
   onRejectVehicle,
@@ -203,14 +204,15 @@ export function VehiclesPage({
   onRejectVehicleChangeRequest,
   showToast,
 }: Toast & {
+  managerStaffId?: string;
   tenants: TenantRecord[];
   vehicles?: TenantVehicle[];
   vehicleChangeRequests?: VehicleChangeRequest[];
   onIssueVehicleCard: (id: string, cardCode: string) => Promise<void>;
-  onRevokeVehicle: (id: string) => Promise<void>;
-  onRejectVehicle?: (id: string, reason: string) => Promise<void>;
-  onApproveVehicleChangeRequest?: (requestId: string) => Promise<void>;
-  onRejectVehicleChangeRequest?: (requestId: string, reason: string) => Promise<void>;
+  onRevokeVehicle: (id: string, actorStaffId?: string) => Promise<void>;
+  onRejectVehicle?: (id: string, reason: string, actorStaffId?: string) => Promise<void>;
+  onApproveVehicleChangeRequest?: (requestId: string, actorStaffId?: string) => Promise<void>;
+  onRejectVehicleChangeRequest?: (requestId: string, reason: string, actorStaffId?: string) => Promise<void>;
 }) {
   const vehicles = externalVehicles ?? [];
   const changeRequests = externalChangeRequests ?? [];
@@ -261,7 +263,7 @@ export function VehiclesPage({
     if (!rejectingVehicle || !rejectReason.trim() || !onRejectVehicle || busy) return;
     setBusy(true);
     try {
-      await onRejectVehicle(rejectingVehicle.id, rejectReason.trim());
+      await onRejectVehicle(rejectingVehicle.id, rejectReason.trim(), managerStaffId);
       showToast(`Đã từ chối cấp thẻ xe cho ${rejectingVehicle.plate || rejectingVehicle.brand}.`);
       setRejectingVehicle(null);
       setRejectReason("");
@@ -277,7 +279,7 @@ export function VehiclesPage({
     if (!onApproveVehicleChangeRequest || busy) return;
     setBusy(true);
     try {
-      await onApproveVehicleChangeRequest(req.id);
+      await onApproveVehicleChangeRequest(req.id, managerStaffId);
       showToast(`Đã chấp thuận yêu cầu đổi xe cho khách ${tenantName(req.tenantId)}.`);
       setViewingChangeRequest(null);
     } catch (error) {
@@ -291,7 +293,7 @@ export function VehiclesPage({
     if (!rejectChangeRequestTarget || !rejectChangeReason.trim() || !onRejectVehicleChangeRequest || busy) return;
     setBusy(true);
     try {
-      await onRejectVehicleChangeRequest(rejectChangeRequestTarget.id, rejectChangeReason.trim());
+      await onRejectVehicleChangeRequest(rejectChangeRequestTarget.id, rejectChangeReason.trim(), managerStaffId);
       showToast(`Đã từ chối yêu cầu đổi xe ${rejectChangeRequestTarget.id}.`);
       setRejectChangeRequestTarget(null);
       setRejectChangeReason("");
@@ -493,7 +495,7 @@ export function VehiclesPage({
                               className="h-8 rounded-sm border border-warning-200 bg-white px-2 text-xs font-semibold text-warning-700 hover:bg-warning-50"
                               onClick={async () => {
                                 if (confirm(`Thu hồi thẻ từ ${vehicle.cardCode} của xe ${vehicle.plate}?`)) {
-                                  await onRevokeVehicle(vehicle.id);
+                                  await onRevokeVehicle(vehicle.id, managerStaffId);
                                   showToast(`Đã thu hồi thẻ xe ${vehicle.plate}`);
                                 }
                               }}

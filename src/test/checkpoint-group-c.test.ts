@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mockDormService } from "../services/mock/mockDormService.ts";
-import { getMockSnapshot, resetMockSnapshot } from "../services/mock/mockStore.ts";
+import { getMockSnapshot, resetMockSnapshot, updateMockSnapshot } from "../services/mock/mockStore.ts";
 import { reportForPeriod } from "../utils/reportForPeriod.ts";
 import { createReportSpreadsheet, createReportPdf } from "../utils/reportExport.ts";
 import {
@@ -125,12 +125,12 @@ test("Group C - Vehicles: Reject initial registration and re-register", async ()
 
   // 2. Reject initial registration requires non-empty reason
   await assert.rejects(
-    () => mockDormService.rejectVehicle(vId, "   "),
+    () => mockDormService.rejectVehicle(vId, "   ", "demo-manager-staff"),
     /Vui lòng nhập lý do từ chối/
   );
 
   // 3. Reject with valid reason
-  const rejected = await mockDormService.rejectVehicle(vId, "Ảnh giấy đăng ký xe bị mờ không đọc được số khung");
+  const rejected = await mockDormService.rejectVehicle(vId, "Ảnh giấy đăng ký xe bị mờ không đọc được số khung", "demo-manager-staff");
   assert.equal(rejected.cardStatus, "Bị từ chối");
   assert.equal(rejected.status, "Bị từ chối");
   assert.equal(normalizeVehicleStatus(rejected), "REJECTED");
@@ -253,7 +253,8 @@ test("Group C - Vehicles: Reject Vehicle Change Request leaves current vehicle u
   // 2. Reject request with reason
   const rejectedReq = await mockDormService.rejectVehicleChangeRequest(
     request.id,
-    "Cà vẹt xe không chính chủ, cần xác minh tại văn phòng"
+    "Cà vẹt xe không chính chủ, cần xác minh tại văn phòng",
+    "demo-manager-staff"
   );
   assert.equal(rejectedReq.status, "REJECTED");
   assert.equal(rejectedReq.rejectionReason, "Cà vẹt xe không chính chủ, cần xác minh tại văn phòng");
@@ -298,11 +299,16 @@ test("Group C - Checkout cancels pending vehicle change requests and PENDING_CAR
   const req = afterState.vehicleChangeRequests?.find((r) => r.id === "VCR-CHECKOUT-TEST");
   assert.equal(req?.status, "CANCELLED");
 
-  // Active vehicles are REVOKED
+  // Vehicles of this tenant: ISSUED -> REVOKED ("Đã thu hồi"), PENDING_CARD -> CANCELLED ("Đã hủy")
   const tenantVehicles = afterState.vehicles.filter((v) => v.tenantId === tenantId);
   for (const v of tenantVehicles) {
     const s = normalizeVehicleStatus(v);
     assert.ok(s === "REVOKED" || s === "CANCELLED" || s === "REPLACED" || s === "REJECTED");
+    if (s === "CANCELLED") {
+      assert.equal(v.cardStatus, "Đã hủy");
+    } else if (s === "REVOKED") {
+      assert.equal(v.cardStatus, "Đã thu hồi");
+    }
   }
 });
 
@@ -434,6 +440,100 @@ test("Group C - Authorization: Service rejects cross-tenant vehicle tampering an
   await assert.rejects(
     () => mockDormService.rejectVehicle("XE-002", "Ảnh mờ", "tech-1"),
     /Không tìm thấy quản lý đang hoạt động/
+  );
+
+  await mockDormService.resetMockData();
+});
+
+test("Group C - Invariants: revokeVehicle rejects non-ISSUED vehicles and cancels pending change request", async () => {
+  await mockDormService.resetMockData();
+  const state = getMockSnapshot();
+  const pendingV = state.vehicles.find((v) => normalizeVehicleStatus(v) === "PENDING_CARD")!;
+  assert.ok(pendingV);
+
+  // 1. Cannot revoke a vehicle that is not ISSUED
+  await assert.rejects(
+    () => mockDormService.revokeVehicle(pendingV.id, "demo-manager-staff"),
+    /Chỉ có thể thu hồi thẻ giữ xe đối với phương tiện đang có thẻ hiệu lực \(ISSUED\)/
+  );
+
+  // 2. Revoking an ISSUED vehicle that has a pending change request cancels the change request (BR-10)
+  const issuedV = state.vehicles.find((v) => normalizeVehicleStatus(v) === "ISSUED")!;
+  assert.ok(issuedV);
+  const changeReq = await mockDormService.requestVehicleChange({
+    tenantId: issuedV.tenantId,
+    currentVehicleId: issuedV.id,
+    newVehicle: { plate: "59-X8 888.88", type: "Xe tay ga", brand: "Honda", color: "Xanh", registrationFront: "data:image/png;base64,f", registrationBack: "data:image/png;base64,b" },
+  });
+  assert.equal(changeReq.status, "PENDING");
+
+  // Now revoke the old issued vehicle
+  const revoked = await mockDormService.revokeVehicle(issuedV.id, "demo-manager-staff");
+  assert.equal(normalizeVehicleStatus(revoked), "REVOKED");
+  assert.equal(revoked.cardStatus, "Đã thu hồi");
+
+  // The change request must be CANCELLED automatically
+  const afterState = getMockSnapshot();
+  const reqAfter = afterState.vehicleChangeRequests?.find((r) => r.id === changeReq.id)!;
+  assert.equal(reqAfter.status, "CANCELLED");
+
+  await mockDormService.resetMockData();
+});
+
+test("Group C - Invariants: approveVehicleChangeRequest rejects missing or conflicting cardCode", async () => {
+  await mockDormService.resetMockData();
+  const state = getMockSnapshot();
+  const issuedV = state.vehicles.find((v) => normalizeVehicleStatus(v) === "ISSUED")!;
+  assert.ok(issuedV);
+
+  const changeReq = await mockDormService.requestVehicleChange({
+    tenantId: issuedV.tenantId,
+    currentVehicleId: issuedV.id,
+    newVehicle: { plate: "59-X7 777.77", type: "Xe tay ga", brand: "Honda", color: "Đỏ", registrationFront: "data:image/png;base64,f", registrationBack: "data:image/png;base64,b" },
+  });
+
+  // Manager actor is required
+  await assert.rejects(
+    () => mockDormService.approveVehicleChangeRequest(changeReq.id),
+    /Thao tác quản trị yêu cầu quyền Quản lý đang hoạt động/
+  );
+  await assert.rejects(
+    () => mockDormService.approveVehicleChangeRequest(changeReq.id, "tech-1"),
+    /Không tìm thấy quản lý đang hoạt động/
+  );
+
+  // If actor is valid manager, it succeeds
+  const { request, oldVehicle, newVehicle } = await mockDormService.approveVehicleChangeRequest(changeReq.id, "demo-manager-staff");
+  assert.equal(request.status, "APPROVED");
+  assert.equal(normalizeVehicleStatus(oldVehicle), "REPLACED");
+  assert.equal(normalizeVehicleStatus(newVehicle), "ISSUED");
+  assert.equal(newVehicle.cardCode, issuedV.cardCode);
+
+  await mockDormService.resetMockData();
+});
+
+test("Group C - Invariants: approveVehicleChangeRequest rejects missing or conflicting cardCode on old vehicle", async () => {
+  await mockDormService.resetMockData();
+  const state = getMockSnapshot();
+  const issuedV = state.vehicles.find((v) => normalizeVehicleStatus(v) === "ISSUED")!;
+  assert.ok(issuedV);
+
+  const changeReq = await mockDormService.requestVehicleChange({
+    tenantId: issuedV.tenantId,
+    currentVehicleId: issuedV.id,
+    newVehicle: { plate: "59-X6 666.66", type: "Xe tay ga", brand: "Honda", color: "Tím", registrationFront: "data:image/png;base64,f", registrationBack: "data:image/png;base64,b" },
+  });
+
+  // Simulate corrupt old vehicle without cardCode
+  const corruptState = {
+    ...getMockSnapshot(),
+    vehicles: getMockSnapshot().vehicles.map((v) => v.id === issuedV.id ? { ...v, cardCode: "" } : v),
+  };
+  updateMockSnapshot(() => corruptState);
+
+  await assert.rejects(
+    () => mockDormService.approveVehicleChangeRequest(changeReq.id, "demo-manager-staff"),
+    /Không tìm thấy mã thẻ vật lý hợp lệ của phương tiện cũ/
   );
 
   await mockDormService.resetMockData();
