@@ -6,13 +6,17 @@
 |---|---|
 | Tên hệ thống | KTX Hub — Private Dormitory Management System (PDMS) |
 | Loại tài liệu | Software Requirements Specification (SRS) |
-| Phiên bản tài liệu | 3.2 — FINAL (xác thực, email duy nhất và tệp riêng tư) |
-| Ngày biên soạn | 09/11/2026 |
+| Phiên bản tài liệu | 3.4 — FINAL (bổ sung yêu cầu đổi xe giữ thẻ, cho phép biểu đồ dùng dữ liệu demo độc lập) |
+| Ngày cập nhật | 11/11/2026 |
 | Trạng thái | **FINAL — đặc tả đã chốt để triển khai**; chưa xác nhận Backend/Frontend hiện hành đáp ứng |
 | Cấu trúc tham khảo | IEEE 830 / ISO/IEC/IEEE 29148 (cách tổ chức tài liệu, không tuyên bố chứng nhận tuân thủ) |
 | Tệp triển khai dự kiến | `docs/SRS.md` |
 
 > **Thay đổi v3.2 (chỉ các mục liên quan):** (1) **Change Password** yêu cầu phiên đăng nhập hợp lệ và mật khẩu hiện tại, **không dùng OTP**; **Forgot Password** vẫn dùng OTP email 6 số/5 phút qua Redis; (2) email mỗi tài khoản, kể cả Tenant, **duy nhất toàn hệ thống** và dùng nhận OTP, email Tenant **không** dùng đăng nhập; (3) JWT Access/Refresh và quản lý token/OTP bằng Redis, không thêm bảng OTP/Session vào PostgreSQL; (4) tài liệu và ảnh nhạy cảm lưu **private trên OCI Object Storage**, chỉ trả liên kết có chữ ký, hiệu lực tối đa 15 phút, sau kiểm tra quyền. **Giữ nguyên** chính sách mã phòng có điều kiện và phiếu thu của v3.1.
+
+> **Thay đổi v3.3:** (1) Bổ sung 4 biểu đồ cho Dashboard, giữ đúng 4 KPI; (2) Manager có thể nhập **tổng lương nhân viên tự tính ngoài hệ thống** vào chi phí vận hành, và UI được sử dụng nhãn **“Lợi nhuận ròng (ước tính)”** kèm chú thích rõ giới hạn; (3) Manager có thể **từ chối yêu cầu cấp thẻ xe đang chờ** với lý do bắt buộc, **không cần minh chứng đính kèm**, đồng thời tạo thông báo hệ thống cho Tenant; (4) tăng dữ liệu lịch sử có ngày sự kiện để thử biểu đồ năm. Không tự động thay đổi Backend hay chứng nhận prototype đã hoàn thành.
+
+> **Thay đổi v3.4:** (1) Tenant đang có xe `ISSUED` được **tự gửi yêu cầu đổi xe**; Manager phê duyệt/từ chối yêu cầu với lý do nếu từ chối; khi duyệt, tạo hồ sơ xe mới dùng **chính mã thẻ vật lý hiện tại**, chuyển hồ sơ xe cũ sang `REPLACED`, giữ toàn bộ lịch sử, **không yêu cầu thu hồi/bàn giao lại thẻ**; (2) tại **Prototype/Mock mode**, cho phép bốn biểu đồ Dashboard lấy **bộ số liệu minh họa tách biệt Shared Mock Store**, không cần khớp hóa đơn/phòng/giường/hợp đồng thực tế của các màn khác, với điều kiện **hiển thị nhãn “Dữ liệu biểu đồ minh họa”**; KPI chính vẫn lấy dữ liệu nghiệp vụ mock và không được giả là số liệu thật; (3) giữ nguyên quyết định “Lợi nhuận ròng (ước tính)” và từ chối cấp thẻ **chỉ cần lý do, không cần ảnh minh chứng** từ v3.3. Những quy tắc tích hợp Backend thật, ERD và API cần đồng bộ riêng sau giai đoạn Prototype.
 
 > **Quy ước hiệu lực:** Tài liệu này phản ánh các quyết định nghiệp vụ đã thống nhất cho phạm vi Phase 1. Khi có khác biệt giữa SRS này với Conceptual ERD, Logical ERD hoặc mã nguồn hiện hành, phải lập kế hoạch đồng bộ thiết kế và triển khai theo SRS; không xem sự khác biệt là bằng chứng chức năng đã được thực hiện. FR-11 được giữ mã số nhưng hoãn triển khai sang Phase 2.
 
@@ -46,8 +50,8 @@ KTX Hub hỗ trợ vận hành **một cơ sở/tòa nhà ký túc xá tư nhân
 |---|---|---|
 | Cơ sở và chỗ ở | Một tòa nhà; ma trận phòng/giường; giá phòng; tiện nghi; bảo trì giường; lưu trữ/khôi phục phòng | Đa cơ sở; thực thể Sleepbox riêng; thay đổi sức chứa phòng đã tạo; đặt/giữ chỗ |
 | Khách thuê và hợp đồng | Tiếp nhận trực tiếp ngày 01; tài khoản Tenant; hợp đồng giấy và file scan; gia hạn bằng phụ lục; checkout; bảo toàn lịch sử | Tự đăng ký công khai; chuyển phòng (FR-11 ở Phase 2); gia hạn trễ/ở thêm mặc định |
-| Tiền thuê và tài chính | Tiền thuê trọn gói; hóa đơn; VietQR và đối soát thủ công; tiền mặt; chi phí cơ sở; Chênh lệch thu – chi ghi nhận | Tự động đồng bộ ngân hàng; kế toán đầy đủ/thuế/lương/khấu hao; tự tính tiền thuê lẻ tháng; thu tiền phạt trên hệ thống |
-| Vận hành | Xe và mã thẻ vật lý; phiếu sự cố; linh kiện sửa chữa; vi phạm; 4 KPI; thông báo hệ thống | Barrier/đầu đọc thẻ; IoT; workflow mất thẻ riêng; thông báo thủ công/hàng loạt từ Manager; native app |
+| Tiền thuê và tài chính | Tiền thuê trọn gói; hóa đơn; VietQR và đối soát thủ công; tiền mặt; chi phí cơ sở; **tổng lương nhân viên do Manager tự tính và nhập theo tháng**; **Lợi nhuận ròng (ước tính từ dữ liệu đã ghi nhận)** | Tự động tính bảng lương từng nhân viên; kê khai thuế, khấu hao và kế toán đầy đủ; đồng bộ ngân hàng; tiền thuê lẻ tháng; thu tiền phạt trên hệ thống |
+| Vận hành | Xe và mã thẻ vật lý (bao gồm **từ chối cấp thẻ kèm lý do** và **Tenant yêu cầu đổi xe giữ nguyên thẻ**); phiếu sự cố; linh kiện sửa chữa; vi phạm; **4 KPI và 4 biểu đồ Dashboard**; thông báo hệ thống | Barrier/đầu đọc thẻ; IoT; workflow mất thẻ riêng; thông báo thủ công/hàng loạt từ Manager; native app |
 | Tài khoản | 3 role cố định; Tenant đăng nhập CCCD; nhân sự đăng nhập email; **đổi mật khẩu bằng mật khẩu cũ, khôi phục bằng OTP email**; email mỗi User duy nhất | Permission editor; đổi email tài khoản Manager; OTP khi đã đăng nhập đổi mật khẩu; xác minh email mới bằng OTP; lịch sử thao tác đổi email/reset mật khẩu riêng |
 
 ### 1.3. Thuật ngữ và từ viết tắt
@@ -69,7 +73,9 @@ KTX Hub hỗ trợ vận hành **một cơ sở/tòa nhà ký túc xá tư nhân
 | Bản ghi thu tiền (`PAYMENT_TRANSACTION`) | Bằng chứng hệ thống xác nhận một hóa đơn đã được Manager thu đủ bằng tiền mặt hoặc chuyển khoản VietQR; không phải lệnh/giao dịch ngân hàng và chỉ có sau xác nhận `Đã thu` |
 | VietQR | Mã QR cung cấp tài khoản nhận, số tiền và nội dung chuyển khoản gắn mã hóa đơn; không tự xác nhận tiền đã đến |
 | RBAC | Kiểm soát quyền theo 3 vai trò `MANAGER`, `TENANT`, `TECHNICIAN` |
-| Chênh lệch thu – chi ghi nhận | Khoản chênh lệch giữa tiền thuê đã xác nhận thu theo kỳ hóa đơn và chi phí được hệ thống ghi nhận; **không phải lợi nhuận ròng kế toán** |
+| Yêu cầu đổi xe (`VehicleChangeRequest`) | Yêu cầu do Tenant đang có xe `ISSUED` khởi tạo; chứa thông tin xe mới, tham chiếu xe hiện tại và trạng thái duyệt, **không phải xe thứ hai đang có hiệu lực**; mã thẻ vật lý giữ nguyên nếu Manager chấp nhận |
+| Xe `REPLACED` | Hồ sơ xe **đã được thay thế** bởi xe mới sau khi duyệt đổi xe; vẫn giữ lịch sử và mã thẻ trước đây nhưng **không đồng nghĩa đã thu hồi thẻ vật lý** |
+| Lợi nhuận ròng (ước tính) | **Nhãn vận hành có điều kiện** cho doanh thu thuê đã xác nhận thu theo kỳ hóa đơn trừ các chi phí đã ghi nhận trong kỳ, bao gồm tổng lương Manager nhập thủ công; **không phải số liệu lợi nhuận ròng đã được kiểm toán hay báo cáo kế toán/thuế đầy đủ** |
 
 ### 1.4. Tài liệu tham chiếu
 
@@ -88,7 +94,7 @@ Chương 2 định vị hệ thống và tác nhân; Chương 3 chuẩn hóa BR;
 
 ### 2.1. Bài toán vận hành
 
-Hệ thống giải quyết sáu nhu cầu cốt lõi: (1) quản lý chiếm chỗ theo từng Bed; (2) theo dõi chi phí cơ sở và chênh lệch thu – chi ghi nhận; (3) cách ly giới tính phòng; (4) thu tiền thuê trọn gói bằng VietQR/tiền mặt với xác nhận thủ công; (5) điều phối sự cố theo mức khẩn cấp; (6) quản lý phương tiện và thẻ gửi xe vật lý.
+Hệ thống giải quyết sáu nhu cầu cốt lõi: (1) quản lý chiếm chỗ theo từng Bed; (2) theo dõi chi phí cơ sở, tổng lương nhập thủ công và lợi nhuận ròng ước tính từ dữ liệu ghi nhận; (3) cách ly giới tính phòng; (4) thu tiền thuê trọn gói bằng VietQR/tiền mặt với xác nhận thủ công; (5) điều phối sự cố theo mức khẩn cấp; (6) quản lý phương tiện và thẻ gửi xe vật lý.
 
 ### 2.2. Nhóm tác nhân
 
@@ -138,13 +144,14 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 2. Chỉ đổi chính sách giới tính khi phòng **không còn người đang cư trú và không có hợp đồng chiếm chỗ còn hiệu lực**.
 3. Backend bắt buộc kiểm tra tại thời điểm gán giường/chỉnh chính sách; không tự đổi giới tính Tenant hoặc di chuyển khách để hợp thức hóa.
 
-### BR-03 — Tiền thuê trọn gói và chênh lệch thu – chi ghi nhận
+### BR-03 — Tiền thuê trọn gói, chi phí vận hành và lợi nhuận ròng ước tính
 
 1. Tiền thuê mỗi Bed theo giá đã khóa trong hợp đồng/phụ lục, gồm tiền phòng và dịch vụ cơ bản: điện, nước, Internet, gửi xe theo chính sách cơ sở. Không xuất hóa đơn tiện ích phân bổ riêng từng Tenant.
 2. Giá tiêu chuẩn chung của phòng có thể được Manager thay đổi; mức mới được sử dụng cho **hợp đồng mới hoặc phụ lục gia hạn ký sau khi thay đổi**, không cập nhật giá hợp đồng/phụ lục đã ký và không chỉnh hóa đơn đã phát hành.
-3. Doanh thu thực thu của một **kỳ hóa đơn** chỉ gồm số tiền của các hóa đơn kỳ đó đã được Manager xác nhận `Đã thu`. Hóa đơn thanh toán muộn vẫn được phản ánh vào kỳ hóa đơn gốc, không chuyển sang kỳ của ngày nhận tiền.
-4. Chênh lệch thu – chi ghi nhận của kỳ = doanh thu tiền thuê thực thu theo kỳ hóa đơn − chi phí sửa chữa hoàn thành được ghi nhận trong kỳ − điện tổng cơ sở − nước tổng cơ sở − Internet − chi phí vận hành khác ghi nhận theo ngày chi phí. Các nhóm chi phí phải được tính đúng một lần; tiền cọc không phải doanh thu.
-5. Chỉ số trên là **báo cáo vận hành từ dữ liệu được ghi nhận**, không phải lợi nhuận ròng hoặc dòng tiền kế toán đầy đủ.
+3. Doanh thu thực thu của một **kỳ hóa đơn** chỉ gồm số tiền của các hóa đơn kỳ đó đã được Manager xác nhận `Đã thu`. Hóa đơn thanh toán muộn vẫn được phản ánh vào kỳ hóa đơn gốc, không chuyển sang kỳ của ngày nhận tiền. Doanh thu kỳ vọng gồm toàn bộ giá trị hóa đơn của kỳ, không phụ thuộc trạng thái thu.
+4. Manager tự tính lương nhân viên **ngoài hệ thống** và nhập **một khoản tổng lương của tháng** vào nhóm chi phí `Lương nhân viên`, kèm ngày chi phí, tiêu đề và chứng từ/ghi chú khi có. Hệ thống **không** tính lương theo nhân viên, chấm công, các khoản trích theo lương hoặc khấu trừ thuế. Nếu cần điều chỉnh số lương tháng đã nhập, Manager sửa khoản ghi nhận thay vì nhập trùng.
+5. **Lợi nhuận ròng (ước tính theo dữ liệu ghi nhận) của kỳ** = doanh thu tiền thuê đã xác nhận thu thuộc kỳ hóa đơn − chi phí vật tư của phiếu sửa chữa hoàn thành trong kỳ − chi phí cơ sở (điện, nước, Internet) theo ngày chi phí − tổng lương nhân viên nhập thủ công theo tháng − các chi phí vận hành khác theo ngày ghi nhận. Không tính trùng chi phí vật tư đã tổng hợp từ Ticket; không tính tiền cọc vào doanh thu hoặc tiền phạt vi phạm vào doanh thu thuê.
+6. **Điều kiện sử dụng nhãn “Lợi nhuận ròng (ước tính)”**: Dashboard/Finance và báo cáo phải kèm giải thích “Chỉ dựa trên doanh thu và chi phí đã nhập/ghi nhận; có thể chưa bao gồm mọi nghĩa vụ và chi phí thực tế”. Doanh thu nhóm theo `billing_period` còn chi phí nhóm theo `expense_date` hoặc ngày Ticket hoàn thành; đây là **chỉ số vận hành quy ước**, không phải lợi nhuận ròng kế toán được kiểm toán, báo cáo thuế hoặc dòng tiền. Khi thiếu khoản chi chưa được nhập, số ước tính có thể cao hơn thực tế.
 
 ### BR-04 — Cọc, thời hạn hợp đồng và checkout
 
@@ -196,12 +203,18 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 5. **Change Password:** cả ba role khi đã đăng nhập phải cung cấp mật khẩu hiện tại và mật khẩu mới hợp lệ; **không gửi/kiểm tra OTP**. **Forgot Password:** dùng OTP email 6 chữ số, hiệu lực 5 phút, dùng một lần và giới hạn thử; Tenant xác định tài khoản bằng CCCD, nhân sự bằng email. Khi Tenant/Technician mất quyền truy cập email, liên hệ Manager để xác minh và hỗ trợ thay email hoặc cấp lại mật khẩu; không tạo quy trình nhiều cấp.
 6. Sau checkout, Tenant giữ tài khoản, tra cứu tài liệu/hóa đơn/lịch sử và gửi minh chứng nợ cũ; không dùng chức năng cư trú hiện hành. Không tạo role `FORMER_TENANT`.
 
-### BR-10 — Phương tiện và thẻ gửi xe
+### BR-10 — Phương tiện, yêu cầu đổi xe và thẻ gửi xe
 
-1. Mỗi Tenant đang cư trú có tối đa **một xe chưa thu hồi**, tính cả `Chưa cấp thẻ` và `Đã cấp thẻ`; thu hồi xe cũ trước khi đăng ký xe mới. Xe đã thu hồi giữ lịch sử.
-2. Xe tay ga, xe số, xe máy điện có đăng ký cần biển số và hai ảnh giấy đăng ký. Xe đạp điện không có đăng ký, xe đạp thường được để trống biển số/ảnh giấy tờ.
-3. Manager cấp mã thẻ vật lý; một mã thẻ chỉ gắn một phương tiện chưa thu hồi tại một thời điểm, và **được tái sử dụng sau thu hồi**. Thu hồi thẻ theo checkout thông thường; không mở workflow mất thẻ riêng.
-4. Gửi xe nằm trong tiền thuê trọn gói. Không tích hợp thiết bị đọc thẻ/barrier hay tính phí gửi xe riêng.
+1. Mỗi Tenant **đang cư trú** có tối đa **một hồ sơ xe đang có hiệu lực hoặc chờ cấp thẻ** (`ISSUED` hoặc `PENDING_CARD`). Xe `REJECTED` (Bị từ chối), `REVOKED` (Đã thu hồi thẻ), `REPLACED` (Đã thay thế xe) và `CANCELLED` (Đã hủy đăng ký chưa cấp thẻ) **không chiếm hạn mức**; tất cả đều được giữ lịch sử, trừ chính sách xóa dữ liệu hợp pháp không thuộc nghiệp vụ này.
+2. Xe tay ga, xe số, xe máy điện có đăng ký cần biển số và ảnh hai mặt giấy đăng ký; xe đạp điện không có giấy đăng ký và xe đạp thường được để trống biển số/ảnh giấy tờ theo bảng FR-08. Kiểm tra ở cả UI và tầng nghiệp vụ, không chỉ trong form.
+3. Với đăng ký mới `PENDING_CARD`, Manager được **cấp thẻ** (`ISSUED`, phải nhập mã thẻ vật lý và xác nhận bàn giao) hoặc **từ chối** (`REJECTED`, lý do văn bản bắt buộc, không yêu cầu ảnh/tệp minh chứng). Khi từ chối lưu người/thời điểm, thông báo tự động trong ứng dụng cho Tenant; Tenant được đăng ký lại bằng **hồ sơ mới**, không sửa lịch sử từ chối.
+4. **Đổi xe khi đã được cấp thẻ:** Tenant có xe `ISSUED` chọn `[Yêu cầu đổi xe]` và cung cấp **thông tin, giấy tờ của xe mới**. Hệ thống tạo `VehicleChangeRequest` ở trạng thái `PENDING`, tham chiếu xe hiện tại và dữ liệu xe mới; **xe cũ vẫn `ISSUED`, mã thẻ vẫn có hiệu lực** trong lúc chờ. Yêu cầu đổi xe **không tạo xe `ISSUED` thứ hai**, không chiếm thêm hạn mức. Mỗi Tenant có tối đa một yêu cầu đổi xe `PENDING` tại một thời điểm.
+5. **Manager duyệt yêu cầu đổi xe:** sau khi kiểm tra dữ liệu và giấy tờ xe mới, hệ thống thực hiện **một cập nhật nhất quán**: chuyển hồ sơ xe cũ `ISSUED → REPLACED`; tạo hồ sơ xe mới ID khác, trạng thái `ISSUED`, gắn **đúng mã thẻ vật lý đang dùng**; đánh dấu yêu cầu `APPROVED`, liên kết ID xe cũ/mới, lưu người và thời điểm duyệt. **Không thu hồi, không bàn giao lại và không sinh mã thẻ mới**. Lịch sử cả hai xe và thời điểm thay thế được giữ.
+6. **Manager từ chối yêu cầu đổi xe:** bắt buộc ghi **lý do văn bản**, không yêu cầu minh chứng; yêu cầu `PENDING → REJECTED`, tạo thông báo cho Tenant kèm lý do. **Xe cũ vẫn `ISSUED`, thẻ vật lý vẫn hoạt động**; Tenant có thể gửi yêu cầu mới sau khi yêu cầu cũ kết thúc. Không sử dụng thao tác `REVOKED` để từ chối.
+7. `REPLACED` chỉ có nghĩa **hồ sơ xe cũ được thay thế**, không có nghĩa thẻ vật lý đã trả. `REVOKED` chỉ dùng khi Manager thực sự nhận lại/thu hồi thẻ đã cấp (ví dụ Tenant thôi gửi xe, checkout). Xe chưa từng cấp thẻ khi bị hủy đăng ký/checkout dùng `CANCELLED`, không gắn hành vi thu hồi thẻ. Không tạo quy trình riêng xử lý mất thẻ.
+8. **Duy nhất mã thẻ đang có hiệu lực:** tại cùng một thời điểm chỉ tối đa một xe `ISSUED` sở hữu mỗi mã thẻ; các bản ghi `REPLACED`/`REVOKED` có thể giữ mã đó trong lịch sử. Manager có thể cấp lại mã thẻ sau **thu hồi vật lý hợp lệ**, hoặc tiếp tục mã đang dùng trong **giao dịch thay xe** đã được duyệt; không được cấp cùng mã cho hai xe `ISSUED` đồng thời. Trình tự duyệt phải được bảo vệ khỏi thao tác đồng thời/lặp yêu cầu.
+9. Khi checkout, hệ thống hủy yêu cầu đổi xe `PENDING` (`CANCELLED`), hủy đăng ký `PENDING_CARD` (`CANCELLED`) và Manager thu hồi vật lý thẻ của xe `ISSUED` (`REVOKED`) đồng bộ với nghiệp vụ checkout. Không để quyền gửi xe còn hiệu lực sau checkout; giữ lịch sử.
+10. Gửi xe đã gồm trong tiền thuê trọn gói; không tích hợp đầu đọc thẻ, barrier, lượt quét, thanh toán thẻ xe hay quy trình khiếu nại riêng trong Phase 1.
 
 ### BR-11 — Ba vai trò và phạm vi truy cập
 
@@ -215,7 +228,7 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 | Phòng/giường | Quản lý | Xem thẻ phòng khi đang ở | Không |
 | Hồ sơ/hợp đồng | Quản lý | Xem của mình; cập nhật thông tin được cấp quyền | Không |
 | Hóa đơn/thu tiền | Phát hành/đối soát/xác nhận | Xem và gửi minh chứng của mình | Không |
-| Phương tiện | Duyệt/cấp/thu hồi | Đăng ký và xem xe của mình khi đang ở | Không |
+| Phương tiện | Duyệt cấp/từ chối thẻ, duyệt/từ chối yêu cầu đổi xe, thu hồi | Đăng ký và xem xe; tự gửi yêu cầu đổi xe khi đã được cấp thẻ | Không |
 | Sự cố | Phân công/điều chỉnh | Tạo/xem phiếu của mình khi đang ở | Chỉ xử lý phiếu được giao |
 | Vi phạm | Lập/xem | Chỉ xem của mình | Không |
 | Tài chính và KPI | Toàn quyền | Không | Không |
@@ -429,12 +442,12 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 
 **Quy tắc liên quan:** BR-04, BR-05, BR-08, BR-11; FR-06, FR-09, FR-13, FR-16 (ngoài phạm vi phần trích này).
 
-#### FR-08: Đăng ký, cấp thẻ và quản lý phương tiện hầm xe
+#### FR-08: Đăng ký, cấp thẻ, từ chối, yêu cầu đổi xe và quản lý phương tiện hầm xe
 
 **Tác nhân:** Tenant đang cư trú; Manager.  
-**Mục tiêu:** Quản lý tối đa một phương tiện chưa thu hồi của mỗi Tenant; thẻ xe là thẻ vật lý và có thể tái sử dụng khi thu hồi.
+**Mục tiêu:** Quản lý một xe có hiệu lực/chờ cấp thẻ trên mỗi Tenant; hỗ trợ Tenant chủ động đề nghị đổi xe trong khi giữ nguyên thẻ vật lý, không mất lịch sử và không nhầm lẫn việc thay xe với thu hồi thẻ.
 
-**Đầu vào:** Chủ xe/Tenant, loại phương tiện, biển số (khi áp dụng), hãng, màu sơn, ảnh mặt trước/sau giấy đăng ký xe (khi áp dụng), mã thẻ vật lý khi cấp.
+**Đầu vào:** Tenant ID, loại xe, biển số (khi áp dụng), hãng, màu, ảnh hai mặt giấy đăng ký xe (khi áp dụng), mã thẻ vật lý khi cấp mới; lý do văn bản khi từ chối đăng ký hoặc yêu cầu đổi xe.
 
 **Quy tắc nhập liệu theo loại xe:**
 
@@ -446,24 +459,48 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 | Xe đạp điện không có giấy đăng ký | Không bắt buộc (`NULL`) | Không bắt buộc (`NULL`) |
 | Xe đạp thông thường | Không bắt buộc (`NULL`) | Không bắt buộc (`NULL`) |
 
-**Quy trình xử lý:**
-1. Tenant đang cư trú chọn `[Đăng ký xe mới]`, nhập các thông tin phù hợp với loại xe và đính kèm ảnh giấy tờ nếu loại xe có yêu cầu.
-2. Hệ thống kiểm tra Tenant chưa có phương tiện ở trạng thái **chưa thu hồi**, gồm cả `Chờ cấp thẻ`/`Chờ duyệt` và `Đã cấp thẻ`. Xe đã thu hồi không chiếm hạn mức.
-3. Xe hợp lệ được lưu ở trạng thái chờ cấp thẻ. Manager mở danh sách phương tiện, lọc theo `Tất cả`, `Chờ cấp thẻ`, `Đã cấp thẻ`, `Đã thu hồi`, tìm theo biển số (nếu có), tên Tenant hoặc mã thẻ.
-4. Manager xem thông tin và ảnh giấy tờ, thực hiện `[Cấp thẻ]`, nhập mã thẻ vật lý và xác nhận bàn giao; phương tiện chuyển sang `Đã cấp thẻ`.
-5. Mã thẻ vật lý chỉ được cấp cho tối đa một phương tiện **chưa thu hồi tại cùng thời điểm**. Sau khi thu hồi hợp lệ, mã đó được phép tái sử dụng cho phương tiện khác; lịch sử cấp phát/thu hồi các phương tiện vẫn được giữ.
-6. Nếu Tenant đổi phương tiện, Manager thu hồi xe/thẻ cũ, chuyển xe cũ sang `Đã thu hồi`, rồi Tenant mới được đăng ký phương tiện tiếp theo. Không ghi đè thông tin xe cũ bằng xe mới.
-7. Trong checkout, Manager thu hồi thẻ và cập nhật trạng thái phương tiện theo FR-13.
+**Trạng thái hồ sơ xe:**
+
+| Trạng thái | Ý nghĩa |
+|---|---|
+| `PENDING_CARD` | Đã đăng ký, đang chờ Manager cấp/từ chối thẻ lần đầu |
+| `ISSUED` | Xe hiện tại có thẻ vật lý hợp lệ |
+| `REJECTED` | Đăng ký ban đầu bị Manager từ chối; chưa được cấp thẻ |
+| `REVOKED` | Đã thu hồi thẻ vật lý và kết thúc quyền gửi xe |
+| `REPLACED` | Xe cũ đã được thay bởi xe mới **với cùng thẻ vật lý**; là lịch sử, không phải thu hồi thẻ |
+| `CANCELLED` | Đăng ký chưa được cấp thẻ bị hủy/kết thúc, ví dụ do checkout |
+
+**Trạng thái yêu cầu đổi xe (`VehicleChangeRequest`):** `PENDING` (Chờ duyệt), `APPROVED` (Đã duyệt), `REJECTED` (Từ chối), `CANCELLED` (Hủy do checkout). Trạng thái của **yêu cầu** và trạng thái của **hồ sơ xe** là hai khái niệm riêng.
+
+**A. Đăng ký xe và cấp/từ chối thẻ lần đầu**
+1. Tenant đang cư trú chọn `[Đăng ký xe mới]` nếu chưa có hồ sơ `PENDING_CARD` hoặc `ISSUED`. Nhập thông tin hợp lệ theo loại xe. Hệ thống kiểm tra ở cả UI và Mock Service/Backend.
+2. Hồ sơ mới ở trạng thái `PENDING_CARD`, chưa có mã thẻ. Manager có thể xem chi tiết, lọc theo trạng thái và tìm theo biển số, tên Tenant, mã thẻ.
+3. Manager xác nhận `[Cấp thẻ]` và nhập mã thẻ vật lý đã bàn giao; nếu hợp lệ, hồ sơ chuyển `ISSUED`. Mã thẻ không được thuộc một xe `ISSUED` khác.
+4. Manager có thể chọn `[Từ chối đăng ký]` đối với hồ sơ `PENDING_CARD`, **nhập lý do bắt buộc**, không cần tệp/ảnh minh chứng; hệ thống lưu người/thời điểm, chuyển hồ sơ `REJECTED`, tạo notification cho Tenant. `REJECTED` không chiếm hạn mức; đăng ký lại là hồ sơ mới.
+
+**B. Tenant tự yêu cầu đổi xe khi vẫn giữ thẻ vật lý**
+1. Tenant có **một xe `ISSUED` và đang cư trú** chọn `[Yêu cầu đổi xe]` trong chi tiết phương tiện. Hệ thống mở form với loại, biển số, hãng, màu và ảnh giấy tờ của **xe mới**, theo cùng quy tắc validation của đăng ký mới.
+2. Khi gửi thành công, tạo bản ghi `VehicleChangeRequest` có ID riêng, `tenantId`, `currentVehicleId`, thông tin/ảnh xe mới, thời điểm tạo, trạng thái `PENDING`. **Không thay đổi dữ liệu xe cũ**, không tạo xe đang hiệu lực mới và không yêu cầu Tenant trả thẻ. Chỉ một yêu cầu `PENDING`/Tenant; không cho gửi trùng.
+3. Manager xem danh sách **Yêu cầu đổi xe**, mở chi tiết so sánh **xe hiện tại và xe đề nghị**, kiểm tra giấy tờ, rồi chọn `[Chấp nhận đổi xe]` hoặc `[Từ chối]`.
+4. Nếu **chấp nhận**, kiểm tra lại xe cũ vẫn `ISSUED` của chính Tenant và yêu cầu còn `PENDING`. Trong cùng một thao tác nhất quán: cập nhật xe cũ thành `REPLACED` (lưu thời điểm thay thế/ID xe kế tiếp); tạo **xe mới có ID mới, trạng thái `ISSUED` và `cardCode` bằng mã thẻ cũ**; cập nhật yêu cầu thành `APPROVED`, lưu người/thời điểm và liên kết hai xe. Tenant giữ thẻ vật lý cũ; **không thao tác thu hồi/cấp lại**. Gửi thông báo đổi xe được duyệt.
+5. Nếu **từ chối**, Manager **nhập lý do bắt buộc**, không đính kèm minh chứng; yêu cầu chuyển `REJECTED` và thông báo tới Tenant. Xe và mã thẻ hiện tại **giữ nguyên**. Tenant có thể gửi yêu cầu đổi xe mới sau khi yêu cầu cũ kết thúc, không ghi đè lịch sử.
+6. Tenant được xem trạng thái/lý do/yêu cầu đổi xe của chính mình và lịch sử cả xe `REPLACED` lẫn xe `ISSUED`, bao gồm mã thẻ mà xe đã sử dụng. Không có luồng khiếu nại riêng.
+
+**C. Thu hồi, checkout và ngoại lệ**
+1. Khi Tenant thôi đăng ký gửi xe hoặc checkout, Manager nhận thẻ vật lý và thực hiện `ISSUED → REVOKED`; mã thẻ được giải phóng để cấp lại.
+2. Nếu checkout xảy ra khi có yêu cầu đổi xe `PENDING`, hệ thống hủy yêu cầu (`CANCELLED`) và thu hồi thẻ của xe đang `ISSUED` trong quy trình checkout. Đăng ký `PENDING_CARD` khi checkout chuyển `CANCELLED` mà **không giả lập thu hồi thẻ**.
+3. Nếu yêu cầu được gửi hoặc duyệt nhiều lần, dữ liệu đồng thời thay đổi, thẻ không còn hợp lệ, xe hiện tại đã đổi hoặc Tenant đã checkout, hệ thống từ chối xử lý và **không ghi dở**. Không có hai xe `ISSUED` cùng mã thẻ hoặc cùng một Tenant tại cùng thời điểm.
 
 **Ràng buộc:**
-- Phí gửi xe đã gồm trong tiền thuê trọn gói; không lập phí gửi xe riêng.
-- Hệ thống chỉ quản lý dữ liệu và mã thẻ vật lý, **không** tích hợp đầu đọc thẻ, barrier hoặc ghi nhận lượt quét ra/vào.
-- Tenant chỉ được xem/đăng ký phương tiện của mình; Manager thao tác cấp/thu hồi.
-- Không bổ sung workflow riêng cho tình huống mất thẻ/chưa giao trả thẻ trong Phase 1.
+- Phí gửi xe nằm trong tiền thuê trọn gói, không lập phí riêng; không hỗ trợ đầu đọc thẻ/barrier/lịch sử lượt quét.
+- Tenant chỉ xem/đăng ký/đổi xe của mình; Manager mới được quyết định cấp/từ chối/duyệt đổi/thu hồi. Kiểm tra quyền tại service/Backend.
+- Yêu cầu đổi xe là bản ghi chờ duyệt **riêng**, không phải hồ sơ xe thứ hai đã cấp thẻ; không sửa đè thông tin xe cũ.
+- Mã thẻ chỉ duy nhất giữa các xe `ISSUED` hiện hành; được phép xuất hiện trên xe `REPLACED`/`REVOKED` để tra cứu lịch sử.
+- Thông báo trong app từ FR-27, không yêu cầu upload bằng chứng khi Manager từ chối; không email/SMS/Zalo hay workflow mất thẻ riêng.
 
-**Đầu ra:** Hồ sơ phương tiện và mã thẻ được quản lý đúng hạn mức; lịch sử được giữ; mã thẻ đã thu hồi có thể cấp lại.
+**Đầu ra:** Hồ sơ xe và lịch sử được giữ; Tenant chủ động yêu cầu đổi xe, Manager quyết định; nếu duyệt thì tiếp tục dùng đúng thẻ vật lý; nếu từ chối thì xe cũ không bị ảnh hưởng và Tenant biết lý do.
 
-**Quy tắc liên quan:** BR-03, BR-08, BR-10, BR-11; FR-07, FR-13.
+**Quy tắc liên quan:** BR-03, BR-08, BR-10, BR-11; FR-07, FR-13, FR-27.
 
 ---
 
@@ -571,13 +608,13 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 **Mục tiêu:** Kết thúc quan hệ cư trú theo hợp đồng, giải phóng giường và bảo toàn lịch sử/hóa đơn.
 
 **Điều kiện trước:**
-- Khách thông báo ý định trả phòng trước tối thiểu 15 ngày theo quy trình vận hành.
+- Khách thông báo ý định trả phòng trước tối thiểu 15 ngày theo quy trình vận hành (zalo).
 - Hai bên hoàn tất bàn giao vật lý. Khi hợp đồng hết hạn mà không gia hạn, Manager thực hiện checkout trong ngày cuối của hợp đồng; không có quyền tự động ở thêm.
 
 **Quy trình xử lý:**
 1. Manager và Tenant kiểm tra phòng, vật dụng, tình trạng hư hỏng; xử lý tiền cọc/khấu trừ nếu có ngoài thực tế theo hợp đồng giấy. Manager thu hồi chìa khóa và thẻ xe vật lý theo quy trình thông thường.
 2. Manager mở `ContractsPage` → Drawer hợp đồng → `[Thanh lý (Checkout)]`; xác nhận đã bàn giao và **chọn bắt buộc** trạng thái giường sau checkout: `AVAILABLE` (có thể tiếp tục cho thuê) hoặc `MAINTENANCE` (cần bảo trì).
-3. Hệ thống cập nhật nhất quán: hợp đồng `Đã thanh lý`; Tenant `Đã trả phòng`; giường không còn bị hợp đồng đó chiếm chỗ và nhận trạng thái đã chọn; phương tiện/thẻ được cập nhật `Đã thu hồi` theo bàn giao thông thường.
+3. Hệ thống cập nhật nhất quán: hợp đồng `Đã thanh lý`; Tenant `Đã trả phòng`; giường không còn bị hợp đồng đó chiếm chỗ và nhận trạng thái đã chọn; xe `ISSUED` được thu hồi thẻ và chuyển `REVOKED`; đăng ký xe chưa cấp thẻ `PENDING_CARD` và yêu cầu đổi xe `PENDING` được hủy thành `CANCELLED` (không giả là đã thu hồi thẻ vật lý).
 4. Checkout **không bị chặn** nếu còn hóa đơn `Nợ` hoặc `Chờ xác nhận` sau bàn giao. Các hóa đơn đó giữ nguyên trạng thái: không tự đánh dấu `Đã thu`, không tự chuyển `Chờ xác nhận` về `Nợ`; Manager tiếp tục đối soát theo quy trình thanh toán.
 5. Hệ thống không phát hành hóa đơn cho kỳ thuê **nằm ngoài thời hạn của hợp đồng hoặc sau khi hợp đồng đã checkout**. Tại lần phát hành ngày 25, phải kiểm tra thời hạn hợp đồng đối với kỳ cần thu, tránh tạo hóa đơn tháng sau cho khách kết thúc hợp đồng tháng này.
 6. Tenant giữ nguyên tài khoản để xem hợp đồng, hóa đơn, lịch sử thanh toán và gửi minh chứng cho hóa đơn `Nợ` theo FR-07. Không xóa hồ sơ định danh, hợp đồng, giao dịch, công nợ, lịch sử cư trú hoặc vi phạm.
@@ -593,37 +630,37 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 **Quy tắc liên quan:** BR-01, BR-04, BR-05, BR-08, BR-10, BR-11; FR-01, FR-07, FR-08, FR-09, FR-12.
 
 ---
-### 4.4. Chi phí cơ sở và Chênh lệch thu – chi ghi nhận
+### 4.4. Chi phí cơ sở và lợi nhuận ròng ước tính
 
-#### FR-14 — Ghi nhận chi phí cơ sở và lập báo cáo thu – chi
+#### FR-14 — Ghi nhận chi phí cơ sở, tổng lương thủ công và báo cáo lợi nhuận ròng ước tính
 
 **Tác nhân:** Manager.  
-**Mục tiêu:** Theo dõi chi phí tổng cơ sở và tổng hợp chênh lệch giữa tiền thuê đã xác nhận thu với các khoản chi hệ thống ghi nhận, theo **kỳ hóa đơn**.
+**Mục tiêu:** Theo dõi các khoản chi vận hành được ghi nhận, bao gồm tổng lương do Manager tự tính bên ngoài, và tổng hợp **Lợi nhuận ròng (ước tính từ dữ liệu ghi nhận)** theo kỳ báo cáo.
 
-**Đầu vào:** Loại chi phí `Điện`, `Nước`, `Internet`, `Khác`; tiêu đề, số tiền, ngày chi phí (`expense_date`), mã chứng từ (nếu có), ảnh chứng từ (nếu có) và ghi chú.
+**Đầu vào:** Loại chi phí `Điện`, `Nước`, `Internet`, `Lương nhân viên`, `Khác`; tiêu đề, số tiền, ngày chi phí (`expense_date`), mã chứng từ (nếu có), ảnh chứng từ (nếu có) và ghi chú.
 
 **Quy trình xử lý:**
-1. Manager tạo khoản chi phí tiện ích tổng của cơ sở hoặc chi phí vận hành khác, chọn ngày chi phí và cung cấp chứng từ khi có.
-2. Manager xem bảng kê theo thời gian/loại chi phí; được **sửa hoặc xóa khoản chi nhập nhầm**. Báo cáo tính lại theo thông tin hiện có, không yêu cầu một workflow phê duyệt hay lịch sử phiên bản chỉnh sửa riêng.
-3. Hệ thống lấy doanh thu của kỳ được chọn từ các hóa đơn **có `billing_period` thuộc kỳ đó và `status = Đã thu`**, dù ngày Manager xác nhận nhận tiền nằm ở tháng khác. Các hóa đơn `Nợ`/`Chờ xác nhận` không được tính là doanh thu đã thu.
-4. Hệ thống tổng hợp chi phí sửa chữa từ các phiếu `Hoàn thành` trong kỳ theo ngày hoàn thành, chỉ gồm tổng chi phí linh kiện/vật tư đã sử dụng; không nhập trùng một chi phí sửa chữa vào khoản chi cơ sở. Chi phí điện/nước/Internet/khác được nhóm theo `expense_date`.
+1. Manager tạo khoản chi phí tiện ích cơ sở hoặc chi phí vận hành khác. Đối với `Lương nhân viên`, Manager tự tổng hợp **tổng lương tháng bên ngoài hệ thống** và nhập một khoản tổng cho tháng tương ứng; không nhập bảng lương từng Technician, không tính lương tự động. Khi nhập sai, sửa bản ghi thay vì tạo khoản trùng.
+2. Manager xem bảng kê theo thời gian/loại chi phí; được **sửa hoặc xóa khoản chi nhập nhầm**. Báo cáo tính lại theo dữ liệu hiện có, không yêu cầu workflow phê duyệt hoặc lịch sử phiên bản sửa đổi riêng.
+3. Hệ thống lấy **doanh thu thực thu** của kỳ từ các hóa đơn có `billing_period` thuộc kỳ và `status = Đã thu`, dù Manager xác nhận tiền vào tháng khác. Hóa đơn `Nợ`/`Chờ xác nhận` không được tính là đã thu; **doanh thu kỳ vọng** là tổng hóa đơn được phát hành cho kỳ, bất kể trạng thái.
+4. Chi phí sửa chữa được tổng hợp từ phiếu `Hoàn thành` theo **ngày hoàn thành**, chỉ gồm vật tư/linh kiện thực dùng. Chi phí điện/nước/Internet/lương tổng/chi phí khác được tổng hợp theo `expense_date` trong kỳ; không nhập trùng chi phí vật tư từ Ticket vào Facility Expense.
 5. Hệ thống tính và hiển thị:
 
    ```text
-   Chênh lệch thu – chi ghi nhận trong kỳ
-       = Tiền thuê thực thu của các hóa đơn thuộc kỳ
-       - Chi phí vật tư sửa chữa hoàn thành ghi nhận trong kỳ
-       - Chi phí điện tổng cơ sở ghi nhận trong kỳ
-       - Chi phí nước tổng cơ sở ghi nhận trong kỳ
-       - Chi phí Internet ghi nhận trong kỳ
-       - Các chi phí vận hành khác ghi nhận trong kỳ
+   Lợi nhuận ròng (ước tính theo dữ liệu ghi nhận) của kỳ
+       = Doanh thu tiền thuê đã xác nhận thu thuộc kỳ hóa đơn
+       - Chi phí vật tư sửa chữa hoàn thành trong kỳ
+       - Điện, nước, Internet toàn cơ sở ghi nhận trong kỳ
+       - Tổng lương nhân viên do Manager nhập cho kỳ
+       - Chi phí vận hành khác đã ghi nhận trong kỳ
    ```
 
-6. Tiền cọc không cộng vào doanh thu tiền thuê. Hệ thống cho xuất báo cáo theo phạm vi thời gian được chọn ở định dạng **Excel (`.xlsx`) và PDF**.
+6. Tiền cọc không cộng vào doanh thu tiền thuê; tiền phạt vi phạm thu ngoài hệ thống không cộng vào doanh thu thuê. Manager có thể xuất báo cáo **Excel (`.xlsx`) và PDF** theo kỳ chọn; file xuất phải sử dụng cùng công thức với UI và hiển thị chú thích ở mục 7.
+7. **Điều kiện bắt buộc khi hiển thị nhãn “Lợi nhuận ròng (ước tính)”**: đặt ngay cạnh số liệu hoặc trong báo cáo lời giải thích: *“Ước tính dựa trên các khoản thu và chi đã được ghi nhận; có thể chưa bao gồm đầy đủ chi phí, thuế, khấu hao và nghĩa vụ khác.”* Không tuyên bố đây là lợi nhuận ròng kế toán đã kiểm toán. Vì doanh thu theo kỳ hóa đơn trong khi chi phí theo ngày ghi nhận/ngày hoàn thành, đây là chỉ số vận hành theo quy ước, **không phải báo cáo dòng tiền**. Khi hóa đơn kỳ cũ được xác nhận muộn, doanh thu và số ước tính **của kỳ cũ** cập nhật theo.
 
-**Ràng buộc:** Không gọi kết quả trên là lợi nhuận ròng kế toán hay báo cáo dòng tiền. Khi hóa đơn của kỳ cũ được xác nhận `Đã thu` muộn, doanh thu thực thu **của kỳ hóa đơn cũ** được cập nhật. Không áp thời gian xuất file cố định tại FR-14; các mục tiêu hiệu năng, nếu có, thuộc NFR.
+**Ràng buộc:** Không triển khai quản lý bảng lương, tính lương theo nhân viên, khấu trừ thuế/bảo hiểm, tính khấu hao hoặc kế toán đầy đủ. Các nhóm chi phí chỉ được tính một lần; Manager chịu trách nhiệm về độ đầy đủ và chính xác dữ liệu nhập.
 
-**Đầu ra:** Danh sách chi phí và báo cáo Chênh lệch thu – chi ghi nhận; báo cáo Excel/PDF.
+**Đầu ra:** Bảng chi phí, chỉ số **Lợi nhuận ròng (ước tính)** có chú thích và báo cáo Excel/PDF nhất quán.
 
 **Liên quan:** BR-03, BR-05, BR-08; FR-15, FR-16, FR-18, FR-20.
 
@@ -738,25 +775,39 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 
 ### 4.8. Thống kê và Dashboard
 
-#### FR-20 — Dashboard với đúng bốn KPI vận hành
+#### FR-20 — Dashboard với bốn KPI vận hành và bốn biểu đồ phân tích
 
 **Tác nhân:** Manager.  
-**Mục tiêu:** Theo dõi sức chứa, thu tiền theo kỳ hóa đơn, công nợ quá hạn và sự cố chưa hoàn thành.
+**Mục tiêu:** Theo dõi sức chứa, thu tiền theo kỳ hóa đơn, công nợ quá hạn và sự cố chưa hoàn thành; phân tích biến động người thuê, trạng thái giường, doanh thu và chi phí trong năm được chọn.
 
-**Đầu ra bắt buộc:** **Đúng bốn thẻ KPI** sau:
+**Đầu ra KPI bắt buộc:** Giữ **đúng bốn thẻ KPI** sau (các biểu đồ bên dưới **không phải KPI bổ sung**):
 
 | KPI | Công thức/phạm vi |
 |---|---|
 | 1. Tỷ lệ lấp đầy | `Số Bed OCCUPIED / tổng số Bed vật lý thuộc các Room đang vận hành × 100%`; Bed MAINTENANCE vẫn tính trong mẫu số; Room lưu trữ không nằm trong hoạt động hiện hành |
-| 2. Doanh thu kỳ vọng / đã thu | Kỳ vọng = tổng số tiền hóa đơn tiền thuê **của kỳ được chọn**; đã thu = tổng số tiền các hóa đơn **cùng kỳ đó** có trạng thái `Đã thu` (dù ngày trả tiền ở tháng khác) |
-| 3. Công nợ quá hạn | Tổng số tiền hóa đơn `Nợ` đã quá ngày hạn thanh toán; **không** tính hóa đơn `Chờ xác nhận` |
-| 4. Sự cố đang mở | Tổng số phiếu trong `Chưa phân công`, `Mới giao`, `Đang xử lý`; không tính `Hoàn thành` |
+| 2. Doanh thu kỳ vọng / đã thu | Kỳ vọng = tổng số tiền hóa đơn thuê **của kỳ được chọn**; đã thu = tổng số tiền các hóa đơn **cùng kỳ** có trạng thái `Đã thu` dù trả tiền tháng khác |
+| 3. Công nợ quá hạn | Tổng hóa đơn `Nợ` quá hạn thanh toán tính tại thời điểm xem; **không** tính `Chờ xác nhận` |
+| 4. Sự cố đang mở | Các phiếu `Chưa phân công`, `Mới giao`, `Đang xử lý`; không tính `Hoàn thành` |
 
-**Quy trình xử lý:** Manager xem Dashboard và chọn kỳ báo cáo liên quan; hệ thống truy vấn dữ liệu theo kỳ và trạng thái tương ứng. Các khoản `Chênh lệch thu – chi ghi nhận` thuộc **FR-14**, **không** là KPI thứ năm.
+**Bốn biểu đồ bắt buộc dưới các thẻ KPI:**
 
-**Ràng buộc:** KPI 2 theo **kỳ hóa đơn**, không theo ngày thực tế thu tiền; chỉ báo quá hạn là điều kiện truy vấn, không bổ sung trạng thái hóa đơn.
+| Biểu đồ | Chiều thời gian / cách tính | Nguồn dữ liệu |
+|---|---|---|
+| 1. Line chart — Người vào ở và người rời đi | **Hai đường**, mỗi tháng từ 01–12 của **năm được chọn**. Vào ở = số lượt onboarding thực sự bắt đầu cư trú trong tháng (kể cả khách quay lại); rời đi = số lượt Manager **xác nhận checkout** trong tháng. Gia hạn không được tính là onboarding hay checkout | Lịch sử Contract với ngày bắt đầu cư trú và **ngày checkout thực tế** / sự kiện vòng đời tương đương. Không suy ngày rời đi chỉ từ `end_date` hoặc trạng thái `CHECKED_OUT` hiện tại |
+| 2. Pie chart — Trạng thái giường | **Snapshot ở thời điểm xem**, phân bố số Bed `MAINTENANCE` / `AVAILABLE` / `OCCUPIED` thuộc **các Room đang vận hành**; không dùng năm được chọn để suy trạng thái giường lịch sử | Room/Bed hiện tại; loại Room đã archive; tổng ba nhóm phải bằng số Bed vật lý đang vận hành |
+| 3. Bar chart — Doanh thu theo kỳ hóa đơn | **Hai series cho mỗi tháng 01–12** của năm được chọn: `Kỳ vọng` = tổng số tiền hóa đơn có `billing_period` của tháng; `Đã thu` = các hóa đơn cùng kỳ có trạng thái `Đã thu`. Tiền thu muộn vẫn thuộc cột kỳ hóa đơn gốc | Invoices, hợp đồng/giá snapshot và payment status; không nhóm theo ngày Manager xác nhận tiền |
+| 4. Bar chart — Chi phí phát sinh | **Một cột tổng chi phí cho mỗi tháng 01–12** của năm được chọn; tổng = chi phí Facility Expenses (gồm tổng lương Manager nhập) theo `expense_date` + chi phí vật tư từ Ticket hoàn thành theo ngày hoàn thành. Không tính trùng vật tư | Facility Expenses và Ticket/Parts; tooltip có thể trình bày cơ cấu nhưng không bắt buộc nhiều series |
 
-**Liên quan:** BR-01, BR-03, BR-05, BR-06; FR-01, FR-14, FR-15, FR-18.
+**Quy trình xử lý:**
+1. Manager xem các KPI và chọn **kỳ hóa đơn** cho KPI 2; các KPI về trạng thái hiện hành luôn phản ánh trạng thái tại lúc xem, theo phạm vi định nghĩa riêng.
+2. Manager chọn **năm thống kê** cho ba biểu đồ lịch sử 12 tháng. Với dữ liệu nghiệp vụ thật, biểu đồ trạng thái giường là snapshot ở thời điểm xem và UI ghi “Trạng thái hiện tại”. Với Prototype dùng bộ số liệu riêng, ghi **“Phân bố giường minh họa”** thay vì khẳng định đây là trạng thái giường vận hành hiện tại; biểu đồ tròn không phụ thuộc năm được chọn.
+3. Mỗi biểu đồ có tiêu đề, chú giải và tooltip; tháng không có số liệu trong tập dữ liệu đang dùng hiển thị 0 hoặc trạng thái trống. Với dữ liệu nghiệp vụ thật, biểu đồ thực hiện đúng nguồn và công thức trong bảng trên. **Dữ liệu minh họa riêng là ngoại lệ chỉ dành cho Prototype/Mock mode**.
+4. **Prototype/Mock mode (quyết định đơn giản hóa để demo sớm):** cho phép sử dụng **một bộ dữ liệu biểu đồ mẫu riêng** (ví dụ `dashboardDemoData.ts`) gồm 12 tháng và tỷ trọng trạng thái giường, **không cần trùng khớp Shared Mock Store, KPI, hóa đơn, hợp đồng, số giường hay các thao tác nghiệp vụ hiện tại**. Không phải bổ sung lịch sử checkout hay seed lại dữ liệu nghiệp vụ chỉ để vẽ biểu đồ. Khi đổi năm thống kê, chọn số liệu mẫu tương ứng (nếu có); không có năm mẫu thì ghi rõ không có dữ liệu. Phải hiển thị **nhãn rõ ràng “Dữ liệu biểu đồ minh họa (Prototype)”** ngay tại khu vực biểu đồ và không nói các con số đó là dữ liệu vận hành thật.
+5. **Bốn KPI hiện có** vẫn tính từ dữ liệu nghiệp vụ Mock Store, **không dùng bộ số liệu chart mẫu để tính KPI, lợi nhuận ròng, hóa đơn, báo cáo tài chính, export hay đổi trạng thái phòng**. Tập dữ liệu minh họa chỉ phục vụ trình diễn giao diện biểu đồ. Ở **API mode**, biểu đồ phải lấy số liệu nghiệp vụ được tổng hợp thật hoặc hiện trạng thái chưa tích hợp; **không tự động dùng dữ liệu demo làm fallback**.
+
+**Ràng buộc:** Đối với nguồn thật, doanh thu theo **kỳ hóa đơn**, không theo ngày thực nhận; chỉ báo quá hạn không phải trạng thái Invoice mới. **Lợi nhuận ròng (ước tính)** thuộc FR-14, không thêm KPI thứ năm. Khi sau này tích hợp dữ liệu thật cho line chart, phải có ngày onboarding/checkout thực tế; **Prototype không bị chặn** vì thiếu lịch sử đầy đủ.
+
+**Liên quan:** BR-01, BR-03, BR-04, BR-05, BR-06; FR-01, FR-07, FR-09, FR-13, FR-14, FR-15, FR-18.
 
 ---
 
@@ -868,14 +919,14 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 
 **Quy trình xử lý:**
 1. Hệ thống có **hộp thư thông báo bên trong ứng dụng**, truy cập qua khu vực thông báo hiện có, **không thêm tab điều hướng thứ năm**.
-2. Thông báo chỉ được **hệ thống tự tạo từ các nghiệp vụ đã có**, như: phát hành hóa đơn, nhắc đến hạn/quá hạn, Manager xác nhận/từ chối minh chứng, lập biên bản vi phạm. Không cung cấp chức năng Manager soạn/gửi thông báo chung.
+2. Thông báo chỉ được **hệ thống tự tạo từ các nghiệp vụ đã có**, như: phát hành hóa đơn, nhắc đến hạn/quá hạn, Manager xác nhận/từ chối minh chứng, lập biên bản vi phạm, **Manager từ chối đăng ký cấp thẻ xe hoặc từ chối yêu cầu đổi xe (kèm lý do), và thông báo khi yêu cầu đổi xe được duyệt**. Không cung cấp chức năng Manager soạn/gửi thông báo chung.
 3. Tenant chỉ xem thông báo và các biên bản vi phạm gắn với chính mình; không truy cập thông báo hoặc hồ sơ của người khác.
 4. Sau checkout, Tenant vẫn xem thông báo/lịch sử cá nhân, tiếp tục nhận thông báo liên quan khoản tiền thuê chưa tất toán; không nhận thông báo sinh hoạt chung mới.
 5. Hệ thống không tích hợp SMS, Zalo, push notification hay email gửi thông báo nghiệp vụ; email OTP **chỉ phục vụ quên/khôi phục mật khẩu**.
 
 **Đầu ra:** Hộp thư cá nhân chỉ chứa thông báo từ các sự kiện nghiệp vụ và lịch sử vi phạm của chính Tenant.
 
-**Liên quan:** BR-05, BR-07, BR-08, BR-11; FR-15, FR-16, FR-19, FR-25.
+**Liên quan:** BR-05, BR-07, BR-08, BR-10, BR-11; FR-08, FR-15, FR-16, FR-19, FR-25.
 
 ---
 ## 5. MA TRẬN TRUY VẾT YÊU CẦU (REQUIREMENTS TRACEABILITY MATRIX — RTM)
@@ -891,26 +942,26 @@ Bảng dưới đây liên kết yêu cầu nghiệp vụ với FR và những *
 | FR-05 | Tìm kiếm và lọc phòng | BR-01 | `rooms` |
 | FR-06 | Hồ sơ Tenant và chỉnh sửa thông tin | BR-08, BR-09, BR-11 | `tenants`, `users`, `contracts`, `invoices` |
 | FR-07 | Quyền tài khoản sau checkout và lịch sử | BR-04, BR-05, BR-08, BR-11 | `tenants`, `users`, `contracts`, `invoices` |
-| FR-08 | Xe và thẻ gửi xe vật lý | BR-10, BR-11 | `vehicles`, `tenants` |
+| FR-08 | Đăng ký/cấp/từ chối thẻ; Tenant yêu cầu đổi xe giữ nguyên thẻ và lịch sử | BR-10, BR-11 | `vehicles` (gồm `REPLACED`, `CANCELLED`), `vehicle_change_requests` (đề xuất), `tenants`, `notifications` |
 | FR-09 | Tiếp nhận ngày 01, hợp đồng, giường, hóa đơn đầu | BR-01, BR-02, BR-04, BR-05, BR-08, BR-09 | `tenants`, `users`, `rooms`, `beds`, `contracts`, `invoices` |
 | FR-10 | Lưu tài liệu hợp đồng giấy | BR-08, BR-11 | `contracts`, `contract_documents`, tệp lưu trữ |
 | FR-11 | Chuyển phòng — Phase 2 | BR-01, BR-02, BR-08 | `contracts`, `beds` (dự kiến) |
 | FR-12 | Gia hạn bằng phụ lục và khóa giá | BR-01, BR-03, BR-04, BR-05, BR-08 | `contracts`, lịch sử phụ lục/gia hạn, `contract_documents` |
 | FR-13 | Checkout, giải phóng giường, giữ công nợ | BR-04, BR-05, BR-08, BR-10 | `contracts`, `beds`, `tenants`, `vehicles`, `invoices` |
-| FR-14 | Chi phí cơ sở và thu – chi ghi nhận | BR-03, BR-05 | `facility_expenses`, `invoices`, `payment_transactions`, `maintenance_tickets`, vật tư |
+| FR-14 | Chi phí cơ sở, tổng lương nhập thủ công và lợi nhuận ròng ước tính có chú thích | BR-03, BR-05 | `facility_expenses` (nhóm lương), `invoices`, `payment_transactions`, `maintenance_tickets`, vật tư |
 | FR-15 | Phát hành hóa đơn tháng đầu và định kỳ | BR-03, BR-05, BR-08 | `invoices`, `contracts`, lịch sử phụ lục |
 | FR-16 | Thanh toán VietQR, tiền mặt, đối soát | BR-04, BR-05, BR-11 | `invoices`, `payment_transactions`, tệp minh chứng |
 | FR-17 | Báo hỏng và phân loại sự cố | BR-06, BR-11 | `maintenance_tickets`, `tenants`, `rooms`, `beds` |
 | FR-18 | Phân công thợ, hoàn thành, vật tư | BR-03, BR-06, BR-08, BR-11 | `maintenance_tickets`, `ticket_replacement_parts`, `staff_profiles` |
 | FR-19 | Vi phạm cá nhân, không thu tiền phạt trong web | BR-07, BR-08 | `violations`, `tenants` |
-| FR-20 | Đúng bốn KPI Dashboard | BR-01, BR-03, BR-05, BR-06 | `rooms`, `beds`, `invoices`, `maintenance_tickets` |
+| FR-20 | Đúng bốn KPI và bốn biểu đồ; dữ liệu biểu đồ độc lập chỉ được phép trong Prototype có nhãn minh họa | BR-01, BR-03, BR-04, BR-05, BR-06 | KPI: nghiệp vụ Mock Store/Backend; charts Prototype: `dashboardDemoData`; charts API thật: `rooms`, `beds`, lịch sử cư trú, `invoices`, `maintenance_tickets`, `facility_expenses` |
 | FR-21 | Đăng nhập CCCD/email và RBAC | BR-09, BR-11 | `users`, `tenants`, `staff_profiles`, JWT + Redis |
 | FR-22 | Đăng xuất | BR-11 | JWT/Redis (thu hồi token; không có Session SQL) |
 | FR-23 | Quản lý tài khoản Technician | BR-09, BR-11 | `users`, `staff_profiles`, Redis thu hồi token |
 | FR-24 | Đổi bằng mật khẩu cũ (không OTP); quên dùng OTP email | BR-09, BR-11 | `users`, email duy nhất, JWT/Redis OTP tạm thời (không có bảng OTP SQL) |
 | FR-25 | Thẻ phòng, người cùng phòng, quyền sau checkout | BR-04, BR-08, BR-11 | `tenants`, `rooms`, `beds`, `contracts`, `invoices` |
 | FR-26 | Tab hóa đơn của Tenant | BR-04, BR-05, BR-11 | `invoices`, `payment_transactions`, `contracts` |
-| FR-27 | Thông báo tự động và lịch sử vi phạm | BR-05, BR-07, BR-08, BR-11 | `notifications`, `violations`, `invoices` |
+| FR-27 | Thông báo tự động: từ chối đăng ký, duyệt/từ chối đổi xe, hóa đơn và lịch sử vi phạm | BR-05, BR-07, BR-08, BR-10, BR-11 | `notifications`, `violations`, `invoices`, `vehicles`, `vehicle_change_requests` (đề xuất) |
 
 ---
 
@@ -1081,6 +1132,29 @@ sequenceDiagram
     Note over U,S: Mất email: Tenant/Technician gặp Manager xác minh trực tiếp
 ```
 
+### 6.8. Tenant yêu cầu đổi xe giữ nguyên thẻ vật lý
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor T as Tenant
+    participant S as KTX Hub
+    actor M as Manager
+    T->>S: Yêu cầu đổi xe, khai xe mới + giấy tờ
+    S->>S: Tạo VehicleChangeRequest PENDING, giữ xe cũ ISSUED
+    M->>S: Xem xe hiện tại và xe đề nghị
+    alt Chấp nhận
+        M->>S: Duyệt đổi xe
+        S->>S: Atomic: xe cũ REPLACED, xe mới ISSUED cùng cardCode
+        S->>S: Yêu cầu APPROVED; lưu liên kết và thời điểm
+        S-->>T: Thông báo duyệt; vẫn giữ thẻ vật lý cũ
+    else Từ chối
+        M->>S: Nhập lý do, từ chối
+        S->>S: Yêu cầu REJECTED; xe cũ vẫn ISSUED
+        S-->>T: Thông báo lý do từ chối
+    end
+```
+
 ---
 
 ## 7. YÊU CẦU GIAO DIỆN NGOÀI (EXTERNAL INTERFACE REQUIREMENTS)
@@ -1161,11 +1235,11 @@ Các chỉ tiêu số dưới đây **được kế thừa từ SRS nền và l�
 | Bài toán | Cơ chế trong phạm vi |
 |---|---|
 | Quản lý vị trí ngủ | Room/Bed 4–6–8, Slot Key, kiểm soát chiếm chỗ và giới tính |
-| Theo dõi thu – chi | Doanh thu được xác nhận theo kỳ hóa đơn, chi phí cơ sở/vật tư sửa chữa, không tính cọc |
+| Theo dõi thu – chi | Doanh thu đã xác nhận theo kỳ hóa đơn; chi phí cơ sở/vật tư sửa chữa/tổng lương nhập thủ công; lợi nhuận ròng **ước tính từ dữ liệu ghi nhận** có chú thích; không tính cọc |
 | Cách ly giới tính | Backend từ chối xếp khách khác giới; không đổi chính sách phòng khi có chiếm chỗ |
 | Thu tiền VietQR và tiền mặt | QR theo hóa đơn, gửi chứng từ, Manager đối soát và xác nhận thủ công |
 | Điều phối sự cố | Ba mức ưu tiên, bốn trạng thái, Technician chỉ xử lý phiếu được giao |
-| Quản lý xe/thẻ vật lý | Tối đa một xe chưa thu hồi, mã thẻ có thể tái sử dụng sau thu hồi, không barrier |
+| Quản lý xe/thẻ vật lý | Tối đa một xe đang chờ/đã cấp; từ chối đăng ký có lý do; Tenant có thể gửi yêu cầu đổi xe, Manager duyệt để chuyển mã thẻ hiện tại sang xe mới mà giữ lịch sử; không barrier |
 
 ### 9.2. Những điểm bắt buộc đồng bộ sang ERD/Backend/Frontend
 
@@ -1177,11 +1251,12 @@ Bảng này là **ghi chú chuyển tiếp triển khai**, không thêm FR mới
 | Contract | Giữ Room/Bed UUID; snapshot thông tin ký; một Contract có nhiều lần gia hạn/phụ lục giá cố định; kỳ gia hạn tiếp nối đầu tháng; không sửa hóa đơn cũ |
 | Tenant/User | Tenant xác thực CCCD, staff xác thực email; **email duy nhất trên toàn hệ thống**, SĐT không UNIQUE; email Manager cố định; Tenant tạo hồ sơ ngày 01 khi onboarding; giữ tài khoản sau checkout; không có role `student` trong mô hình RBAC đích |
 | Invoice/Payment | Phát hành hóa đơn tháng đầu ngay trong onboarding, các kỳ sau ngày 25; due ngày 05; theo kỳ hợp đồng/phụ lục; 3 trạng thái; idempotent; `PAYMENT_TRANSACTION` ghi nhận cả tiền mặt và VietQR sau khi Manager xác nhận đã thu đủ, 0..1 bản ghi thu hoàn tất/hóa đơn |
-| Finance | Doanh thu `Đã thu` nhóm theo **billing_period**, chi phí theo ngày ghi nhận và hoàn thành sửa chữa; bỏ nhãn "lợi nhuận ròng" khỏi View/report |
-| Vehicle | Biển số/ảnh đăng ký có thể NULL tùy xe; một xe chưa thu hồi/Tenant; thẻ chỉ duy nhất giữa các xe chưa thu hồi và được cấp lại sau khi thu hồi |
+| Finance | Doanh thu `Đã thu` nhóm theo **billing_period**; chi phí theo ngày ghi nhận và hoàn thành sửa chữa; thêm nhóm `Lương nhân viên` do Manager nhập **tổng theo tháng**; cho hiển thị **“Lợi nhuận ròng (ước tính)”** kèm cảnh báo rõ giới hạn, đồng bộ công thức UI/PDF/XLSX |
+| Vehicle | Có `PENDING_CARD`, `ISSUED`, `REJECTED`, `REVOKED`, `REPLACED`, `CANCELLED`; `VehicleChangeRequest` riêng (`PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`) và quan hệ xe cũ/mới; duyệt đổi xe atomic chuyển cùng `cardCode`; lý do từ chối bắt buộc không minh chứng; notification; giới hạn một xe `ISSUED`/Tenant và một `ISSUED`/cardCode; chưa tự coi schema Backend đáp ứng |
 | Maintenance | Loại `Điện`, `Nước`, `Internet`, `Nội thất`, `Tiện ích`, `Khác`; thêm `Chưa phân công`, phân công lại; vật tư tên/số lượng/đơn giá, tính tổng tự động, có thể bằng 0 |
 | Auth | Một login form CCCD/email; Change Password dùng JWT + mật khẩu hiện tại (**không OTP**); Forgot Password dùng OTP email 5 phút qua Redis; JWT Access/Refresh và thu hồi token trên Redis; **không có bảng auth_sessions/auth_otps PostgreSQL**; Manager không có chức năng đổi email; nhân sự không cần username riêng |
-| Portal/Notifications | Quyền của Tenant sau checkout; danh sách người cùng phòng chỉ có họ tên/mã Bed; FR-27 chỉ các thông báo tự động, không có màn soạn thông báo của Manager |
+| Portal/Notifications | Quyền Tenant sau checkout; thông báo từ chối đăng ký xe, duyệt/từ chối yêu cầu đổi xe; Tenant có nút yêu cầu đổi xe nếu `ISSUED`; danh sách người cùng phòng chỉ họ tên/mã Bed; FR-27 chỉ thông báo tự động, không có màn soạn của Manager |
+| Dashboard/Analytics | Giữ đúng 4 KPI từ nghiệp vụ; thêm 4 biểu đồ (doanh thu 2 series kỳ vọng/đã thu). **Prototype** được dùng bộ số liệu chart minh họa riêng, không cần khớp Mock Store, phải có nhãn rõ và không tác động KPI/Finance. Chỉ khi tích hợp API thật mới yêu cầu ngày checkout thực tế và nguồn nghiệp vụ để vẽ chart |
 | Lưu tệp / Database | OCI private + URL có chữ ký tối đa 15 phút; lưu object key; bỏ `rooms.occupied_beds`, tính số đang ở từ `beds`; cho phép dựng lại Flyway baseline trên DB **chỉ có seed** trong đợt refactor Backend (không xóa dữ liệu khi chưa xác nhận môi trường) |
 
 ### 9.3. Các giới hạn được chủ động chấp nhận trong Phase 1
@@ -1191,7 +1266,8 @@ Bảng này là **ghi chú chuyển tiếp triển khai**, không thêm FR mới
 - Không thiết kế điều chỉnh/hủy hóa đơn phức tạp cho ngoại lệ trả phòng sớm sau khi kỳ tương lai đã phát hành; không làm quy trình đòi nợ, thanh toán một phần, trả dư/hoàn tiền.
 - Không làm workflow mất thẻ xe, quản lý phiên bản file scan, phê duyệt nhiều cấp, lịch sử riêng thay đổi email/reset mật khẩu.
 - Không có Manager soạn thông báo chung, thông báo SMS/Zalo/push, webhook ngân hàng, tự động nhận tiền hay thiết bị barrier.
-- Không làm accounting đầy đủ hoặc tuyên bố chỉ số thu – chi là lợi nhuận ròng thực tế.
+- Không làm payroll tự động, accounting đầy đủ, kê khai thuế hay kiểm toán; nhãn “Lợi nhuận ròng (ước tính)” luôn kèm giải thích chỉ tính các khoản thu và chi đã ghi nhận.
+- Không có luồng khiếu nại từ chối xe, không yêu cầu tải minh chứng từ chối, không xử lý mất thẻ riêng. **Có luồng Tenant chủ động yêu cầu đổi xe giữ nguyên thẻ, Manager chấp nhận/từ chối và bảo toàn lịch sử**; không tự đổi xe chưa qua duyệt.
 
 ### 9.4. Trạng thái tài liệu và lưu ý nghiệm thu
 
@@ -1199,4 +1275,4 @@ Bảng này là **ghi chú chuyển tiếp triển khai**, không thêm FR mới
 
 ---
 
-*Hết tài liệu SRS — KTX Hub / PDMS, phiên bản 3.2 — FINAL.*
+*Hết tài liệu SRS — KTX Hub / PDMS, phiên bản 3.4 — FINAL (cập nhật nghiệp vụ; chưa xác nhận triển khai).*
