@@ -78,7 +78,7 @@ export function checkout(state: LifecycleState, id: string, status: "AVAILABLE" 
       return { ...item, cardStatus: "Đã thu hồi" as const, status: "Đã thu hồi" as const, vehicleStatus: "REVOKED" as const, revokedAt: now };
     }
     if (s === "PENDING_CARD") {
-      return { ...item, cardStatus: "Đã thu hồi" as const, status: "Đã hủy" as const, vehicleStatus: "CANCELLED" as const, cancelledAt: now };
+      return { ...item, cardStatus: "Đã hủy" as const, status: "Đã hủy" as const, vehicleStatus: "CANCELLED" as const, cancelledAt: now };
     }
     return item;
   });

@@ -8,16 +8,24 @@ function fixture(): LifecycleState {
     tenants: [{ id: "tenant-1", userId: "user-1", name: "A", email: "a@example.invalid", phone: "0900000000", gender: "Nam", cccd: "012345678901", address: "A", room: "P.1", bed: "G01", start: "01/01/2026", end: "31/12/2099", monthlyRent: 1000000, deposit: 1000000, status: "Đang thuê" }],
     contracts: [{ id: "contract-1", tenantId: "tenant-1", tenantName: "A", roomId: "room-1", bedId: "bed-1", room: "P.1", bed: "G01", startDate: "2026-01-01", endDate: "2099-12-31", deposit: 1000000, monthlyRent: 1000000, status: "Hiệu lực" }],
     invoices: [{ id: "invoice-1", tenantId: "tenant-1", contractId: "contract-1", billingPeriod: "2026-01-01", tenant: "A", room: "P.1", bed: "G01", amount: 1000000, due: "05/01/2026", status: "Nợ" }],
-    vehicles: [{ id: "vehicle-1", tenantId: "tenant-1", plate: "", type: "Xe đạp", brand: "", color: "", cardStatus: "Chưa cấp thẻ" }], accounts: [],
+    vehicles: [
+      { id: "vehicle-pending", tenantId: "tenant-1", plate: "", type: "Xe đạp", brand: "", color: "", cardStatus: "Chưa cấp thẻ" },
+      { id: "vehicle-issued", tenantId: "tenant-1", plate: "59-X1 999.99", type: "Xe tay ga", brand: "Honda", color: "Đen", cardStatus: "Đã cấp thẻ", cardCode: "CARD-01" },
+    ], accounts: [],
     staff: [], tickets: [], violations: [], notifications: [], expenses: [],
   };
 }
-test("checkout retains debt and revokes pending vehicle while applying selected bed status", () => {
+test("checkout retains debt, cancels pending vehicle and revokes issued vehicle while applying selected bed status", () => {
   const before = fixture();
   const after = checkout(before, "contract-1", "MAINTENANCE");
   assert.equal(after.rooms[0].bedOverrides?.G01.status, "MAINTENANCE");
   assert.equal(after.tenants[0].status, "Đã trả phòng");
-  assert.equal(after.vehicles[0].cardStatus, "Đã thu hồi");
+  // PENDING_CARD becomes CANCELLED (Đã hủy)
+  assert.equal(after.vehicles[0].cardStatus, "Đã hủy");
+  assert.equal(after.vehicles[0].vehicleStatus, "CANCELLED");
+  // ISSUED becomes REVOKED (Đã thu hồi)
+  assert.equal(after.vehicles[1].cardStatus, "Đã thu hồi");
+  assert.equal(after.vehicles[1].vehicleStatus, "REVOKED");
   assert.equal(after.invoices[0].status, "Nợ");
   assert.equal(before.rooms[0].bedOverrides?.G01.status, "OCCUPIED");
 });
