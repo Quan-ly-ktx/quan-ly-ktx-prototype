@@ -23,6 +23,9 @@ export function RoomsPage({
   onCreateRoom,
   onUpdateRoom,
   onDeleteRoom,
+  onDeleteMistakenRoom,
+  onArchiveRoom,
+  onRestoreRoom,
   onUpdateBedStatus,
   tenants,
   onQuickOnboard,
@@ -33,12 +36,16 @@ export function RoomsPage({
   onCreateRoom?: (room: RoomRecord) => Promise<RoomRecord>;
   onUpdateRoom?: (id: string, room: RoomRecord) => Promise<RoomRecord>;
   onDeleteRoom?: (id: string) => Promise<void>;
+  onDeleteMistakenRoom?: (id: string) => Promise<void>;
+  onArchiveRoom?: (id: string) => Promise<void>;
+  onRestoreRoom?: (id: string) => Promise<RoomRecord>;
   onUpdateBedStatus?: (bedId: string, status: BedStatus) => Promise<void>;
   tenants: TenantRecord[];
   onQuickOnboard?: (roomCode: string, bedCode: string) => void;
   showToast: (message: string) => void;
 }) {
   const { contracts } = useDormData();
+  const [roomTab, setRoomTab] = useState<"active" | "archived">("active");
   const [viewMode, setViewMode] = useState<"matrix" | "table">("matrix");
   const [floor, setFloor] = useState("Tất cả");
   const [gender, setGender] = useState("Tất cả");
@@ -52,6 +59,7 @@ export function RoomsPage({
   const [deleteRoom, setDeleteRoom] = useState<RoomRecord | null>(null);
 
   const activeRooms = rooms.filter((r) => !r.deletedAt);
+  const archivedRooms = rooms.filter((r) => Boolean(r.deletedAt));
 
   const availableFloors = Array.from(
     new Set(activeRooms.map((r) => Number(r.floor))),
@@ -176,6 +184,35 @@ export function RoomsPage({
     }
   };
 
+  const handleConfirmMistakenDelete = async (roomToDelete: RoomRecord) => {
+    try {
+      if (onDeleteMistakenRoom) {
+        await onDeleteMistakenRoom(roomToDelete.id);
+      } else {
+        await onRoomsChange(rooms.filter((r) => r.id !== roomToDelete.id));
+      }
+      showToast(`Đã xóa vĩnh viễn phòng ${roomToDelete.code}. Mã phòng đã được giải phóng.`);
+      setDeleteRoom(null);
+      if (selectedRoom?.id === roomToDelete.id) setSelectedRoom(null);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Xóa phòng thất bại");
+    }
+  };
+
+  const handleRestoreRoom = async (roomToRestore: RoomRecord) => {
+    try {
+      if (onRestoreRoom) {
+        await onRestoreRoom(roomToRestore.id);
+      } else {
+        const updated = rooms.map((r) => r.id === roomToRestore.id ? { ...r, deletedAt: undefined } : r);
+        await onRoomsChange(updated);
+      }
+      showToast(`Đã khôi phục phòng ${roomToRestore.code} vào sơ đồ hoạt động`);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Khôi phục phòng thất bại");
+    }
+  };
+
   const handleToggleBedMaintenance = async (
     room: RoomRecord,
     bedCode: string,
@@ -233,6 +270,20 @@ export function RoomsPage({
         description="Theo dõi trực quan sơ đồ ma trận phòng, quản lý danh mục và cấu hình tiện nghi theo thời gian thực."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-sm border border-slate-200 bg-slate-100 p-0.5">
+              <Button
+                className={`h-8.5 rounded-sm px-3 text-xs font-semibold ${roomTab === "active" ? "bg-white text-brand-700 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
+                onClick={() => setRoomTab("active")}
+              >
+                Đang hoạt động ({activeRooms.length})
+              </Button>
+              <Button
+                className={`h-8.5 rounded-sm px-3 text-xs font-semibold ${roomTab === "archived" ? "bg-white text-brand-700 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
+                onClick={() => setRoomTab("archived")}
+              >
+                Đã lưu trữ ({archivedRooms.length})
+              </Button>
+            </div>
             <div className="flex rounded-sm border border-slate-200 bg-slate-100 p-0.5">
               <Button
                 className={`flex h-8.5 items-center gap-1.5 rounded-sm px-3 text-xs font-semibold ${
@@ -381,7 +432,58 @@ export function RoomsPage({
           </div>
         </div>
       </section>
-
+      {roomTab === "archived" ? (
+        <section className="rounded-sm border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="mb-4">
+            <h2 className="font-heading text-base font-bold text-slate-950">
+              Danh sách phòng trong kho lưu trữ
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Các phòng này đã ngừng hoạt động và được bảo toàn mã phòng, giường và lịch sử theo SRS FR-04. Bấm "Khôi phục" để đưa lại vào sơ đồ ma trận.
+            </p>
+          </div>
+          {archivedRooms.length === 0 ? (
+            <div className="p-8 text-center text-sm text-slate-500">
+              Chưa có phòng nào trong danh sách lưu trữ.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Mã phòng</th>
+                    <th className="px-4 py-3">Vị trí</th>
+                    <th className="px-4 py-3">Loại phòng</th>
+                    <th className="px-4 py-3">Chính sách</th>
+                    <th className="px-4 py-3">Thời điểm lưu trữ</th>
+                    <th className="px-4 py-3 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {archivedRooms.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3.5 font-mono font-bold text-slate-900">{r.code}</td>
+                      <td className="px-4 py-3.5 text-slate-600">Tầng {r.floor}</td>
+                      <td className="px-4 py-3.5 text-slate-600">{r.type} ({r.total} giường)</td>
+                      <td className="px-4 py-3.5 text-slate-600">Phòng {r.gender}</td>
+                      <td className="px-4 py-3.5 font-mono text-xs text-slate-500">{r.deletedAt}</td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Button
+                          className="h-8 rounded-sm bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
+                          onClick={() => void handleRestoreRoom(r)}
+                        >
+                          Khôi phục phòng
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : (
+        <>
       {viewMode === "matrix" && (
         <RoomMatrixView
           filteredRooms={filteredRooms}
@@ -402,7 +504,8 @@ export function RoomsPage({
           onDeleteRoom={setDeleteRoom}
         />
       )}
-
+        </>
+      )}
       <RoomDetailDrawer
         room={selectedRoomWithOcc}
         tenants={tenants}
@@ -427,8 +530,10 @@ export function RoomsPage({
       {deleteRoom && (
         <DeleteRoomModal
           room={deleteRoom}
+          hasHistory={contracts.some((c) => c.roomId === deleteRoom.id)}
           onClose={() => setDeleteRoom(null)}
           onConfirm={handleConfirmArchive}
+          onDeleteMistaken={handleConfirmMistakenDelete}
         />
       )}
     </>

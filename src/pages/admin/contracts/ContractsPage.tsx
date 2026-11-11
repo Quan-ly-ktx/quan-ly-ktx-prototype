@@ -36,6 +36,16 @@ export function ContractsPage({ contracts, onRenewContract, onCheckoutContract, 
   };
   const upload = async (files: FileList | null) => {
     if (!selected || !files?.length) return;
+    for (const file of Array.from(files)) {
+      if (!/\.(jpe?g|png|webp|pdf|docx?)$/i.test(file.name)) {
+        showToast(`Tệp ${file.name} không đúng định dạng (.jpg, .png, .webp, .pdf, .docx).`);
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showToast(`Tệp ${file.name} vượt quá dung lượng tối đa 10 MB.`);
+        return;
+      }
+    }
     await perform(async () => {
       const documents = await Promise.all(Array.from(files, async (file): Promise<ContractDocumentRecord> => ({
         id: crypto.randomUUID(), contractId: selected.id, name: file.name, size: file.size, type: file.type,
