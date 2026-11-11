@@ -16,6 +16,9 @@ export interface DormService {
   createRoom(room: RoomRecord): Promise<RoomRecord>;
   updateRoom(id: string, room: RoomRecord): Promise<RoomRecord>;
   deleteRoom(id: string): Promise<void>;
+  deleteMistakenRoom(id: string): Promise<void>;
+  archiveRoom(id: string): Promise<void>;
+  restoreRoom(id: string): Promise<RoomRecord>;
   updateBedStatus(bedId: string, status: BedStatus): Promise<void>;
   getTenants(): Promise<TenantRecord[]>;
   getExpenses(): Promise<FacilityExpense[]>;
@@ -35,7 +38,7 @@ export interface DormService {
   checkoutContract(id: string, bedStatus: "AVAILABLE" | "MAINTENANCE"): Promise<void>;
   addContractDocuments(id: string, documents: ContractDocumentRecord[]): Promise<void>;
   deleteContractDocument(id: string, documentId: string): Promise<void>;
-  updateTenantProfile(id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">): Promise<TenantRecord>;
+  updateTenantProfile(id: string, profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>, actorRole?: "manager" | "tenant"): Promise<TenantRecord>;
   createTicket(ticket: Omit<Ticket, "id">): Promise<Ticket>;
   updateTicket(id: string, patch: Partial<Ticket>, actorStaffId?: string): Promise<Ticket>;
   saveRooms(rooms: RoomRecord[]): Promise<RoomRecord[]>;
@@ -44,6 +47,9 @@ export interface DormService {
   rejectInvoiceProof(id: string): Promise<Invoice>;
   confirmInvoiceProof(id: string, managerStaffId: string): Promise<Invoice>;
   confirmPayment(invoiceId: string, manager: string): Promise<Invoice>;
+  getBusinessDate(): string;
+  setBusinessDate(date?: string): void;
+  checkDueReminders?(asOfDate?: string): Promise<number>;
 }
 
 export const dormService: DormService = env.USE_MOCK

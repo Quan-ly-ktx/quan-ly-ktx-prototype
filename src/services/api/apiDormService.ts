@@ -38,7 +38,7 @@ class ApiDormServiceImpl implements DormService {
   async checkoutContract(_id: string, _status: "AVAILABLE" | "MAINTENANCE"): Promise<void> { throw new Error("API thanh lý chưa được thống nhất."); }
   async addContractDocuments(_id: string, _documents: ContractDocumentRecord[]): Promise<void> { throw new Error("API tài liệu hợp đồng chưa được thống nhất."); }
   async deleteContractDocument(_id: string, _documentId: string): Promise<void> { throw new Error("API tài liệu hợp đồng chưa được thống nhất."); }
-  async updateTenantProfile(_id: string, _profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">): Promise<TenantRecord> { throw new Error("API cập nhật hồ sơ chưa được thống nhất."); }
+  async updateTenantProfile(_id: string, _profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>, _actorRole?: "manager" | "tenant"): Promise<TenantRecord> { throw new Error("API cập nhật hồ sơ chưa được thống nhất."); }
   async getRooms(): Promise<RoomRecord[]> {
     const res = await httpClient.get<SingleResponse<RoomDetailResponse[]> | RoomDetailResponse[]>(
       "/admin/rooms/matrix",
@@ -70,6 +70,9 @@ class ApiDormServiceImpl implements DormService {
   async deleteRoom(id: string): Promise<void> {
     await httpClient.delete<void>(`/admin/rooms/${id}`);
   }
+  async deleteMistakenRoom(_id: string): Promise<void> { throw new Error("API xóa phòng nhầm chưa được thống nhất."); }
+  async archiveRoom(id: string): Promise<void> { await this.deleteRoom(id); }
+  async restoreRoom(_id: string): Promise<RoomRecord> { throw new Error("API khôi phục phòng chưa được thống nhất."); }
 
   async updateBedStatus(bedId: string, status: BedStatus): Promise<void> {
     const payload: UpdateBedStatusRequest = {
@@ -111,6 +114,9 @@ class ApiDormServiceImpl implements DormService {
   async confirmInvoiceProof(_id: string, _managerStaffId: string): Promise<Invoice> { throw new Error("API minh chứng chưa được thống nhất."); }
 
   async confirmPayment(_invoiceId: string, _managerStaffId: string): Promise<Invoice> { throw new Error("API xác nhận tiền mặt chưa được thống nhất."); }
+  getBusinessDate(): string { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
+  setBusinessDate(_date?: string): void {}
+  async checkDueReminders(_asOfDate?: string): Promise<number> { return 0; }
 }
 
 export const apiDormService = new ApiDormServiceImpl();

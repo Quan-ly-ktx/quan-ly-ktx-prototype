@@ -2,9 +2,10 @@ import type { DormService } from "../dormService.ts";
 import type { RoomRecord, BedStatus, TenantRecord, Invoice, Ticket } from "../../types/index.ts";
 import type { ContractDocumentRecord, ContractRecord, OnboardingInput, TenantVehicle } from "../../types/tenant.ts";
 import type { FacilityExpense, PaymentProof } from "../../types/invoice.ts";
-import { onboard, renew, checkout } from "./contractLifecycle.ts";
+import { onboard, renew, checkout, getDemoDate, setDemoDate } from "./contractLifecycle.ts";
 import { demoEmailAvailable } from "./mockAuth.ts";
 import { getMockSnapshot, updateMockSnapshot, resetMockSnapshot, type MockSnapshot } from "./mockStore.ts";
+import { calculateOverdueDays } from "../../utils/invoiceCalculations.ts";
 
 function bedIds(room: RoomRecord): RoomRecord {
   return { ...room, bedOverrides: Object.fromEntries(Array.from({ length: room.total }, (_, index) => {
@@ -14,19 +15,21 @@ function bedIds(room: RoomRecord): RoomRecord {
   })) };
 }
 
-function validateTicket(ticket: Ticket, state: MockSnapshot): void {
+function validateNewTicket(ticket: Omit<Ticket, "id">, state: MockSnapshot): void {
   const tenant = state.tenants.find((item) => item.id === ticket.reporterTenantId);
   if (!tenant || tenant.status === "Đã trả phòng") throw new Error("Người báo không còn cư trú.");
   const room = state.rooms.find((item) => item.id === ticket.roomId);
   if (!room || room.deletedAt) throw new Error("Không tìm thấy phòng của phiếu.");
   if (!state.contracts.some((contract) => contract.tenantId === tenant.id && contract.roomId === room.id && contract.status !== "Đã thanh lý")) throw new Error("Người báo không cư trú tại phòng.");
   if (ticket.bedId && !Object.values(room.bedOverrides ?? {}).some((bed) => bed.id === ticket.bedId)) throw new Error("Giường không thuộc phòng của phiếu.");
-  if (ticket.assigneeStaffId && !state.staff.some((staff) => staff.id === ticket.assigneeStaffId && staff.active && state.accounts.some((account) => account.id === staff.userId && account.role === "technician" && account.status !== "INACTIVE" && account.status !== "LOCKED"))) throw new Error("Không tìm thấy kỹ thuật viên đang hoạt động.");
 }
 function ticketDisplay(ticket: Ticket, state: MockSnapshot): Ticket {
-  validateTicket(ticket, state);
-  const tenant = state.tenants.find((item) => item.id === ticket.reporterTenantId)!;
-  const room = state.rooms.find((item) => item.id === ticket.roomId)!;
+  const tenant = state.tenants.find((item) => item.id === ticket.reporterTenantId);
+  if (!tenant) throw new Error("Không tìm thấy người báo của phiếu.");
+  const room = state.rooms.find((item) => item.id === ticket.roomId);
+  if (!room) throw new Error("Không tìm thấy phòng của phiếu.");
+  if (ticket.bedId && !Object.values(room.bedOverrides ?? {}).some((bed) => bed.id === ticket.bedId)) throw new Error("Giường không thuộc phòng của phiếu.");
+  if (ticket.assigneeStaffId && !state.staff.some((staff) => staff.id === ticket.assigneeStaffId && staff.active && state.accounts.some((account) => account.id === staff.userId && account.role === "technician" && account.status !== "INACTIVE" && account.status !== "LOCKED"))) throw new Error("Không tìm thấy kỹ thuật viên đang hoạt động.");
   const bed = Object.entries(room.bedOverrides ?? {}).find(([, item]) => item.id === ticket.bedId)?.[0];
   return { ...ticket, reporter: tenant.name, phone: tenant.phone, room: room.code, bed, assignee: state.staff.find((item) => item.id === ticket.assigneeStaffId)?.fullName };
 }
@@ -62,16 +65,69 @@ class MockDormServiceImpl implements DormService {
     if (!this.state.expenses.some((item) => item.id === id)) throw new Error("Không tìm thấy chi phí.");
     this.commit({ ...this.state, expenses: this.state.expenses.filter((item) => item.id !== id) });
   }
-  async updateTenantProfile(id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">): Promise<TenantRecord> {
+  async updateTenantProfile(
+    id: string,
+    profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>,
+    actorRole?: "manager" | "tenant"
+  ): Promise<TenantRecord> {
     const tenant = this.state.tenants.find((item) => item.id === id);
     if (!tenant) throw new Error("Không tìm thấy hồ sơ.");
-    if (!profile.name.trim() || !profile.address.trim() || !/^0\d{9}$/.test(profile.phone) || !/^\d{12}$/.test(profile.cccd) || !/^\S+@\S+\.\S+$/.test(profile.email)) throw new Error("Thông tin hồ sơ không hợp lệ.");
-    if (this.state.tenants.some((item) => item.id !== id && item.cccd === profile.cccd) || !demoEmailAvailable(profile.email, id)) throw new Error("CCCD hoặc email đã được sử dụng.");
+
+    if (actorRole === "tenant") {
+      if (profile.name !== undefined || profile.cccd !== undefined || profile.gender !== undefined || profile.email !== undefined) {
+        throw new Error("Người thuê chỉ được phép chỉnh sửa số điện thoại, địa chỉ và liên hệ khẩn cấp.");
+      }
+      if (profile.phone && !/^0\d{9}$/.test(profile.phone.trim())) throw new Error("Số điện thoại không hợp lệ (phải gồm 10 chữ số bắt đầu bằng 0).");
+      if (profile.emergencyContactPhone && !/^0\d{9}$/.test(profile.emergencyContactPhone.trim())) throw new Error("Số điện thoại liên hệ khẩn cấp không hợp lệ.");
+      if (profile.address !== undefined && !profile.address.trim()) throw new Error("Địa chỉ thường trú không được để trống.");
+      const updated: TenantRecord = {
+        ...tenant,
+        phone: profile.phone?.trim() ?? tenant.phone,
+        address: profile.address?.trim() ?? tenant.address,
+        emergencyContactName: profile.emergencyContactName?.trim() ?? tenant.emergencyContactName,
+        emergencyContactPhone: profile.emergencyContactPhone?.trim() ?? tenant.emergencyContactPhone,
+      };
+      this.commit({
+        ...this.state,
+        tenants: this.state.tenants.map((item) => item.id === id ? updated : item),
+      });
+      return updated;
+    }
+
+    const name = profile.name?.trim() ?? tenant.name;
+    const address = profile.address?.trim() ?? tenant.address;
+    const phone = profile.phone?.trim() ?? tenant.phone;
+    const cccd = profile.cccd?.trim() ?? tenant.cccd;
+    const email = profile.email?.trim().toLowerCase() ?? tenant.email;
+    const gender = profile.gender ?? tenant.gender;
+
+    if (!name || !address || !/^0\d{9}$/.test(phone) || !/^\d{12}$/.test(cccd) || !/^\S+@\S+\.\S+$/.test(email)) {
+      throw new Error("Thông tin hồ sơ không hợp lệ.");
+    }
+    if (this.state.tenants.some((item) => item.id !== id && item.cccd === cccd) || !demoEmailAvailable(email, id)) {
+      throw new Error("CCCD hoặc email đã được sử dụng.");
+    }
     const currentContract = this.state.contracts.find((contract) => contract.tenantId === id && contract.status !== "Đã thanh lý");
     const room = currentContract && this.state.rooms.find((item) => item.id === currentContract.roomId);
-    if (tenant.status !== "Đã trả phòng" && room && room.gender !== profile.gender) throw new Error("Giới tính không phù hợp với phòng đang thuê.");
-    const updated = { ...tenant, ...profile, email: profile.email.trim().toLowerCase(), name: profile.name.trim() };
-    this.commit({ ...this.state, tenants: this.state.tenants.map((item) => item.id === id ? updated : item), accounts: this.state.accounts.map((item) => item.id === tenant.userId ? { ...item, identifier: updated.cccd, email: updated.email, name: updated.name } : item) });
+    if (tenant.status !== "Đã trả phòng" && room && room.gender !== gender) {
+      throw new Error("Giới tính không phù hợp với phòng đang thuê.");
+    }
+    const updated: TenantRecord = {
+      ...tenant,
+      name,
+      address,
+      phone,
+      cccd,
+      email,
+      gender,
+      emergencyContactName: profile.emergencyContactName?.trim() ?? tenant.emergencyContactName,
+      emergencyContactPhone: profile.emergencyContactPhone?.trim() ?? tenant.emergencyContactPhone,
+    };
+    this.commit({
+      ...this.state,
+      tenants: this.state.tenants.map((item) => item.id === id ? updated : item),
+      accounts: this.state.accounts.map((item) => item.id === tenant.userId ? { ...item, identifier: updated.cccd, email: updated.email, name: updated.name } : item),
+    });
     return updated;
   }
   async getTickets() { return [...this.state.tickets]; }
@@ -83,8 +139,26 @@ class MockDormServiceImpl implements DormService {
     if (!vehicle.id || vehicle.cardStatus !== "Chưa cấp thẻ" || vehicle.cardCode) throw new Error("Phương tiện mới phải ở trạng thái chờ cấp thẻ.");
     if (this.state.vehicles.some((item) => item.id === vehicle.id)) throw new Error("Mã phương tiện đã tồn tại.");
     if (this.state.vehicles.some((item) => item.tenantId === tenant.id && item.cardStatus !== "Đã thu hồi")) throw new Error("Người thuê đã có phương tiện chưa thu hồi.");
-    this.commit({ ...this.state, vehicles: [vehicle, ...this.state.vehicles] });
-    return vehicle;
+    if (!vehicle.brand?.trim() || !vehicle.color?.trim()) throw new Error("Hãng xe và màu sắc là bắt buộc.");
+    const requiresRegistration = vehicle.type !== "Xe đạp" && vehicle.type !== "Xe đạp điện";
+    if (requiresRegistration) {
+      if (!vehicle.plate?.trim() || !/^[0-9A-Z .-]{6,14}$/.test(vehicle.plate.trim().toUpperCase())) {
+        throw new Error("Biển số xe là bắt buộc đối với loại xe có đăng ký.");
+      }
+      if (!vehicle.registrationFront || !vehicle.registrationBack) {
+        throw new Error("Bắt buộc phải có đủ 2 mặt ảnh giấy đăng ký xe.");
+      }
+    } else if (vehicle.plate?.trim() && !/^[0-9A-Z .-]{6,14}$/.test(vehicle.plate.trim().toUpperCase())) {
+      throw new Error("Biển số xe không hợp lệ.");
+    }
+    const cleanVehicle = {
+      ...vehicle,
+      plate: vehicle.plate?.trim().toUpperCase() || "",
+      brand: vehicle.brand.trim(),
+      color: vehicle.color.trim(),
+    };
+    this.commit({ ...this.state, vehicles: [cleanVehicle, ...this.state.vehicles] });
+    return cleanVehicle;
   }
   private async updateVehicle(id: string, patch: Partial<TenantVehicle>) {
     const current = this.state.vehicles.find((vehicle) => vehicle.id === id);
@@ -145,10 +219,37 @@ class MockDormServiceImpl implements DormService {
     const updated = { ...original, ...room, code, id, bedOverrides: original.bedOverrides };
     this.commit({ ...this.state, rooms: this.state.rooms.map((item) => item.id === id ? updated : item) }); return updated;
   }
-  async deleteRoom(id: string) {
-    if (!this.state.rooms.some((room) => room.id === id)) throw new Error("Không tìm thấy phòng.");
-    if (this.state.contracts.some((contract) => contract.roomId === id && contract.status !== "Đã thanh lý")) throw new Error("Phòng còn hợp đồng hiệu lực.");
-    this.commit({ ...this.state, rooms: this.state.rooms.map((room) => room.id === id ? { ...room, deletedAt: new Date().toISOString() } : room) });
+  async deleteMistakenRoom(id: string): Promise<void> {
+    const room = this.state.rooms.find((r) => r.id === id);
+    if (!room) throw new Error("Không tìm thấy phòng.");
+    const hasContracts = this.state.contracts.some((c) => c.roomId === id);
+    const hasTickets = this.state.tickets.some((t) => t.roomId === id);
+    if (hasContracts || hasTickets) {
+      throw new Error("Phòng đã có lịch sử nghiệp vụ (hợp đồng hoặc sự cố), không thể xóa vĩnh viễn. Vui lòng đưa vào lưu trữ.");
+    }
+    this.commit({ ...this.state, rooms: this.state.rooms.filter((r) => r.id !== id) });
+  }
+  async archiveRoom(id: string): Promise<void> {
+    const room = this.state.rooms.find((r) => r.id === id);
+    if (!room) throw new Error("Không tìm thấy phòng.");
+    if (room.deletedAt) throw new Error("Phòng đã ở trạng thái lưu trữ.");
+    if (this.state.contracts.some((c) => c.roomId === id && c.status !== "Đã thanh lý")) {
+      throw new Error("Phòng còn hợp đồng hiệu lực, không thể đưa vào lưu trữ.");
+    }
+    this.commit({ ...this.state, rooms: this.state.rooms.map((r) => r.id === id ? { ...r, deletedAt: new Date().toISOString() } : r) });
+  }
+  async restoreRoom(id: string): Promise<RoomRecord> {
+    const room = this.state.rooms.find((r) => r.id === id);
+    if (!room || !room.deletedAt) throw new Error("Không tìm thấy phòng trong danh sách lưu trữ.");
+    if (this.state.rooms.some((r) => r.id !== id && !r.deletedAt && r.code.toUpperCase() === room.code.toUpperCase())) {
+      throw new Error("Mã phòng đang bị trùng với một phòng đang hoạt động.");
+    }
+    const restored: RoomRecord = { ...room, deletedAt: undefined };
+    this.commit({ ...this.state, rooms: this.state.rooms.map((r) => r.id === id ? restored : r) });
+    return restored;
+  }
+  async deleteRoom(id: string): Promise<void> {
+    await this.archiveRoom(id);
   }
   async updateBedStatus(bedId: string, status: BedStatus) {
     if (status !== "AVAILABLE" && status !== "MAINTENANCE") throw new Error("Trạng thái thuê chỉ thay đổi qua tiếp nhận hoặc trả phòng");
@@ -161,6 +262,7 @@ class MockDormServiceImpl implements DormService {
   }
   async createTicket(ticket: Omit<Ticket, "id">) {
     if (ticket.status !== "Chưa phân công" || ticket.assigneeStaffId) throw new Error("Phiếu mới phải chưa phân công.");
+    validateNewTicket(ticket, this.state);
     const created = ticketDisplay({ ...ticket, id: crypto.randomUUID() }, this.state);
     this.commit({ ...this.state, tickets: [created, ...this.state.tickets] });
     return created;
@@ -176,6 +278,24 @@ class MockDormServiceImpl implements DormService {
     if (changed && !((old.status === "Chưa phân công" && target === "Mới giao" && !!patch.assigneeStaffId) || (old.status === "Mới giao" && target === "Đang xử lý") || (old.status === "Đang xử lý" && target === "Hoàn thành") || (old.status === "Đang xử lý" && target === "Mới giao" && reassigned))) throw new Error("Chuyển trạng thái phiếu không hợp lệ.");
     if ((actorStaffId || (changed && (target === "Đang xử lý" || target === "Hoàn thành"))) && (!actorStaffId || actorStaffId !== old.assigneeStaffId || reassigned)) throw new Error("Chỉ kỹ thuật viên hiện được giao có thể xử lý phiếu.");
     if (target !== "Chưa phân công" && !(patch.assigneeStaffId ?? old.assigneeStaffId)) throw new Error("Phiếu cần được phân công.");
+    if (target === "Hoàn thành") {
+      const resolution = patch.resolution ?? old.resolution;
+      const photo = patch.completionPhoto ?? old.completionPhoto;
+      if (!resolution || !resolution.trim() || !photo) {
+        throw new Error("Phiếu hoàn thành bắt buộc phải có kết quả xử lý và ảnh nghiệm thu.");
+      }
+      const parts = patch.parts ?? old.parts ?? [];
+      for (const part of parts) {
+        if (!part.name || !part.name.trim() || !Number.isSafeInteger(part.quantity) || part.quantity <= 0 || !Number.isSafeInteger(part.unitCost) || part.unitCost < 0) {
+          throw new Error("Thông tin linh kiện, số lượng hoặc đơn giá không hợp lệ.");
+        }
+      }
+      const expectedTotal = parts.reduce((sum, p) => sum + p.quantity * p.unitCost, 0);
+      const cost = patch.cost ?? old.cost ?? 0;
+      if (cost !== expectedTotal) {
+        throw new Error("Tổng chi phí vật tư không khớp với danh mục linh kiện.");
+      }
+    }
     const updated = ticketDisplay({ ...old, ...patch, id }, this.state);
     this.commit({ ...this.state, tickets: this.state.tickets.map((item) => item.id === id ? updated : item) });
     return updated;
@@ -202,7 +322,18 @@ class MockDormServiceImpl implements DormService {
       const renewal = contract.renewals?.find((item) => item.startDate <= billingPeriod && item.endDate >= billingPeriod);
       return { id: crypto.randomUUID(), contractId: contract.id, billingPeriod, tenantId: tenant.id, tenant: tenant.name, room: contract.room, bed: contract.bed, amount: renewal?.monthlyRent ?? contract.monthlyRent, due: `05/${billingPeriod.slice(5, 7)}/${billingPeriod.slice(0, 4)}`, status: "Nợ" as const, kind: `Tiền phòng tháng ${billingPeriod.slice(5, 7)}` };
     });
-    if (issued.length) this.commit({ ...state, invoices: [...issued, ...state.invoices] });
+    if (issued.length) {
+      const newNotis = issued.map((inv) => ({
+        id: `NOTI-${crypto.randomUUID()}`,
+        tenantId: inv.tenantId!,
+        title: "Phát hành hóa đơn tiền phòng",
+        body: `Hóa đơn kỳ ${inv.billingPeriod} (${inv.amount.toLocaleString("vi-VN")} đ) đã được phát hành. Hạn thanh toán: ${inv.due}.`,
+        time: new Date().toISOString(),
+        read: false,
+        type: "general" as const,
+      }));
+      this.commit({ ...state, invoices: [...issued, ...state.invoices], notifications: [...newNotis, ...state.notifications] });
+    }
     return issued;
   }
   async submitInvoiceProof(id: string, tenantId: string, proof: PaymentProof): Promise<Invoice> {
@@ -214,21 +345,110 @@ class MockDormServiceImpl implements DormService {
     return this.updateInvoice(id, { status: "Chờ xác nhận", proof });
   }
   async rejectInvoiceProof(id: string): Promise<Invoice> {
-    return this.updateInvoice(id, { status: "Nợ", proof: undefined });
+    const invoice = this.state.invoices.find((item) => item.id === id);
+    if (!invoice) throw new Error("Không tìm thấy hóa đơn.");
+    const updated = await this.updateInvoice(id, { status: "Nợ", proof: undefined });
+    if (invoice.tenantId) {
+      const noti = {
+        id: `NOTI-${crypto.randomUUID()}`,
+        tenantId: invoice.tenantId,
+        title: "Minh chứng thanh toán bị từ chối",
+        body: `Minh chứng thanh toán cho hóa đơn ${invoice.id} (${invoice.amount.toLocaleString("vi-VN")} đ) đã bị từ chối. Vui lòng kiểm tra và gửi lại.`,
+        time: new Date().toISOString(),
+        read: false,
+        type: "general" as const,
+      };
+      this.commit({ ...this.state, notifications: [noti, ...this.state.notifications] });
+    }
+    return updated;
   }
   async confirmInvoiceProof(id: string, managerStaffId: string): Promise<Invoice> {
     const state = this.state;
     const manager = managerFor(state, managerStaffId);
     const invoice = state.invoices.find((item) => item.id === id);
     if (!invoice) throw new Error("Không tìm thấy hóa đơn.");
-    return this.updateInvoice(id, { status: "Đã thu", payment: { amount: invoice.amount, method: "Trực tuyến", paidAt: new Date().toISOString(), confirmedBy: manager.fullName, confirmedByStaffId: manager.id } });
+    const updated = await this.updateInvoice(id, { status: "Đã thu", payment: { amount: invoice.amount, method: "Trực tuyến", paidAt: new Date().toISOString(), confirmedBy: manager.fullName, confirmedByStaffId: manager.id } });
+    if (invoice.tenantId) {
+      const noti = {
+        id: `NOTI-${crypto.randomUUID()}`,
+        tenantId: invoice.tenantId,
+        title: "Xác nhận thanh toán thành công",
+        body: `Hóa đơn ${invoice.id} (${invoice.amount.toLocaleString("vi-VN")} đ) đã được xác nhận thanh toán chuyển khoản.`,
+        time: new Date().toISOString(),
+        read: false,
+        type: "general" as const,
+      };
+      this.commit({ ...this.state, notifications: [noti, ...this.state.notifications] });
+    }
+    return updated;
   }
   async confirmPayment(id: string, managerStaffId: string) {
     const manager = managerFor(this.state, managerStaffId);
     const invoice = this.state.invoices.find((item) => item.id === id);
     if (!invoice || invoice.status !== "Nợ" || invoice.payment) throw new Error("Chỉ có thể xác nhận tiền mặt cho hóa đơn đang nợ");
     const updated: Invoice = { ...invoice, status: "Đã thu", payment: { amount: invoice.amount, method: "Tiền mặt", paidAt: new Date().toISOString(), confirmedBy: manager.fullName, confirmedByStaffId: manager.id } };
-    this.commit({ ...this.state, invoices: this.state.invoices.map((item) => item.id === id ? updated : item) }); return updated;
+    const noti = invoice.tenantId ? {
+      id: `NOTI-${crypto.randomUUID()}`,
+      tenantId: invoice.tenantId,
+      title: "Xác nhận thanh toán thành công",
+      body: `Hóa đơn ${invoice.id} (${invoice.amount.toLocaleString("vi-VN")} đ) đã được xác nhận thanh toán tiền mặt.`,
+      time: new Date().toISOString(),
+      read: false,
+      type: "general" as const,
+    } : null;
+    this.commit({
+      ...this.state,
+      invoices: this.state.invoices.map((item) => item.id === id ? updated : item),
+      notifications: noti ? [noti, ...this.state.notifications] : this.state.notifications,
+    });
+    return updated;
+  }
+  getBusinessDate(): string { return getDemoDate(); }
+  setBusinessDate(date?: string): void { setDemoDate(date); }
+  async checkDueReminders(asOfDate?: string): Promise<number> {
+    const today = asOfDate ?? this.getBusinessDate();
+    const debts = this.state.invoices.filter((inv) => inv.status === "Nợ" && inv.tenantId);
+    let count = 0;
+    const newNotis = [];
+    for (const inv of debts) {
+      const overdueDays = calculateOverdueDays(inv.due, inv.status, today);
+      if (overdueDays > 0) {
+        const notiId = `NOTI-OVERDUE-${inv.id}`;
+        if (!this.state.notifications.some((n) => n.id === notiId)) {
+          newNotis.push({
+            id: notiId,
+            tenantId: inv.tenantId!,
+            title: "Thông báo hóa đơn quá hạn",
+            body: `Hóa đơn ${inv.id} (${inv.amount.toLocaleString("vi-VN")} đ) đã quá hạn thanh toán ${overdueDays} ngày. Vui lòng thanh toán sớm nhất.`,
+            time: new Date().toISOString(),
+            read: false,
+            type: "general" as const,
+          });
+          count++;
+        }
+      } else {
+        const notiId = `NOTI-DUE-${inv.id}`;
+        if (!this.state.notifications.some((n) => n.id === notiId)) {
+          newNotis.push({
+            id: notiId,
+            tenantId: inv.tenantId!,
+            title: "Nhắc nhở hạn nộp tiền phòng",
+            body: `Hóa đơn ${inv.id} (${inv.amount.toLocaleString("vi-VN")} đ) có hạn thanh toán là ${inv.due}. Vui lòng thanh toán trước hạn.`,
+            time: new Date().toISOString(),
+            read: false,
+            type: "general" as const,
+          });
+          count++;
+        }
+      }
+    }
+    if (newNotis.length) {
+      this.commit({
+        ...this.state,
+        notifications: [...newNotis, ...this.state.notifications],
+      });
+    }
+    return count;
   }
 }
 export const mockDormService = new MockDormServiceImpl();

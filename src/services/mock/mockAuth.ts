@@ -29,7 +29,12 @@ export function demoEmailAvailable(identifier: string, exceptId?: string): boole
   const email = identifier.trim().toLowerCase();
   const exceptAccountId = exceptId ? state.staff.find((staff) => staff.id === exceptId)?.userId ?? exceptId : undefined;
   return !state.tenants.some((tenant) => tenant.id !== exceptId && tenant.email.trim().toLowerCase() === email)
-    && !state.accounts.some((account) => account.id !== exceptAccountId && (!exceptId || account.tenantId !== exceptId) && (account.email ?? account.identifier).trim().toLowerCase() === email);
+    && !state.accounts.some((account) =>
+      account.id !== exceptAccountId &&
+      (!exceptId || account.staffId !== exceptId) &&
+      (!exceptId || account.tenantId !== exceptId) &&
+      (account.email ?? account.identifier).trim().toLowerCase() === email
+    );
 }
 export function updateDemoTechnician(id: string, identifier: string, name: string) {
   if (!demoEmailAvailable(identifier, id)) throw new Error("Email đã được sử dụng.");

@@ -31,7 +31,8 @@ export type DormDataContextType = {
   onCheckoutContract: (id: string, status: "AVAILABLE" | "MAINTENANCE") => Promise<void>;
   onAddContractDocuments: (id: string, documents: ContractDocumentRecord[]) => Promise<void>;
   onDeleteContractDocument: (id: string, documentId: string) => Promise<void>;
-  onUpdateTenantProfile: (id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">) => Promise<TenantRecord>;
+  onUpdateTenantProfile: (id: string, profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>, actorRole?: "manager" | "tenant") => Promise<TenantRecord>;
+  error: string | null;
   loading: boolean;
   reload: () => Promise<void>;
   onCreateTicket: (ticket: Omit<Ticket, "id">) => Promise<Ticket>;
@@ -39,6 +40,9 @@ export type DormDataContextType = {
   onCreateRoom: (room: RoomRecord) => Promise<RoomRecord>;
   onUpdateRoom: (id: string, room: RoomRecord) => Promise<RoomRecord>;
   onDeleteRoom: (id: string) => Promise<void>;
+  onDeleteMistakenRoom: (id: string) => Promise<void>;
+  onArchiveRoom: (id: string) => Promise<void>;
+  onRestoreRoom: (id: string) => Promise<RoomRecord>;
   onUpdateBedStatus: (bedId: string, status: BedStatus) => Promise<void>;
   onRoomsChange: (rooms: RoomRecord[]) => Promise<void>;
   onSubmitInvoiceProof: (id: string, tenantId: string, proof: NonNullable<Invoice["proof"]>) => Promise<void>;
@@ -58,10 +62,12 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
   const [contracts, setContracts] = useState<ContractRecord[]>([]);
   const [vehicles, setVehicles] = useState<TenantVehicle[]>([]);
   const [expenses, setExpenses] = useState<FacilityExpense[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [r, t, inv, tck] = await Promise.all([
         dormService.getRooms(),
@@ -83,8 +89,17 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         setExpenses([]);
         showToast(expenseData.reason instanceof Error ? expenseData.reason.message : "Không thể tải chi phí.");
       }
-    } catch {
-      showToast("Không thể tải dữ liệu. Vui lòng thử lại.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Không thể tải dữ liệu. Vui lòng thử lại.";
+      setError(msg);
+      setRooms([]);
+      setTenants([]);
+      setInvoices([]);
+      setTickets([]);
+      setContracts([]);
+      setVehicles([]);
+      setExpenses([]);
+      showToast(msg);
     } finally {
       setLoading(false);
     }
@@ -129,13 +144,21 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     return updated;
   };
 
+  const onDeleteMistakenRoom = async (id: string): Promise<void> => {
+    await dormService.deleteMistakenRoom(id);
+    setRooms(await dormService.getRooms());
+  };
+  const onArchiveRoom = async (id: string): Promise<void> => {
+    await dormService.archiveRoom(id);
+    setRooms(await dormService.getRooms());
+  };
+  const onRestoreRoom = async (id: string): Promise<RoomRecord> => {
+    const restored = await dormService.restoreRoom(id);
+    setRooms(await dormService.getRooms());
+    return restored;
+  };
   const onDeleteRoom = async (id: string): Promise<void> => {
-    await dormService.deleteRoom(id);
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, deletedAt: new Date().toISOString() } : r,
-      ),
-    );
+    await onArchiveRoom(id);
   };
 
   const onUpdateBedStatus = async (bedId: string, status: BedStatus): Promise<void> => {
@@ -211,8 +234,8 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     await dormService.deleteContractDocument(id, documentId);
     setContracts(await dormService.getContracts());
   };
-  const onUpdateTenantProfile = async (id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">) => {
-    const updated = await dormService.updateTenantProfile(id, profile);
+  const onUpdateTenantProfile = async (id: string, profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>, actorRole?: "manager" | "tenant") => {
+    const updated = await dormService.updateTenantProfile(id, profile, actorRole);
     setTenants((current) => current.map((tenant) => tenant.id === id ? updated : tenant));
     return updated;
   };
@@ -240,6 +263,7 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         onAddContractDocuments,
         onDeleteContractDocument,
         onUpdateTenantProfile,
+        error,
         loading,
         reload,
         onCreateTicket,
@@ -247,6 +271,9 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         onCreateRoom,
         onUpdateRoom,
         onDeleteRoom,
+        onDeleteMistakenRoom,
+        onArchiveRoom,
+        onRestoreRoom,
         onUpdateBedStatus,
         onRoomsChange,
         onSubmitInvoiceProof,

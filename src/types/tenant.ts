@@ -14,6 +14,8 @@ export type TenantRecord = {
   monthlyRent: number;
   deposit: number;
   status: "Đang thuê" | "Sắp hết HĐ" | "Đã trả phòng";
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 };
 
 export type OnboardingInput = {

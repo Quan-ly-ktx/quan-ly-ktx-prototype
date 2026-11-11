@@ -46,7 +46,17 @@ function seed(): MockSnapshot {
     const room = rooms.find((item) => item.code === tenant.room)!;
     const bed = room.bedOverrides![tenant.bed];
     const id = `c0000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
-    return { id, tenantId: tenant.id, tenantName: tenant.name, room: room.code, roomId: room.id, bed: tenant.bed, bedId: bed.id, startDate: iso(tenant.start), endDate: iso(tenant.end), deposit: tenant.deposit, monthlyRent: tenant.monthlyRent, status: tenant.status === "Đã trả phòng" ? "Đã thanh lý" : "Hiệu lực", documents: [], renewals: tenant.id === "NT-0188" ? [{ id: "d0000000-0000-4000-8000-000000000001", contractId: id, startDate: "2027-10-01", endDate: "2028-09-30", monthlyRent: tenant.monthlyRent, signedAt: "2027-09-01" }] : [] };
+    const sampleDocs = tenant.id === former.id ? [{
+      id: "doc-sample-former-contract",
+      contractId: id,
+      name: "hop-dong-thue-phong-p302.pdf",
+      size: 61849,
+      type: "application/pdf",
+      category: "ORIGINAL_CONTRACT" as const,
+      uploadedAt: "2026-01-01T08:00:00Z",
+      content: "data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAFjYYCADEYGBgZ2Bg5GFwYfIDZgYGBnYGDgYGBj4GBgZGBg4AEAMwICegplbmRzdHJlYW0KZW5kb2JqCg==",
+    }] : [];
+    return { id, tenantId: tenant.id, tenantName: tenant.name, room: room.code, roomId: room.id, bed: tenant.bed, bedId: bed.id, startDate: iso(tenant.start), endDate: iso(tenant.end), deposit: tenant.deposit, monthlyRent: tenant.monthlyRent, status: tenant.status === "Đã trả phòng" ? "Đã thanh lý" : "Hiệu lực", documents: sampleDocs, renewals: tenant.id === "NT-0188" ? [{ id: "d0000000-0000-4000-8000-000000000001", contractId: id, startDate: "2027-10-01", endDate: "2028-09-30", monthlyRent: tenant.monthlyRent, signedAt: "2027-09-01" }] : [] };
   });
   const invoices: Invoice[] = initialInvoices.filter((item) => item.tenantId && contracts.some((contract) => contract.tenantId === item.tenantId)).map((item) => ({ ...item, contractId: contracts.find((contract) => contract.tenantId === item.tenantId)!.id }));
   invoices.push({ id: "e0000000-0000-4000-8000-000000000001", tenantId: former.id, contractId: contracts.find((contract) => contract.tenantId === former.id)!.id, billingPeriod: "2026-03-01", tenant: former.name, room: former.room, bed: former.bed, amount: former.monthlyRent, due: "05/03/2026", status: "Nợ" });
@@ -129,7 +139,23 @@ function migrate(old: Partial<MockSnapshot>, legacyAccounts?: MockAccount[], leg
 function load(): MockSnapshot {
   if (typeof localStorage === "undefined") return seed();
   const old = readLegacy<Partial<MockSnapshot>>(KEY);
-  if (old && Array.isArray(old.staff) && Array.isArray(old.violations) && Array.isArray(old.notifications) && Array.isArray(old.expenses)) return old as MockSnapshot;
+  if (old && Array.isArray(old.staff) && Array.isArray(old.violations) && Array.isArray(old.notifications) && Array.isArray(old.expenses)) {
+    const formerId = "f5000000-0000-4000-8000-000000000001";
+    const formerContract = old.contracts?.find((c) => c.tenantId === formerId);
+    if (formerContract && (!formerContract.documents || formerContract.documents.length === 0)) {
+      formerContract.documents = [{
+        id: "doc-sample-former-contract",
+        contractId: formerContract.id,
+        name: "hop-dong-thue-phong-p302.pdf",
+        size: 61849,
+        type: "application/pdf",
+        category: "ORIGINAL_CONTRACT",
+        uploadedAt: "2026-01-01T08:00:00Z",
+        content: "data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAFjYYCADEYGBgZ2Bg5GFwYfIDZgYGBnYGDgYGBj4GBgZGBg4AEAMwICegplbmRzdHJlYW0KZW5kb2JqCg==",
+      }];
+    }
+    return old as MockSnapshot;
+  }
   const legacyAccounts = readLegacy<MockAccount[]>("dorm_demo_credentials");
   const legacyStaff = readLegacy<TechnicianResponse[]>("dorm_mock_technicians");
   const events = readLegacy<{ violations: IncidentViolation[]; notifications: IncidentNotification[] }>("dorm_mock_incident_events");
@@ -141,7 +167,15 @@ function load(): MockSnapshot {
 export function getMockSnapshot(): MockSnapshot { return structuredClone(memory ??= load()); }
 export function updateMockSnapshot(change: (state: MockSnapshot) => MockSnapshot): MockSnapshot {
   const next = change(getMockSnapshot());
-  if (typeof localStorage !== "undefined") localStorage.setItem(KEY, JSON.stringify(next));
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(next));
+    } catch (error) {
+      const isQuota = error instanceof Error && (error.name === "QuotaExceededError" || error.message.includes("quota"));
+      if (isQuota) throw new Error("Dung lượng bộ nhớ trình duyệt đã đầy (quota exceeded). Vui lòng xóa bớt tài liệu demo hoặc dùng tệp nhỏ hơn.");
+      throw error;
+    }
+  }
   memory = structuredClone(next);
   for (const listener of listeners) queueMicrotask(listener);
   return structuredClone(next);
