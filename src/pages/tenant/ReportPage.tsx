@@ -199,11 +199,13 @@ export function ReportPage({
               {personalTickets.map((ticket) => {
                 const tone = ticketTone[ticket.status];
                 return (
-                  <li
-                    className="p-5 hover:bg-slate-50 transition-colors cursor-pointer"
-                    key={ticket.id}
-                    onClick={() => setSelectedTicket(ticket)}
-                  >
+                  <li key={ticket.id}>
+                    <button
+                      type="button"
+                      aria-label={`Xem chi tiết phiếu ${ticket.id}: ${ticket.title}`}
+                      className="focus-ring block w-full text-left p-5 hover:bg-slate-50 transition-colors cursor-pointer active:translate-y-[1px]"
+                      onClick={() => setSelectedTicket(ticket)}
+                    >
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-xs font-medium text-slate-500">
                         {ticket.id}
@@ -236,6 +238,7 @@ export function ReportPage({
                         </span>
                       )}
                     </div>
+                    </button>
                   </li>
                 );
               })}

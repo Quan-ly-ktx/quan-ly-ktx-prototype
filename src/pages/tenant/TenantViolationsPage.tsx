@@ -50,9 +50,11 @@ export function TenantViolationsPage({
                 : "status-label-slate";
 
           return (
-            <article
+            <button
+              type="button"
               key={v.id}
-              className="rounded-sm border border-slate-200 bg-white p-5 shadow-xs hover:border-brand-500 transition-colors cursor-pointer"
+              aria-label={`Xem chi tiết biên bản ${v.id}, ${v.type}, ngày ${v.date}`}
+              className="focus-ring block w-full text-left rounded-sm border border-slate-200 bg-white p-5 shadow-xs hover:border-brand-500 transition-colors cursor-pointer active:translate-y-[1px]"
               onClick={() => setSelectedViolation(v)}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -70,9 +72,9 @@ export function TenantViolationsPage({
               </div>
 
               <div className="mt-3">
-                <h3 className="text-sm font-bold text-slate-900">
+                <div className="text-sm font-bold text-slate-900">
                   Hành vi vi phạm: {v.type}
-                </h3>
+                </div>
                 <p className="mt-1 text-xs text-slate-600 line-clamp-2 leading-relaxed">
                   {v.note}
                 </p>
@@ -88,7 +90,7 @@ export function TenantViolationsPage({
                   <span className="text-slate-400">Không có tiền phạt</span>
                 )}
               </div>
-            </article>
+            </button>
           );
         })}
 

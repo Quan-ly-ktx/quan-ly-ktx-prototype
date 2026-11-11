@@ -134,9 +134,11 @@ export function TenantVehiclesPage({
       )}
       <div className="grid gap-6 lg:grid-cols-2">
         {vehicles.map((vehicle) => (
-          <article
-            className="rounded-sm border border-slate-200 bg-white p-5 shadow-xs hover:border-brand-500 transition-colors cursor-pointer"
+          <button
+            type="button"
             key={vehicle.id}
+            aria-label={`Xem chi tiết phương tiện ${vehicle.plate || vehicle.brand || vehicle.type}`}
+            className="focus-ring block w-full text-left rounded-sm border border-slate-200 bg-white p-5 shadow-xs hover:border-brand-500 transition-colors cursor-pointer active:translate-y-[1px]"
             onClick={() => setSelectedVehicle(vehicle)}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -186,7 +188,7 @@ export function TenantVehiclesPage({
               <span>Bấm xem chi tiết & giấy tờ xe</span>
               <Icon name="chevron" className="size-4" />
             </div>
-          </article>
+          </button>
         ))}
       </div>
       {open && (

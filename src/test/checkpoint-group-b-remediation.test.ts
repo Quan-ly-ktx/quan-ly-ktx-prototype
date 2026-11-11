@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
 import { getMockSnapshot } from "../services/mock/mockStore.ts";
 import { reportForPeriod } from "../utils/reportForPeriod.ts";
 import type { FacilityExpense, Invoice, Ticket } from "../types/index.ts";
@@ -114,4 +116,21 @@ test("Group B - B4 Tenant Violations isolation: tenant only sees own violations"
   for (const item of v2) {
     assert.equal(item.tenantId, tenant2.id);
   }
+});
+
+test("Group B - A11y: Tenant interactive cards use accessible button elements with focus-ring", () => {
+  const violationsSrc = fs.readFileSync(path.resolve(import.meta.dirname, "../pages/tenant/TenantViolationsPage.tsx"), "utf-8");
+  const vehiclesSrc = fs.readFileSync(path.resolve(import.meta.dirname, "../pages/tenant/TenantVehiclesPage.tsx"), "utf-8");
+  const reportSrc = fs.readFileSync(path.resolve(import.meta.dirname, "../pages/tenant/ReportPage.tsx"), "utf-8");
+  // TenantViolationsPage must use <button type="button" with focus-ring and aria-label
+  assert.match(violationsSrc, /<button\s+type="button"[\s\S]*?aria-label=\{`Xem chi tiết biên bản/);
+  assert.match(violationsSrc, /focus-ring/);
+
+  // TenantVehiclesPage must use <button type="button" with focus-ring and aria-label
+  assert.match(vehiclesSrc, /<button\s+type="button"[\s\S]*?aria-label=\{`Xem chi tiết phương tiện/);
+  assert.match(vehiclesSrc, /focus-ring/);
+
+  // ReportPage must use <button type="button" with focus-ring and aria-label inside <li>
+  assert.match(reportSrc, /<li\s+key=\{ticket\.id\}>\s*<button\s+type="button"[\s\S]*?aria-label=\{`Xem chi tiết phiếu/);
+  assert.match(reportSrc, /focus-ring/);
 });
