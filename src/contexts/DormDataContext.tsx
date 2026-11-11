@@ -45,6 +45,7 @@ export type DormDataContextType = {
   onRestoreRoom: (id: string) => Promise<RoomRecord>;
   onUpdateBedStatus: (bedId: string, status: BedStatus) => Promise<void>;
   onRoomsChange: (rooms: RoomRecord[]) => Promise<void>;
+  onIssueInvoices: (billingPeriod: string) => Promise<Invoice[]>;
   onSubmitInvoiceProof: (id: string, tenantId: string, proof: NonNullable<Invoice["proof"]>) => Promise<void>;
   onRejectInvoiceProof: (id: string) => Promise<void>;
   onConfirmInvoiceProof: (id: string, manager: string) => Promise<void>;
@@ -172,6 +173,12 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     const saved = await dormService.saveRooms(newRooms);
     setRooms(saved);
   };
+  const onIssueInvoices = async (billingPeriod: string): Promise<Invoice[]> => {
+    const issued = await dormService.issueInvoices(billingPeriod);
+    const refreshed = await dormService.getInvoices();
+    setInvoices(refreshed);
+    return issued;
+  };
 
   const onSubmitInvoiceProof = async (id: string, tenantId: string, proof: NonNullable<Invoice["proof"]>) => {
     const updated = await dormService.submitInvoiceProof(id, tenantId, proof);
@@ -280,6 +287,7 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         onRejectInvoiceProof,
         onConfirmInvoiceProof,
         onConfirmPayment,
+        onIssueInvoices,
       }}
     >
       {children}

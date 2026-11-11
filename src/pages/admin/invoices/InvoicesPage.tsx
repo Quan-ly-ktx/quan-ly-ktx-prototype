@@ -27,11 +27,13 @@ export function InvoicesPage({
   managerStaffId,
   tenants,
   onConfirmPayment,
+  onIssueInvoices,
   showToast,
 }: Toast & {
   records: Invoice[];
   onRejectInvoiceProof: (id: string) => Promise<void>;
   onConfirmInvoiceProof: (id: string, managerStaffId: string) => Promise<void>;
+  onIssueInvoices?: (billingPeriod: string) => Promise<Invoice[]>;
   managerStaffId?: string;
   tenants: TenantRecord[];
   onConfirmPayment: (invoiceId: string, manager: string) => Promise<Invoice>;
@@ -150,7 +152,8 @@ export function InvoicesPage({
                   const [y, m] = currentToday.split("-").map(Number);
                   const nextMonth = `${y + (m === 12 ? 1 : 0)}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
                   try {
-                    const issued = await dormService.issueInvoices(nextMonth);
+                    const action = onIssueInvoices ?? ((p: string) => dormService.issueInvoices(p));
+                    const issued = await action(nextMonth);
                     if (issued.length > 0) {
                       showToast(`Đã phát hành ${issued.length} hóa đơn mới kỳ ${nextMonth.slice(0, 7)}`);
                     } else {

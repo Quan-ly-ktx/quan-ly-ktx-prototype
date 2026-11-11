@@ -326,8 +326,18 @@ class MockDormServiceImpl implements DormService {
     this.commit({ ...this.state, invoices: this.state.invoices.map((item) => item.id === id ? updated : item) });
     return updated;
   }
-  async issueInvoices(billingPeriod: string): Promise<Invoice[]> {
+  async issueInvoices(billingPeriod: string, asOfDate?: string): Promise<Invoice[]> {
     if (!/^\d{4}-(0[1-9]|1[0-2])-01$/.test(billingPeriod)) throw new Error("Kỳ hóa đơn không hợp lệ.");
+    const today = asOfDate ?? this.getBusinessDate();
+    const [todayY, todayM, todayD] = today.split("-").map(Number);
+    const nextMonthStr = `${todayY + (todayM === 12 ? 1 : 0)}-${String(todayM === 12 ? 1 : todayM + 1).padStart(2, "0")}-01`;
+
+    if (billingPeriod > nextMonthStr) {
+      throw new Error("Không thể phát hành hóa đơn sớm cho kỳ tương lai xa.");
+    }
+    if (billingPeriod === nextMonthStr && todayD < 25) {
+      throw new Error("Kỳ hóa đơn tháng sau chỉ được phát hành định kỳ từ ngày 25 hàng tháng.");
+    }
     const state = this.state;
     const issued: Invoice[] = state.contracts.filter((contract) => contract.status !== "Đã thanh lý" && contract.startDate <= billingPeriod && contract.endDate >= billingPeriod && !state.invoices.some((invoice) => invoice.contractId === contract.id && invoice.billingPeriod === billingPeriod)).map((contract) => {
       const tenant = state.tenants.find((item) => item.id === contract.tenantId);

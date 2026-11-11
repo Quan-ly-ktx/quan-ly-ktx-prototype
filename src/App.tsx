@@ -85,6 +85,7 @@ function AppContent() {
     onCreateTicket,
     onUpdateTicket,
     onConfirmPayment,
+    onIssueInvoices,
   } = useDormData();
 
   const [activeNav, setActiveNav] = useState("Bảng điều khiển");
@@ -314,6 +315,7 @@ function AppContent() {
               managerStaffId={currentUser?.staffId}
               tenants={tenants}
               onConfirmPayment={onConfirmPayment}
+              onIssueInvoices={onIssueInvoices}
               showToast={showToast}
             />
           ) : activeNav === "Tài chính" ? (
