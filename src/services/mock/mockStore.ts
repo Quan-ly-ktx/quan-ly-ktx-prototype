@@ -11,6 +11,7 @@ export type MockAccount = { id: string; identifier: string; role: Role; name: st
 export type MockStaff = TechnicianResponse & { userId: string; role?: "manager" | "technician" };
 export type MockSnapshot = { rooms: RoomRecord[]; tenants: TenantRecord[]; invoices: Invoice[]; contracts: ContractRecord[]; vehicles: TenantVehicle[]; accounts: MockAccount[]; staff: MockStaff[]; tickets: Ticket[]; violations: IncidentViolation[]; notifications: IncidentNotification[]; expenses: FacilityExpense[]; legacySnapshot?: unknown };
 const KEY = "dorm_mock_snapshot_v2";
+const SAMPLE_VALID_PDF_DATA_URL = "data:application/pdf;base64,JVBERi0xLjcKJYGBgYEKCjcgMCBvYmoKPDwKL0ZpbHRlciAvRmxhdGVEZWNvZGUKL0xlbmd0aCA1ODMKPj4Kc3RyZWFtCniclZTfitQwFMbv+xS5FnZNTs6fBERwph288EboC4juirIiK+Lz+5203XaYjoyENmlPmv7Od77kuTuMXbxPYbl+fe1ev394+vPw+9vnT3eHn09f7izWwiVaqSHlMD52xGH80GE+WgpJY7Ca7hEef3RvOPOJBzaKXDBKFKX4vT1V9JmLCHrMwbvaZih6EW5vE/dvw/i9G191w9h97J4nRArLdY5YjUkLiZaQ0iUdJQlm+YWO9aSZoh41WaRIPf7OBh5FZHrmokkHrBktajHRvMMDEsYf9/SiGGOJUosG/HxHLxDlVS/oIiBhXnQTdoUYTDKpNql5kOoxRPKk6f+o1MCqYUHFKrYrFeqomzr2ispo0ZPr5OpAE8vvWiWZ+kw54lKMYmuYTYi0eiID1HFgaMhHcNddBdHOKU2MJGd15eI+oK6ApKID0Hw+SmfciiUNY44BpjZkchyAJcjXRg3LRWVxSBecboMsLDGVmFzFK5B8AbkLRzPcQd1x2R0HnUV7Twej5N8Ztb5VwiswezS3xv593m97/thLR+FUS8XK1XToJR3ZYCwpOQIMPOTshpjxTGG2jWUMsezJb1fgAWn3t5oDdWJVyvk6aFxBuf2mNgenbQVmxRKd5vvi40l7zEQiUzSv0t0H+L8u+k2F+2e8mU/d141eFv51+9Tdv9z+3L3f/766/3p3+Pv27wfvLh+L3v1D4y7kG9eYmRkmZW5kc3RyZWFtCmVuZG9iago2IDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMyAwIFIKL1Jlc291cmNlcyA8PAovRm9udCA8PAovRjEgMSAwIFIKL0YyIDIgMCBSCj4+Cj4+Ci9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9Db250ZW50cyA3IDAgUgo+PgplbmRvYmoKMSAwIG9iago8PAovVHlwZSAvRm9udAovU3VidHlwZSAvVHlwZTEKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZAovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwo+PgplbmRvYmoKMiAwIG9iago8PAovVHlwZSAvRm9udAovU3VidHlwZSAvVHlwZTEKL0Jhc2VGb250IC9IZWx2ZXRpY2EKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFs2IDAgUl0KL0NvdW50IDEKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDMgMCBSCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9Qcm9kdWNlciAocGRmLWxpYiAxfCAxLjExLjEpCi9Nb2REYXRlIChEOjIwMjYxMTExMjIwOTQzWikKL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MTExMTIyMDk0M1opCj4+CmVuZG9iagp4cmVmCjAgOAowMDAwMDAwMDAwIDY1NTM1IGYKMDAwMDAwMDkxMCAwMDAwMCBuCjAwMDAwMDEwMTMgMDAwMDAgbgowMDAwMDAxMTEwIDAwMDAwIG4KMDAwMDAwMTE2OSAwMDAwMCBuCjAwMDAwMDEyMTkgMDAwMDAgbgowMDAwMDAwNzI1IDAwMDAwIG4KMDAwMDAwMDAxNSAwMDAwMCBuCnRyYWlsZXIKPDwKL1NpemUgOAovUm9vdCA0IDAgUgovSW5mbyA1IDAgUgo+PgpzdGFydHhyZWYKMTM1NQolJUVPRgo=";
 const listeners = new Set<() => void>();
 let memory: MockSnapshot | undefined;
 const uuid = () => crypto.randomUUID();
@@ -50,11 +51,11 @@ function seed(): MockSnapshot {
       id: "doc-sample-former-contract",
       contractId: id,
       name: "hop-dong-thue-phong-p302.pdf",
-      size: 61849,
+      size: 1451,
       type: "application/pdf",
       category: "ORIGINAL_CONTRACT" as const,
       uploadedAt: "2026-01-01T08:00:00Z",
-      content: "data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAFjYYCADEYGBgZ2Bg5GFwYfIDZgYGBnYGDgYGBj4GBgZGBg4AEAMwICegplbmRzdHJlYW0KZW5kb2JqCg==",
+      content: SAMPLE_VALID_PDF_DATA_URL,
     }] : [];
     return { id, tenantId: tenant.id, tenantName: tenant.name, room: room.code, roomId: room.id, bed: tenant.bed, bedId: bed.id, startDate: iso(tenant.start), endDate: iso(tenant.end), deposit: tenant.deposit, monthlyRent: tenant.monthlyRent, status: tenant.status === "Đã trả phòng" ? "Đã thanh lý" : "Hiệu lực", documents: sampleDocs, renewals: tenant.id === "NT-0188" ? [{ id: "d0000000-0000-4000-8000-000000000001", contractId: id, startDate: "2027-10-01", endDate: "2028-09-30", monthlyRent: tenant.monthlyRent, signedAt: "2027-09-01" }] : [] };
   });
@@ -147,11 +148,11 @@ function load(): MockSnapshot {
         id: "doc-sample-former-contract",
         contractId: formerContract.id,
         name: "hop-dong-thue-phong-p302.pdf",
-        size: 61849,
+        size: 1451,
         type: "application/pdf",
         category: "ORIGINAL_CONTRACT",
         uploadedAt: "2026-01-01T08:00:00Z",
-        content: "data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjQgMCBvYmoKPDwgL0xlbmd0aCA1IDAgUiAvRmlsdGVyIC9GbGF0ZURlY29kZSA+PgpzdHJlYW0KeAFjYYCADEYGBgZ2Bg5GFwYfIDZgYGBnYGDgYGBj4GBgZGBg4AEAMwICegplbmRzdHJlYW0KZW5kb2JqCg==",
+        content: SAMPLE_VALID_PDF_DATA_URL,
       }];
     }
     return old as MockSnapshot;
