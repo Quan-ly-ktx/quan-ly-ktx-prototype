@@ -1,5 +1,5 @@
 import type { Invoice, RoomRecord } from "../../types/index.ts";
-import type { ContractRecord, OnboardingInput, OnboardingResult, TenantRecord, TenantVehicle } from "../../types/tenant.ts";
+import { normalizeVehicleStatus, type ContractRecord, type OnboardingInput, type OnboardingResult, type TenantRecord, type TenantVehicle } from "../../types/tenant.ts";
 
 import type { MockSnapshot } from "./mockStore.ts";
 export type LifecycleState = MockSnapshot;
@@ -70,5 +70,30 @@ export function checkout(state: LifecycleState, id: string, status: "AVAILABLE" 
   const entry = room && Object.entries(room.bedOverrides ?? {}).find(([, bed]) => bed.id === contract.bedId);
   if (!room || !entry || entry[1].status !== "OCCUPIED") throw new Error("Không tìm thấy giường đang thuê của hợp đồng.");
   const [code, bed] = entry;
-  return { ...state, rooms: state.rooms.map((item) => item.id === room.id ? { ...item, bedOverrides: { ...item.bedOverrides, [code]: { ...bed, status } } } : item), tenants: state.tenants.map((item) => item.id === contract.tenantId ? { ...item, status: "Đã trả phòng" } : item), contracts: state.contracts.map((item) => item.id === id ? { ...item, status: "Đã thanh lý" } : item), vehicles: state.vehicles.map((item) => item.tenantId === contract.tenantId && item.cardStatus !== "Đã thu hồi" ? { ...item, cardStatus: "Đã thu hồi" } : item) };
+  const now = new Date().toISOString();
+  const updatedVehicles = state.vehicles.map((item) => {
+    if (item.tenantId !== contract.tenantId) return item;
+    const s = normalizeVehicleStatus(item);
+    if (s === "ISSUED") {
+      return { ...item, cardStatus: "Đã thu hồi" as const, status: "Đã thu hồi" as const, vehicleStatus: "REVOKED" as const, revokedAt: now };
+    }
+    if (s === "PENDING_CARD") {
+      return { ...item, cardStatus: "Đã thu hồi" as const, status: "Đã hủy" as const, vehicleStatus: "CANCELLED" as const, cancelledAt: now };
+    }
+    return item;
+  });
+  const updatedRequests = (state.vehicleChangeRequests ?? []).map((req) => {
+    if (req.tenantId === contract.tenantId && req.status === "PENDING") {
+      return { ...req, status: "CANCELLED" as const, processedAt: now };
+    }
+    return req;
+  });
+  return {
+    ...state,
+    rooms: state.rooms.map((item) => item.id === room.id ? { ...item, bedOverrides: { ...item.bedOverrides, [code]: { ...bed, status } } } : item),
+    tenants: state.tenants.map((item) => item.id === contract.tenantId ? { ...item, status: "Đã trả phòng" } : item),
+    contracts: state.contracts.map((item) => item.id === id ? { ...item, status: "Đã thanh lý" } : item),
+    vehicles: updatedVehicles,
+    vehicleChangeRequests: updatedRequests,
+  };
 }
