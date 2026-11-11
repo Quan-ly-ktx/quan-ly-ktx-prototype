@@ -6,7 +6,7 @@
 |---|---|
 | Tên hệ thống | KTX Hub — Private Dormitory Management System (PDMS) |
 | Loại tài liệu | Software Requirements Specification (SRS) |
-| Phiên bản tài liệu | 3.4 — FINAL (bổ sung yêu cầu đổi xe giữ thẻ, cho phép biểu đồ dùng dữ liệu demo độc lập) |
+| Phiên bản tài liệu | 3.4.1 — FINAL (Amendment giao diện: Tenant 5 tab điều hướng, tách tab Vi phạm riêng và giữ Thông báo chuông) |
 | Ngày cập nhật | 11/11/2026 |
 | Trạng thái | **FINAL — đặc tả đã chốt để triển khai**; chưa xác nhận Backend/Frontend hiện hành đáp ứng |
 | Cấu trúc tham khảo | IEEE 830 / ISO/IEC/IEEE 29148 (cách tổ chức tài liệu, không tuyên bố chứng nhận tuân thủ) |
@@ -17,6 +17,8 @@
 > **Thay đổi v3.3:** (1) Bổ sung 4 biểu đồ cho Dashboard, giữ đúng 4 KPI; (2) Manager có thể nhập **tổng lương nhân viên tự tính ngoài hệ thống** vào chi phí vận hành, và UI được sử dụng nhãn **“Lợi nhuận ròng (ước tính)”** kèm chú thích rõ giới hạn; (3) Manager có thể **từ chối yêu cầu cấp thẻ xe đang chờ** với lý do bắt buộc, **không cần minh chứng đính kèm**, đồng thời tạo thông báo hệ thống cho Tenant; (4) tăng dữ liệu lịch sử có ngày sự kiện để thử biểu đồ năm. Không tự động thay đổi Backend hay chứng nhận prototype đã hoàn thành.
 
 > **Thay đổi v3.4:** (1) Tenant đang có xe `ISSUED` được **tự gửi yêu cầu đổi xe**; Manager phê duyệt/từ chối yêu cầu với lý do nếu từ chối; khi duyệt, tạo hồ sơ xe mới dùng **chính mã thẻ vật lý hiện tại**, chuyển hồ sơ xe cũ sang `REPLACED`, giữ toàn bộ lịch sử, **không yêu cầu thu hồi/bàn giao lại thẻ**; (2) tại **Prototype/Mock mode**, cho phép bốn biểu đồ Dashboard lấy **bộ số liệu minh họa tách biệt Shared Mock Store**, không cần khớp hóa đơn/phòng/giường/hợp đồng thực tế của các màn khác, với điều kiện **hiển thị nhãn “Dữ liệu biểu đồ minh họa”**; KPI chính vẫn lấy dữ liệu nghiệp vụ mock và không được giả là số liệu thật; (3) giữ nguyên quyết định “Lợi nhuận ròng (ước tính)” và từ chối cấp thẻ **chỉ cần lý do, không cần ảnh minh chứng** từ v3.3. Những quy tắc tích hợp Backend thật, ERD và API cần đồng bộ riêng sau giai đoạn Prototype.
+
+> **Thay đổi v3.4.1 (Amendment giao diện Tenant):** (1) Tổ chức giao diện Tenant thành **5 tab điều hướng** (trên cả desktop và mobile): `Phòng`, `Hóa đơn`, `Phương tiện`, `Báo hỏng`, `Vi phạm`; (2) Lịch sử vi phạm nội quy cá nhân được chuyển từ Hộp thư thông báo sang tab điều hướng `Vi phạm` riêng biệt (Tenant chỉ xem biên bản của mình, xem được sau khi checkout, tiền phạt chỉ là thông tin tham khảo không tạo hóa đơn/nút thanh toán); (3) **Thông báo hệ thống** tiếp tục truy cập bằng biểu tượng chuông trên header, không phải tab điều hướng, vẫn hiển thị số thông báo chưa đọc và giữ nguyên các thông báo tự động từ hóa đơn, vi phạm, phương tiện (FR-27); (4) Giữ nguyên FR-19, không tạo vai trò hay workflow mới.
 
 > **Quy ước hiệu lực:** Tài liệu này phản ánh các quyết định nghiệp vụ đã thống nhất cho phạm vi Phase 1. Khi có khác biệt giữa SRS này với Conceptual ERD, Logical ERD hoặc mã nguồn hiện hành, phải lập kế hoạch đồng bộ thiết kế và triển khai theo SRS; không xem sự khác biệt là bằng chứng chức năng đã được thực hiện. FR-11 được giữ mã số nhưng hoãn triển khai sang Phase 2.
 
@@ -913,18 +915,18 @@ Frontend sử dụng React/TypeScript, trình duyệt Chrome, Edge, Firefox và 
 
 **Liên quan:** BR-04, BR-05, BR-08, BR-11; FR-07, FR-15, FR-16.
 
-#### FR-27 — Hộp thư thông báo hệ thống và lịch sử vi phạm cá nhân
+#### FR-27 — Hộp thư thông báo hệ thống và tab Vi phạm cá nhân của Tenant
 
 **Tác nhân:** Tenant.
 
 **Quy trình xử lý:**
-1. Hệ thống có **hộp thư thông báo bên trong ứng dụng**, truy cập qua khu vực thông báo hiện có, **không thêm tab điều hướng thứ năm**.
+1. Hệ thống có **hộp thư thông báo bên trong ứng dụng**, truy cập qua biểu tượng chuông trên header. Tenant có **năm tab điều hướng**: `Phòng`, `Hóa đơn`, `Phương tiện`, `Báo hỏng`, `Vi phạm`. Lịch sử biên bản vi phạm cá nhân được hiển thị tại tab điều hướng `Vi phạm` riêng biệt, không còn gộp bên trong drawer thông báo.
 2. Thông báo chỉ được **hệ thống tự tạo từ các nghiệp vụ đã có**, như: phát hành hóa đơn, nhắc đến hạn/quá hạn, Manager xác nhận/từ chối minh chứng, lập biên bản vi phạm, **Manager từ chối đăng ký cấp thẻ xe hoặc từ chối yêu cầu đổi xe (kèm lý do), và thông báo khi yêu cầu đổi xe được duyệt**. Không cung cấp chức năng Manager soạn/gửi thông báo chung.
 3. Tenant chỉ xem thông báo và các biên bản vi phạm gắn với chính mình; không truy cập thông báo hoặc hồ sơ của người khác.
-4. Sau checkout, Tenant vẫn xem thông báo/lịch sử cá nhân, tiếp tục nhận thông báo liên quan khoản tiền thuê chưa tất toán; không nhận thông báo sinh hoạt chung mới.
+4. Sau checkout, Tenant vẫn xem thông báo/lịch sử cá nhân và tab Vi phạm, tiếp tục nhận thông báo liên quan khoản tiền thuê chưa tất toán; không nhận thông báo sinh hoạt chung mới.
 5. Hệ thống không tích hợp SMS, Zalo, push notification hay email gửi thông báo nghiệp vụ; email OTP **chỉ phục vụ quên/khôi phục mật khẩu**.
 
-**Đầu ra:** Hộp thư cá nhân chỉ chứa thông báo từ các sự kiện nghiệp vụ và lịch sử vi phạm của chính Tenant.
+**Đầu ra:** Hộp thư chuông chứa thông báo từ các sự kiện nghiệp vụ; tab Vi phạm hiển thị danh sách biên bản và lịch sử vi phạm của chính Tenant.
 
 **Liên quan:** BR-05, BR-07, BR-08, BR-10, BR-11; FR-08, FR-15, FR-16, FR-19, FR-25.
 
@@ -961,7 +963,7 @@ Bảng dưới đây liên kết yêu cầu nghiệp vụ với FR và những *
 | FR-24 | Đổi bằng mật khẩu cũ (không OTP); quên dùng OTP email | BR-09, BR-11 | `users`, email duy nhất, JWT/Redis OTP tạm thời (không có bảng OTP SQL) |
 | FR-25 | Thẻ phòng, người cùng phòng, quyền sau checkout | BR-04, BR-08, BR-11 | `tenants`, `rooms`, `beds`, `contracts`, `invoices` |
 | FR-26 | Tab hóa đơn của Tenant | BR-04, BR-05, BR-11 | `invoices`, `payment_transactions`, `contracts` |
-| FR-27 | Thông báo tự động: từ chối đăng ký, duyệt/từ chối đổi xe, hóa đơn và lịch sử vi phạm | BR-05, BR-07, BR-08, BR-10, BR-11 | `notifications`, `violations`, `invoices`, `vehicles`, `vehicle_change_requests` (đề xuất) |
+| FR-27 | Thông báo tự động qua biểu tượng chuông và tab Vi phạm cá nhân của Tenant | BR-05, BR-07, BR-08, BR-10, BR-11 | `notifications`, `violations`, `invoices`, `vehicles`, `vehicle_change_requests` (đề xuất) |
 
 ---
 
@@ -1164,7 +1166,7 @@ sequenceDiagram
 | Nhóm | Yêu cầu |
 |---|---|
 | Manager | Desktop Web, thuận tiện quản lý bảng danh sách và Drawer; sidebar, bộ lọc nhiều tiêu chí, biểu đồ và biểu mẫu quản lý |
-| Tenant | Mobile-first Web, thanh điều hướng đáy gồm **4 tab**: `Phòng`, `Hóa đơn`, `Phương tiện`, `Báo hỏng`; thông báo và vi phạm ở khu vực thông báo riêng, không thêm tab thứ năm |
+| Tenant | Mobile-first Web, thanh điều hướng đáy gồm **5 tab**: `Phòng`, `Hóa đơn`, `Phương tiện`, `Báo hỏng`, `Vi phạm`; thông báo hệ thống truy cập qua biểu tượng chuông trên header |
 | Technician | Mobile/Tablet responsive, danh sách phiếu ưu tiên rõ ràng, nút cập nhật xử lý và tải ảnh dễ sử dụng trên màn hình cảm ứng |
 | Đăng nhập chung | Một form `Email hoặc CCCD` + `Mật khẩu`; sau đăng nhập điều hướng theo role và trạng thái cư trú |
 | Tenant sau checkout | Không hiện Thẻ phòng hay bạn cùng phòng hiện tại; vẫn mở được hợp đồng cũ, hóa đơn, lịch sử và gửi minh chứng nợ cũ |
@@ -1255,7 +1257,7 @@ Bảng này là **ghi chú chuyển tiếp triển khai**, không thêm FR mới
 | Vehicle | Có `PENDING_CARD`, `ISSUED`, `REJECTED`, `REVOKED`, `REPLACED`, `CANCELLED`; `VehicleChangeRequest` riêng (`PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`) và quan hệ xe cũ/mới; duyệt đổi xe atomic chuyển cùng `cardCode`; lý do từ chối bắt buộc không minh chứng; notification; giới hạn một xe `ISSUED`/Tenant và một `ISSUED`/cardCode; chưa tự coi schema Backend đáp ứng |
 | Maintenance | Loại `Điện`, `Nước`, `Internet`, `Nội thất`, `Tiện ích`, `Khác`; thêm `Chưa phân công`, phân công lại; vật tư tên/số lượng/đơn giá, tính tổng tự động, có thể bằng 0 |
 | Auth | Một login form CCCD/email; Change Password dùng JWT + mật khẩu hiện tại (**không OTP**); Forgot Password dùng OTP email 5 phút qua Redis; JWT Access/Refresh và thu hồi token trên Redis; **không có bảng auth_sessions/auth_otps PostgreSQL**; Manager không có chức năng đổi email; nhân sự không cần username riêng |
-| Portal/Notifications | Quyền Tenant sau checkout; thông báo từ chối đăng ký xe, duyệt/từ chối yêu cầu đổi xe; Tenant có nút yêu cầu đổi xe nếu `ISSUED`; danh sách người cùng phòng chỉ họ tên/mã Bed; FR-27 chỉ thông báo tự động, không có màn soạn của Manager |
+| Portal/Notifications | Quyền Tenant sau checkout; thông báo từ chối đăng ký xe, duyệt/từ chối yêu cầu đổi xe; Tenant có nút yêu cầu đổi xe nếu `ISSUED`; danh sách người cùng phòng chỉ họ tên/mã Bed; Tenant có 5 tab điều hướng, tab Vi phạm riêng; FR-27 chỉ thông báo tự động hệ thống qua icon chuông, không có màn soạn của Manager |
 | Dashboard/Analytics | Giữ đúng 4 KPI từ nghiệp vụ; thêm 4 biểu đồ (doanh thu 2 series kỳ vọng/đã thu). **Prototype** được dùng bộ số liệu chart minh họa riêng, không cần khớp Mock Store, phải có nhãn rõ và không tác động KPI/Finance. Chỉ khi tích hợp API thật mới yêu cầu ngày checkout thực tế và nguồn nghiệp vụ để vẽ chart |
 | Lưu tệp / Database | OCI private + URL có chữ ký tối đa 15 phút; lưu object key; bỏ `rooms.occupied_beds`, tính số đang ở từ `beds`; cho phép dựng lại Flyway baseline trên DB **chỉ có seed** trong đợt refactor Backend (không xóa dữ liệu khi chưa xác nhận môi trường) |
 
@@ -1275,4 +1277,4 @@ Bảng này là **ghi chú chuyển tiếp triển khai**, không thêm FR mới
 
 ---
 
-*Hết tài liệu SRS — KTX Hub / PDMS, phiên bản 3.4 — FINAL (cập nhật nghiệp vụ; chưa xác nhận triển khai).*
+*Hết tài liệu SRS — KTX Hub / PDMS, phiên bản 3.4.1 — FINAL (cập nhật nghiệp vụ; chưa xác nhận triển khai).*
