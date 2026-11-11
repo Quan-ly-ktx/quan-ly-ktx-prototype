@@ -53,12 +53,14 @@ export function FinancialPage({
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptError, setReceiptError] = useState("");
 
-  const filteredExpenses = expenses.filter((expense) =>
-    (!period || expenseMonth(expense.expenseDate) === period) &&
-    (categoryFilter === "Tất cả" || expense.category === categoryFilter),
+  const periodExpenses = expenses.filter(
+    (expense) => !period || expenseMonth(expense.expenseDate) === period,
+  );
+  const filteredExpenses = periodExpenses.filter(
+    (expense) => categoryFilter === "Tất cả" || expense.category === categoryFilter,
   );
   const report = reportForPeriod(records, tickets, expenses, period);
-  const categories = expenses.filter((expense) => expenseMonth(expense.expenseDate) === period).reduce(
+  const categories = periodExpenses.reduce(
     (totals, expense) => ({ ...totals, [expense.category]: totals[expense.category] + expense.amount }),
     { "Điện EVN": 0, "Nước": 0, "Internet": 0, "Khác": 0 } satisfies Record<FacilityExpenseCategory, number>,
   );
@@ -151,16 +153,21 @@ export function FinancialPage({
 
       {!report && <p className="mb-4 text-sm text-slate-600" role="status">{exportUnavailable}</p>}
       {saveError && <p className="mb-4 text-sm text-danger-600" role="alert">{saveError}</p>}
-      <div className="mb-6 flex flex-wrap gap-4">
-        <label className="text-sm">Tháng chi phí <input type="month" className={`${inputCls} ml-2`} value={period} onChange={(event) => setPeriod(event.target.value)} /></label>
-        <label className="text-sm">Loại chi phí <select className={`${inputCls} ml-2`} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-          <option>Tất cả</option><option>Điện EVN</option><option>Nước</option><option>Internet</option><option>Khác</option>
-        </select></label>
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        <label className="inline-flex items-center text-sm font-semibold text-slate-700">
+          Kỳ báo cáo (Tháng/Năm):
+          <input
+            type="month"
+            className={`${inputCls} ml-2 w-48`}
+            value={period}
+            onChange={(event) => setPeriod(event.target.value)}
+          />
+        </label>
       </div>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icon="wallet" tone="success" label="Doanh thu theo kỳ" value={report ? money(report.revenue) : "Chưa đủ dữ liệu"} hint={`Theo kỳ hóa đơn ${period}`} />
         <Stat icon="tools" tone="warning" label="Chi phí sửa chữa theo kỳ" value={report ? money(report.repairs) : "Chưa đủ dữ liệu"} hint="Phiếu hoàn thành theo giờ Việt Nam" />
-        <Stat icon="invoice" tone="danger" label="Chi phí cơ sở theo kỳ" value={report ? money(report.facility) : "Chưa đủ dữ liệu"} hint={`${filteredExpenses.length} khoản đang lọc`} />
+        <Stat icon="invoice" tone="danger" label="Chi phí cơ sở theo kỳ" value={report ? money(report.facility) : "Chưa đủ dữ liệu"} hint={`${periodExpenses.length} khoản trong kỳ`} />
         <Stat icon="trend" tone="brand" label="Chênh lệch thu – chi ghi nhận" value={report ? money(report.difference) : "Chưa đủ dữ liệu"} hint="Không phải lợi nhuận ròng" />
       </div>
 
@@ -172,7 +179,7 @@ export function FinancialPage({
               Hóa đơn chi phí tiện ích cơ sở (Điện tổng, Nước tổng, Internet)
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Chi phí theo ngày ghi nhận, lọc theo tháng và loại.
+              Chi phí theo ngày ghi nhận trong kỳ {period}.
             </p>
           </div>
           <Button
@@ -182,6 +189,29 @@ export function FinancialPage({
           >
             + Nhập hóa đơn tổng
           </Button>
+        </div>
+        {/* Filter scoped only to facility expenses table */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-6 py-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-600">Lọc danh sách chi phí:</span>
+            <label className="inline-flex items-center gap-1.5 text-slate-700">
+              <span className="text-slate-500">Loại chi phí:</span>
+              <select
+                className={`${inputCls} h-8 text-xs w-40 bg-white`}
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+              >
+                <option>Tất cả</option>
+                <option>Điện EVN</option>
+                <option>Nước</option>
+                <option>Internet</option>
+                <option>Khác</option>
+              </select>
+            </label>
+          </div>
+          <span className="font-mono text-slate-500">
+            Hiển thị {filteredExpenses.length} / {periodExpenses.length} khoản chi phí
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-160 text-left">
