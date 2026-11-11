@@ -7,7 +7,7 @@ import type {
   BedStatus,
   FacilityExpense,
 } from "../types/index.ts";
-import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle } from "../types/tenant.ts";
+import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle, VehicleChangeRequest } from "../types/tenant.ts";
 import { dormService } from "../services/dormService.ts";
 import { useToast } from "../hooks/useToast.ts";
 import { env } from "../config/env.ts";
@@ -19,6 +19,7 @@ export type DormDataContextType = {
   tickets: Ticket[];
   contracts: ContractRecord[];
   vehicles: TenantVehicle[];
+  vehicleChangeRequests: VehicleChangeRequest[];
   expenses: FacilityExpense[];
   onCreateExpense: (expense: FacilityExpense) => Promise<void>;
   onUpdateExpense: (id: string, expense: FacilityExpense) => Promise<void>;
@@ -26,6 +27,10 @@ export type DormDataContextType = {
   onRegisterVehicle: (vehicle: TenantVehicle) => Promise<void>;
   onIssueVehicleCard: (id: string, cardCode: string) => Promise<void>;
   onRevokeVehicle: (id: string) => Promise<void>;
+  onRejectVehicle: (id: string, reason: string) => Promise<void>;
+  onRequestVehicleChange: (input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }) => Promise<void>;
+  onApproveVehicleChangeRequest: (requestId: string) => Promise<void>;
+  onRejectVehicleChangeRequest: (requestId: string, reason: string) => Promise<void>;
   onResetDemo: () => Promise<void>;
   onOnboard: (input: OnboardingInput) => Promise<OnboardingResult>;
   onRenewContract: (id: string, endDate: string) => Promise<void>;
@@ -63,6 +68,7 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [contracts, setContracts] = useState<ContractRecord[]>([]);
   const [vehicles, setVehicles] = useState<TenantVehicle[]>([]);
+  const [vehicleChangeRequests, setVehicleChangeRequests] = useState<VehicleChangeRequest[]>([]);
   const [expenses, setExpenses] = useState<FacilityExpense[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,11 +90,13 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
       setTenants(t);
       setInvoices(inv);
       setTickets(tck);
-      const [contractData, vehicleData, expenseData] = await Promise.allSettled([dormService.getContracts(), dormService.getVehicles(), dormService.getExpenses()]);
+      const [contractData, vehicleData, expenseData, changeReqData] = await Promise.allSettled([dormService.getContracts(), dormService.getVehicles(), dormService.getExpenses(), dormService.getVehicleChangeRequests()]);
       if (contractData.status === "fulfilled") setContracts(contractData.value);
       else showToast(contractData.reason instanceof Error ? contractData.reason.message : "Không thể tải hợp đồng.");
       if (vehicleData.status === "fulfilled") setVehicles(vehicleData.value);
       else showToast(vehicleData.reason instanceof Error ? vehicleData.reason.message : "Không thể tải phương tiện.");
+      if (changeReqData.status === "fulfilled") setVehicleChangeRequests(changeReqData.value);
+      else setVehicleChangeRequests([]);
       if (expenseData.status === "fulfilled") setExpenses(expenseData.value);
       else {
         setExpenses([]);
@@ -203,10 +211,10 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     return confirmed;
   };
   const refreshLifecycle = async () => {
-    const [nextRooms, nextTenants, nextInvoices, nextContracts, nextVehicles] = await Promise.all([
-      dormService.getRooms(), dormService.getTenants(), dormService.getInvoices(), dormService.getContracts(), dormService.getVehicles(),
+    const [nextRooms, nextTenants, nextInvoices, nextContracts, nextVehicles, nextChangeReqs] = await Promise.all([
+      dormService.getRooms(), dormService.getTenants(), dormService.getInvoices(), dormService.getContracts(), dormService.getVehicles(), dormService.getVehicleChangeRequests(),
     ]);
-    setRooms(nextRooms); setTenants(nextTenants); setInvoices(nextInvoices); setContracts(nextContracts); setVehicles(nextVehicles);
+    setRooms(nextRooms); setTenants(nextTenants); setInvoices(nextInvoices); setContracts(nextContracts); setVehicles(nextVehicles); setVehicleChangeRequests(nextChangeReqs);
   };
   const onOnboard = async (input: OnboardingInput) => {
     const result = await dormService.onboard(input);
@@ -232,6 +240,23 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
   const onRevokeVehicle = async (id: string) => {
     const updated = await dormService.revokeVehicle(id);
     setVehicles((current) => current.map((vehicle) => vehicle.id === id ? updated : vehicle));
+  };
+  const onRejectVehicle = async (id: string, reason: string) => {
+    const updated = await dormService.rejectVehicle(id, reason);
+    setVehicles((current) => current.map((vehicle) => vehicle.id === id ? updated : vehicle));
+  };
+  const onRequestVehicleChange = async (input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }) => {
+    const created = await dormService.requestVehicleChange(input);
+    setVehicleChangeRequests((prev) => [created, ...prev]);
+  };
+  const onApproveVehicleChangeRequest = async (requestId: string) => {
+    const { request, oldVehicle, newVehicle } = await dormService.approveVehicleChangeRequest(requestId);
+    setVehicles((prev) => [newVehicle, ...prev.map((v) => v.id === oldVehicle.id ? oldVehicle : v)]);
+    setVehicleChangeRequests((prev) => prev.map((r) => r.id === requestId ? request : r));
+  };
+  const onRejectVehicleChangeRequest = async (requestId: string, reason: string) => {
+    const updated = await dormService.rejectVehicleChangeRequest(requestId, reason);
+    setVehicleChangeRequests((prev) => prev.map((r) => r.id === requestId ? updated : r));
   };
   const onResetDemo = async () => {
     await dormService.resetMockData();
@@ -267,6 +292,11 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
         onRegisterVehicle,
         onIssueVehicleCard,
         onRevokeVehicle,
+        onRejectVehicle,
+        onRequestVehicleChange,
+        onApproveVehicleChangeRequest,
+        onRejectVehicleChangeRequest,
+        vehicleChangeRequests,
         onResetDemo,
         onOnboard,
         onRenewContract,

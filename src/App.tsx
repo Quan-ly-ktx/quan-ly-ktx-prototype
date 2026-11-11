@@ -62,6 +62,11 @@ function AppContent() {
     onRegisterVehicle,
     onIssueVehicleCard,
     onRevokeVehicle,
+    onRejectVehicle,
+    onRequestVehicleChange,
+    onApproveVehicleChangeRequest,
+    onRejectVehicleChangeRequest,
+    vehicleChangeRequests,
     onResetDemo,
     onOnboard,
     onRenewContract,
@@ -136,7 +141,9 @@ function AppContent() {
           invoices={invoices}
           onSubmitInvoiceProof={onSubmitInvoiceProof}
           vehicles={vehicles}
+          vehicleChangeRequests={vehicleChangeRequests}
           onCreateVehicle={onRegisterVehicle}
+          onRequestVehicleChange={onRequestVehicleChange}
           onCreateTicket={onCreateTicket}
           onLogout={logout}
           onUpdateTenantProfile={onUpdateTenantProfile}
@@ -299,6 +306,10 @@ function AppContent() {
               vehicles={vehicles}
               onIssueVehicleCard={onIssueVehicleCard}
               onRevokeVehicle={onRevokeVehicle}
+              onRejectVehicle={onRejectVehicle}
+              vehicleChangeRequests={vehicleChangeRequests}
+              onApproveVehicleChangeRequest={onApproveVehicleChangeRequest}
+              onRejectVehicleChangeRequest={onRejectVehicleChangeRequest}
               showToast={showToast}
             />
           ) : activeNav === "Hợp đồng" ? (

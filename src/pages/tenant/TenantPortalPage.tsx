@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AccountMenu, Button, Icon, type IconName } from "../../components/common/index.ts";
 import type { Ticket } from "../../types/incident.ts";
 import type { Invoice } from "../../types/invoice.ts";
-import type { ContractRecord, TenantRecord } from "../../types/tenant.ts";
+import type { ContractRecord, TenantRecord, VehicleChangeRequest } from "../../types/tenant.ts";
 import { invoicesForTenant } from "../../utils/invoiceOwnership.ts";
 import { getIncidentNotifications, getViolations, markIncidentNotificationRead, subscribeIncidentStore } from "../../services/mock/incidentStore.ts";
 import { env } from "../../config/env.ts";
@@ -33,7 +33,9 @@ export function TenantPortal({
   invoices: externalInvoices,
   onSubmitInvoiceProof,
   vehicles: externalVehicles,
+  vehicleChangeRequests,
   onCreateVehicle,
+  onRequestVehicleChange,
   onCreateTicket,
   onLogout,
   onUpdateTenantProfile,
@@ -46,7 +48,9 @@ export function TenantPortal({
   invoices?: Invoice[];
   onSubmitInvoiceProof?: (id: string, tenantId: string, proof: NonNullable<Invoice["proof"]>) => Promise<void>;
   vehicles?: TenantVehicle[];
+  vehicleChangeRequests?: VehicleChangeRequest[];
   onCreateVehicle?: (vehicle: TenantVehicle) => Promise<void>;
+  onRequestVehicleChange?: (input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }) => Promise<void>;
   onCreateTicket: (ticket: Ticket) => Promise<Ticket>;
   onUpdateTenantProfile?: (id: string, profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>, actorRole?: "manager" | "tenant") => Promise<TenantRecord>;
   onLogout: () => void;
@@ -347,6 +351,8 @@ export function TenantPortal({
                 tenantId={tenant.id}
                 canRegister={isResident}
                 onCreateVehicle={handleCreateVehicle}
+                vehicleChangeRequests={vehicleChangeRequests?.filter((r) => r.tenantId === tenant.id)}
+                onRequestVehicleChange={onRequestVehicleChange}
                 showToast={showToast}
               />
             )}
