@@ -56,7 +56,7 @@ export function IncidentsPage({
   const [dispatchPriority, setDispatchPriority] = useState<Priority>("Bình thường");
   const [dispatchDeadline, setDispatchDeadline] = useState("");
   const [activeTechnicians, setActiveTechnicians] = useState<TechnicianResponse[]>([]);
-
+  const [previewPhoto, setPreviewPhoto] = useState<{ url: string; title: string } | null>(null);
   useEffect(() => {
     technicianService
       .getTechnicians({ active: true })
@@ -283,36 +283,150 @@ export function IncidentsPage({
       {ticket && (
         <Drawer
           title={ticket.title}
-          subtitle={`${ticket.id} · ${ticket.room}`}
+          subtitle={`${ticket.id} · Phòng ${ticket.room}${ticket.bed ? ` · Giường ${ticket.bed}` : ""}`}
           onClose={() => setTicket(null)}
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={stTone(ticket.status)}>{ticket.status}</Badge>
             <PriorityTag priority={ticket.priority} />
           </div>
-          <p className="mt-5 rounded-sm bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
+          <p className="mt-4 rounded-sm bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
             {ticket.description}
           </p>
-          <dl className="mt-5 divide-y divide-slate-100 rounded-sm border border-slate-200 text-sm">
+          <dl className="mt-4 divide-y divide-slate-100 rounded-sm border border-slate-200 text-xs">
             {[
               ["Người báo", `${ticket.reporter} · ${ticket.phone}`],
+              ["Vị trí", `Phòng ${ticket.room}${ticket.bed ? ` · Giường ${ticket.bed}` : ""}`],
               ["Hạng mục", ticket.category],
               ["Thời gian báo", ticket.createdAt],
-              ["Hạn xử lý", ticket.deadline],
+              ["Hạn xử lý", ticket.deadline || "Chưa đặt hạn"],
               ["Kỹ thuật viên", ticket.assignee ?? "Chưa phân công"],
-              ...(ticket.resolution
-                ? [
-                    ["Kết quả", ticket.resolution],
-                    ["Chi phí", money(ticket.cost ?? 0)],
-                  ]
-                : []),
             ].map(([k, v]) => (
-              <div key={k} className="flex justify-between gap-4 px-4 py-4">
+              <div key={k} className="flex justify-between gap-4 px-3 py-2.5">
                 <dt className="text-slate-500">{k}</dt>
                 <dd className="text-right font-medium text-slate-900">{v}</dd>
               </div>
             ))}
           </dl>
+
+          {/* Scene Photo */}
+          <div className="mt-4 rounded-sm border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Ảnh hiện trường sự cố</h4>
+              {ticket.scenePhoto && (
+                <span className="text-[11px] text-brand-600 font-medium">Bấm ảnh để phóng to</span>
+              )}
+            </div>
+            {ticket.scenePhoto ? (
+              <button
+                type="button"
+                className="group relative block w-full overflow-hidden rounded-sm border border-slate-200 bg-slate-100 hover:border-brand-500 transition-colors"
+                onClick={() => setPreviewPhoto({ url: ticket.scenePhoto!, title: `Ảnh hiện trường: ${ticket.title} (${ticket.id})` })}
+              >
+                <img
+                  src={ticket.scenePhoto}
+                  alt="Ảnh hiện trường"
+                  className="max-h-44 w-full object-contain mx-auto transition-transform group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
+                  Xem ảnh lớn
+                </div>
+              </button>
+            ) : (
+              <p className="text-xs text-slate-400 italic">Không có ảnh hiện trường đính kèm.</p>
+            )}
+          </div>
+
+          {/* Resolution & Parts (if completed or has resolution) */}
+          {(ticket.status === "Hoàn thành" || ticket.resolution) && (
+            <div className="mt-4 rounded-sm border border-success-200 bg-success-50/30 p-3.5 shadow-xs">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-success-800 mb-2">
+                Kết quả nghiệm thu kỹ thuật
+              </h4>
+              {ticket.resolution ? (
+                <p className="text-xs text-slate-800 leading-relaxed font-medium bg-white p-2.5 rounded-sm border border-success-100">
+                  {ticket.resolution}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500 italic">Chưa có mô tả kết quả xử lý.</p>
+              )}
+              {ticket.completedAt && (
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Thời điểm hoàn thành: <span className="font-mono text-slate-700">{new Date(ticket.completedAt).toLocaleString("vi-VN")}</span>
+                </p>
+              )}
+
+              {/* Completion Photo */}
+              <div className="mt-3 pt-3 border-t border-success-100">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-slate-700">Ảnh nghiệm thu sau hoàn thành:</span>
+                  {ticket.completionPhoto && (
+                    <span className="text-[11px] text-brand-600 font-medium">Bấm để phóng to</span>
+                  )}
+                </div>
+                {ticket.completionPhoto ? (
+                  <button
+                    type="button"
+                    className="group relative block w-full overflow-hidden rounded-sm border border-slate-200 bg-white hover:border-brand-500 transition-colors"
+                    onClick={() => setPreviewPhoto({ url: ticket.completionPhoto!, title: `Ảnh nghiệm thu: ${ticket.title} (${ticket.id})` })}
+                  >
+                    <img
+                      src={ticket.completionPhoto}
+                      alt="Ảnh nghiệm thu"
+                      className="max-h-44 w-full object-contain mx-auto transition-transform group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
+                      Xem ảnh lớn
+                    </div>
+                  </button>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">Không có ảnh nghiệm thu sau hoàn thành.</p>
+                )}
+              </div>
+
+              {/* Parts list & Costs */}
+              <div className="mt-3 pt-3 border-t border-success-100">
+                <h5 className="text-xs font-semibold text-slate-700 mb-2">Danh mục linh kiện thực tế:</h5>
+                {(ticket.parts && ticket.parts.length > 0) ? (
+                  <div className="overflow-x-auto rounded-sm border border-slate-200 bg-white">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
+                        <tr>
+                          <th className="p-2 font-semibold">Tên vật tư</th>
+                          <th className="p-2 font-semibold text-center">SL</th>
+                          <th className="p-2 font-semibold text-right">Đơn giá</th>
+                          <th className="p-2 font-semibold text-right">Thành tiền</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {ticket.parts.map((p, idx) => (
+                          <tr key={idx}>
+                            <td className="p-2 text-slate-900 font-medium">{p.name}</td>
+                            <td className="p-2 text-center font-mono text-slate-700">{p.quantity}</td>
+                            <td className="p-2 text-right font-mono text-slate-700">{money(p.unitCost)}</td>
+                            <td className="p-2 text-right font-mono font-semibold text-slate-900">{money(p.quantity * p.unitCost)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t border-slate-200 bg-slate-50 font-bold">
+                        <tr>
+                          <td colSpan={3} className="p-2 text-slate-700">Tổng chi phí vật tư:</td>
+                          <td className="p-2 text-right font-mono text-danger-600">
+                            {money(ticket.parts.reduce((sum, p) => sum + p.quantity * p.unitCost, 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center text-xs text-slate-600 bg-white p-2.5 rounded-sm border border-slate-100">
+                    <span>Không sử dụng linh kiện thay thế</span>
+                    <span className="font-bold text-slate-900">Chi phí: {money(ticket.cost ?? 0)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {ticket.status !== "Hoàn thành" && (
             <div className="mt-6 rounded-sm border border-slate-200 bg-slate-50 p-4">
               <h3 className="font-heading text-sm font-bold text-slate-900">
@@ -487,6 +601,29 @@ export function IncidentsPage({
                 onClick={submit}
               >
                 Ghi nhận vi phạm
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {previewPhoto && (
+        <Modal
+          title={previewPhoto.title}
+          onClose={() => setPreviewPhoto(null)}
+          wide
+        >
+          <div className="p-6 text-center">
+            <img
+              src={previewPhoto.url}
+              alt={previewPhoto.title}
+              className="max-h-[70vh] mx-auto rounded-sm border border-slate-200 object-contain shadow-xs"
+            />
+            <div className="mt-4 flex justify-center">
+              <Button
+                className="h-9 rounded-sm border border-slate-200 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setPreviewPhoto(null)}
+              >
+                Đóng
               </Button>
             </div>
           </div>
