@@ -3,6 +3,7 @@ import { Button } from "../../../components/common/index.ts";
 import { useDormData } from "../../../hooks/index.ts";
 import type { Invoice, QuickKind } from "../../../types/index.ts";
 import { DashboardKPIs } from "./DashboardKPIs.tsx";
+import { DashboardCharts } from "./DashboardCharts.tsx";
 
 export function DashboardPage({ invoices, onNavigate }: {
   invoices: Invoice[];
@@ -26,7 +27,14 @@ export function DashboardPage({ invoices, onNavigate }: {
           <input className="ml-2 rounded border border-slate-300 p-2" type="month" value={period} onChange={(event) => setPeriod(event.target.value)} />
         </label>
       </header>
-      {loading ? <p>Đang tải dữ liệu…</p> : <DashboardKPIs invoices={invoices} rooms={rooms} tenants={tenants} tickets={tickets} period={period} />}
+      {loading ? (
+        <p>Đang tải dữ liệu…</p>
+      ) : (
+        <>
+          <DashboardKPIs invoices={invoices} rooms={rooms} tenants={tenants} tickets={tickets} period={period} />
+          <DashboardCharts />
+        </>
+      )}
       <div className="mt-6 flex flex-wrap gap-3">
         <Button className="rounded border border-slate-300 px-4 py-2" onClick={() => onNavigate("Hóa đơn")}>Xem hóa đơn</Button>
         <Button className="rounded border border-slate-300 px-4 py-2" onClick={() => onNavigate("Sự cố & kỷ luật")}>Xem sự cố</Button>
