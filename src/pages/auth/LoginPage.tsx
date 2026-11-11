@@ -1,23 +1,36 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type React from "react";
 import { Button, Icon, Modal } from "../../components/common/index.ts";
 import type { Role, LoginRequest } from "../../types/auth.ts";
 import { authService } from "../../services/authService.ts";
 import { env } from "../../config/env.ts";
 import { demoRequestOtp, demoResetPassword, demoVerifyOtp } from "../../services/mock/mockAuth.ts";
+import { getMockSnapshot } from "../../services/mock/mockStore.ts";
 
-const demoAccounts: { role: Role; label: string; email: string }[] = [
-  { role: "manager", label: "Quản lý", email: "manager@gmail.com" },
-  { role: "tenant", label: "Người thuê", email: "079203001187" },
-  { role: "tenant", label: "Khách đã checkout", email: "000000000001" },
-  { role: "technician", label: "Kỹ thuật viên", email: "thinh.vv@ktxhub.vn" },
-];
+
 
 export function LoginPage({
   onLogin,
 }: {
   onLogin: (roleOrCredentials: Role | LoginRequest) => Promise<void> | void;
 }) {
+  const technicianEmail = useMemo(() => {
+    if (!env.USE_MOCK) return "thinh.vv@ktxhub.vn";
+    try {
+      const state = getMockSnapshot();
+      const tech = state.staff.find((s) => s.id === "tech-1" && s.active);
+      return tech?.email ?? "thinh.vv@ktxhub.vn";
+    } catch {
+      return "thinh.vv@ktxhub.vn";
+    }
+  }, []);
+
+  const demoAccounts: { role: Role; label: string; email: string }[] = [
+    { role: "manager", label: "Quản lý", email: "manager@gmail.com" },
+    { role: "tenant", label: "Người thuê", email: "079203001187" },
+    { role: "tenant", label: "Khách đã checkout", email: "000000000001" },
+    { role: "technician", label: "Kỹ thuật viên", email: technicianEmail },
+  ];
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

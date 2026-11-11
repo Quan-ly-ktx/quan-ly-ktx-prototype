@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Drawer, PageHeader } from "../../../components/common/index.ts";
 import { card, th, inputCls, Badge, type Toast } from "../common.tsx";
 import { technicianService } from "../../../services/technicianService.ts";
-import { addDemoTechnician, demoEmailAvailable, resetDemoTechnician, updateDemoTechnician } from "../../../services/mock/mockAuth.ts";
+import { demoEmailAvailable, resetDemoTechnician } from "../../../services/mock/mockAuth.ts";
 import { env } from "../../../config/env.ts";
 import type { TechnicianResponse } from "../../../types/api/endpoints.ts";
 
@@ -41,7 +41,6 @@ export function TechnicianAccountsPage({ showToast }: Toast) {
     try {
       const password = generatePassword();
       const created = await technicianService.createTechnician({ fullName: form.name.trim(), email: form.email.trim(), phone: form.phone.trim(), password });
-      if (env.USE_MOCK) addDemoTechnician(created.id, form.email.trim(), form.name.trim(), password);
       setStaff((items) => [...items, created]);
       setForm(emptyForm);
       setOnce(password);
@@ -56,8 +55,8 @@ export function TechnicianAccountsPage({ showToast }: Toast) {
     setBusy(true); setError("");
     try {
       const updated = await technicianService.updateTechnician(current.id, { fullName: edit.name.trim(), email: edit.email.trim(), phone: edit.phone.trim() });
-      if (env.USE_MOCK) updateDemoTechnician(current.id, edit.email.trim(), edit.name.trim());
       setStaff((items) => items.map((s) => s.id === current.id ? updated : s));
+      setEdit({ name: updated.fullName, email: updated.email ?? "", phone: updated.phone });
       showToast("Đã cập nhật kỹ thuật viên.");
     } catch (err) { setError(err instanceof Error ? err.message : "Không thể cập nhật kỹ thuật viên."); }
     finally { setBusy(false); }

@@ -20,6 +20,7 @@ export function RoomPage({
   onRequest,
   pendingDeposit,
   onPay,
+  onUpdateProfile,
 }: {
   tenant: TenantRecord;
   contract?: ContractRecord;
@@ -31,11 +32,12 @@ export function RoomPage({
   onRequest: (kind: RequestKind) => void;
   pendingDeposit: boolean;
   onPay: () => void;
+  onUpdateProfile?: (profile: { phone: string; address: string; emergencyContactName?: string; emergencyContactPhone?: string }) => Promise<void>;
 }) {
   const TENANT = useContext(TenantCtx);
   const [docsOpen, setDocsOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const ownedContract = contract?.tenantId === tenant.id && contract.status !== "Đã thanh lý" ? contract : undefined;
+  const ownedContract = contract?.tenantId === tenant.id ? contract : undefined;
   const contractDocuments = ownedContract?.documents?.filter((doc) => doc.contractId === ownedContract.id) ?? [];
   const endParts = tenant.end.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   const endDate = endParts
@@ -49,6 +51,13 @@ export function RoomPage({
   const openTickets = myTickets.filter(
     (ticket) => ticket.status !== "Hoàn thành",
   );
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [editPhone, setEditPhone] = useState(tenant.phone);
+  const [editAddress, setEditAddress] = useState(tenant.address);
+  const [editEmergName, setEditEmergName] = useState(tenant.emergencyContactName ?? "");
+  const [editEmergPhone, setEditEmergPhone] = useState(tenant.emergencyContactPhone ?? "");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
   return (
     <>
       <section className="mb-8">
@@ -220,9 +229,27 @@ export function RoomPage({
           </Card>
 
           <Card>
-            <h2 className="font-heading text-lg font-bold text-slate-900">
-              Hồ sơ cá nhân
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-heading text-lg font-bold text-slate-900">
+                Hồ sơ cá nhân
+              </h2>
+              {onUpdateProfile && (
+                <button
+                  type="button"
+                  className="rounded-sm border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 active:translate-y-[1px]"
+                  onClick={() => {
+                    setEditPhone(tenant.phone);
+                    setEditAddress(tenant.address);
+                    setEditEmergName(tenant.emergencyContactName ?? "");
+                    setEditEmergPhone(tenant.emergencyContactPhone ?? "");
+                    setProfileError("");
+                    setProfileModalOpen(true);
+                  }}
+                >
+                  Chỉnh sửa
+                </button>
+              )}
+            </div>
             <dl className="mt-4 divide-y divide-slate-100 text-sm">
               {[
                 ["Họ và tên", TENANT.name, false],
@@ -351,6 +378,110 @@ export function RoomPage({
               </Button>
             </div>
           </div>
+        </Modal>
+      )}
+      {profileModalOpen && (
+        <Modal
+          title="Chỉnh sửa thông tin liên hệ"
+          description="Người thuê chỉ được phép chỉnh sửa số điện thoại, địa chỉ và thông tin liên hệ khẩn cấp theo SRS FR-06."
+          onClose={() => setProfileModalOpen(false)}
+        >
+          <form
+            className="space-y-4 p-6"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (profileSaving) return;
+              if (!/^0\d{9}$/.test(editPhone.trim())) {
+                setProfileError("Số điện thoại phải gồm 10 chữ số bắt đầu bằng 0.");
+                return;
+              }
+              if (!editAddress.trim()) {
+                setProfileError("Địa chỉ thường trú không được để trống.");
+                return;
+              }
+              if (editEmergPhone.trim() && !/^0\d{9}$/.test(editEmergPhone.trim())) {
+                setProfileError("Số điện thoại liên hệ khẩn cấp không hợp lệ.");
+                return;
+              }
+              setProfileSaving(true);
+              setProfileError("");
+              try {
+                if (onUpdateProfile) {
+                  await onUpdateProfile({
+                    phone: editPhone.trim(),
+                    address: editAddress.trim(),
+                    emergencyContactName: editEmergName.trim() || undefined,
+                    emergencyContactPhone: editEmergPhone.trim() || undefined,
+                  });
+                }
+                setProfileModalOpen(false);
+              } catch (err) {
+                setProfileError(err instanceof Error ? err.message : "Cập nhật hồ sơ thất bại.");
+              } finally {
+                setProfileSaving(false);
+              }
+            }}
+          >
+            {profileError && (
+              <div className="rounded-sm border border-danger-200 bg-danger-50 p-3 text-xs text-danger-700">
+                {profileError}
+              </div>
+            )}
+            <div className="rounded-sm border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <span className="font-semibold text-slate-800">Thông tin cố định:</span> {tenant.name} · CCCD: {tenant.cccd} · Email: {tenant.email} (Chỉ Ban Quản lý có quyền điều chỉnh sau đối soát giấy tờ gốc).
+            </div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Số điện thoại *
+              <input
+                className="focus-ring mt-1 h-10 w-full rounded-sm border border-slate-200 px-3 text-sm"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                required
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Địa chỉ thường trú *
+              <input
+                className="focus-ring mt-1 h-10 w-full rounded-sm border border-slate-200 px-3 text-sm"
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                required
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Họ tên người liên hệ khẩn cấp
+              <input
+                className="focus-ring mt-1 h-10 w-full rounded-sm border border-slate-200 px-3 text-sm"
+                value={editEmergName}
+                onChange={(e) => setEditEmergName(e.target.value)}
+                placeholder="VD: Nguyễn Văn Phụ (Bố)"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700">
+              Số điện thoại khẩn cấp
+              <input
+                className="focus-ring mt-1 h-10 w-full rounded-sm border border-slate-200 px-3 text-sm"
+                value={editEmergPhone}
+                onChange={(e) => setEditEmergPhone(e.target.value)}
+                placeholder="VD: 0912345678"
+              />
+            </label>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                className="h-10 rounded-sm border border-slate-200 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setProfileModalOpen(false)}
+              >
+                Hủy
+              </Button>
+              <Button
+                type="submit"
+                disabled={profileSaving}
+                className="h-10 rounded-sm bg-brand-500 px-4 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+              >
+                {profileSaving ? "Đang lưu..." : "Lưu thay đổi"}
+              </Button>
+            </div>
+          </form>
         </Modal>
       )}
     </>

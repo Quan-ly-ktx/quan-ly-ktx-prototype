@@ -36,6 +36,7 @@ export function TenantPortal({
   onCreateVehicle,
   onCreateTicket,
   onLogout,
+  onUpdateTenantProfile,
   showToast,
 }: {
   tenant: TenantRecord;
@@ -47,6 +48,7 @@ export function TenantPortal({
   vehicles?: TenantVehicle[];
   onCreateVehicle?: (vehicle: TenantVehicle) => Promise<void>;
   onCreateTicket: (ticket: Ticket) => Promise<Ticket>;
+  onUpdateTenantProfile?: (id: string, profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>, actorRole?: "manager" | "tenant") => Promise<TenantRecord>;
   onLogout: () => void;
   showToast: (message: string) => void;
 }) {
@@ -291,6 +293,12 @@ export function TenantPortal({
                 onRequest={setRequest}
                 pendingDeposit={pendingDeposit}
                 onPay={() => setPage("invoices")}
+                onUpdateProfile={async (p) => {
+                  if (onUpdateTenantProfile) {
+                    await onUpdateTenantProfile(tenant.id, p, "tenant");
+                    showToast("Đã cập nhật thông tin cá nhân.");
+                  }
+                }}
               />
             )}
             {page === "room" && (

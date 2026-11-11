@@ -51,7 +51,7 @@ export function TenantsPage({
   tenants: TenantRecord[];
   rooms: RoomRecord[];
   onOnboard: (input: OnboardingInput) => Promise<OnboardingResult>;
-  onUpdateTenantProfile: (id: string, profile: Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender">) => Promise<TenantRecord>;
+  onUpdateTenantProfile: (id: string, profile: Partial<Pick<TenantRecord, "name" | "cccd" | "email" | "phone" | "address" | "gender" | "emergencyContactName" | "emergencyContactPhone">>, actorRole?: "manager" | "tenant") => Promise<TenantRecord>;
   invoices?: Invoice[];
   initialSlot?: { roomId: string; bedId: string } | null;
   onClearInitialSlot?: () => void;

@@ -22,9 +22,30 @@ import { ToastProvider, AuthProvider, DormDataProvider } from "./contexts/index.
 import { useAuth, useToast, useDormData } from "./hooks/index.ts";
 import type { Priority } from "./types/incident.ts";
 import { env } from "./config/env.ts";
+import { dormService } from "./services/dormService.ts";
 
 function AppContent() {
   const { role, currentUser, logout } = useAuth();
+  const [simClock, setSimClock] = useState(() => dormService.getBusinessDate());
+
+  const handleSetSimDate = (target: "01" | "25" | "end") => {
+    const base = new Date();
+    const year = base.getFullYear();
+    const month = base.getMonth() + 1;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    let targetDate = "";
+    if (target === "01") {
+      targetDate = `${year}-${pad(month)}-01`;
+    } else if (target === "25") {
+      targetDate = `${year}-${pad(month)}-25`;
+    } else {
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      targetDate = `${year}-${pad(month)}-${pad(lastDay)}`;
+    }
+    dormService.setBusinessDate(targetDate);
+    setSimClock(targetDate);
+    showToast(`Đã chuyển ngày mô phỏng sang ${targetDate}`);
+  };
   const { toast, showToast, closeToast } = useToast();
   const {
     rooms,
@@ -47,11 +68,16 @@ function AppContent() {
     onAddContractDocuments,
     onDeleteContractDocument,
     onUpdateTenantProfile,
+    error,
     loading,
+    reload,
     onRoomsChange,
     onCreateRoom,
     onUpdateRoom,
     onDeleteRoom,
+    onDeleteMistakenRoom,
+    onArchiveRoom,
+    onRestoreRoom,
     onUpdateBedStatus,
     onSubmitInvoiceProof,
     onRejectInvoiceProof,
@@ -111,6 +137,7 @@ function AppContent() {
           onCreateVehicle={onRegisterVehicle}
           onCreateTicket={onCreateTicket}
           onLogout={logout}
+          onUpdateTenantProfile={onUpdateTenantProfile}
           showToast={showToast}
         />
         {toastNode}
@@ -145,9 +172,58 @@ function AppContent() {
         <div className="mx-auto max-w-[1280px]">
           {env.USE_MOCK && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-slate-200 bg-white px-4 py-2.5 shadow-xs">
-              <span className="text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">Môi trường Mock:</span> Dữ liệu lưu trong trình duyệt cục bộ.
-              </span>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-semibold text-slate-700">Mock Mode:</span>
+                <span className="rounded-sm bg-brand-50 px-2 py-0.5 font-mono font-bold text-brand-700 border border-brand-100">
+                  Ngày mô phỏng: {simClock}
+                </span>
+                <span className="text-slate-400">·</span>
+                <button
+                  type="button"
+                  className="rounded-sm border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100 active:translate-y-[1px]"
+                  onClick={() => handleSetSimDate("01")}
+                >
+                  Ngày 01 (Onboarding)
+                </button>
+                <button
+                  type="button"
+                  className="rounded-sm border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100 active:translate-y-[1px]"
+                  onClick={() => handleSetSimDate("25")}
+                >
+                  Ngày 25 (Hóa đơn)
+                </button>
+                <button
+                  type="button"
+                  className="rounded-sm border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100 active:translate-y-[1px]"
+                  onClick={() => handleSetSimDate("end")}
+                >
+                  Cuối tháng
+                </button>
+                <input
+                  type="date"
+                  className="h-6 rounded-sm border border-slate-200 px-1 font-mono text-[11px]"
+                  value={simClock}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      dormService.setBusinessDate(e.target.value);
+                      setSimClock(e.target.value);
+                      showToast(`Đã chuyển ngày mô phỏng sang ${e.target.value}`);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="text-xs text-brand-600 underline hover:text-brand-700"
+                  onClick={() => {
+                    dormService.setBusinessDate(undefined);
+                    const real = dormService.getBusinessDate();
+                    setSimClock(real);
+                    showToast("Đã đưa ngày mô phỏng về ngày thực tế.");
+                  }}
+                >
+                  Ngày thực tế
+                </button>
+              </div>
               <button
                 type="button"
                 className="focus-ring flex items-center gap-1.5 rounded-sm border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 active:translate-y-[1px] transition-all"
@@ -166,6 +242,21 @@ function AppContent() {
               </button>
             </div>
           )}
+          {error && (
+            <div className="mb-4 flex items-center justify-between rounded-sm border border-danger-200 bg-danger-50 p-4 text-sm text-danger-700">
+              <div className="flex items-center gap-2.5">
+                <Icon name="alert" className="size-5 shrink-0" />
+                <span>{error}</span>
+              </div>
+              <button
+                type="button"
+                className="focus-ring cursor-pointer rounded-sm bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-danger-700 active:translate-y-[1px]"
+                onClick={() => void reload()}
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
           {activeNav === "Phòng & giường" ? (
             <RoomsPage
               rooms={rooms}
@@ -173,6 +264,9 @@ function AppContent() {
               onCreateRoom={onCreateRoom}
               onUpdateRoom={onUpdateRoom}
               onDeleteRoom={onDeleteRoom}
+              onDeleteMistakenRoom={onDeleteMistakenRoom}
+              onArchiveRoom={onArchiveRoom}
+              onRestoreRoom={onRestoreRoom}
               onUpdateBedStatus={onUpdateBedStatus}
               tenants={tenants}
               onQuickOnboard={(roomId, bedId) => {

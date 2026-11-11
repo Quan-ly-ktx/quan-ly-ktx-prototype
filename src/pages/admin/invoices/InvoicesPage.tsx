@@ -8,13 +8,17 @@ import {
   Select,
 } from "../../../components/common/index.ts";
 import { money } from "../../../utils/formatters.ts";
+import ExcelJS from "exceljs";
+import { dormService } from "../../../services/dormService.ts";
+import { env } from "../../../config/env.ts";
 import type { Invoice } from "../../../types/invoice.ts";
 import type { TenantRecord } from "../../../types/tenant.ts";
-import { totalInvoiceDue } from "../../../utils/invoiceCalculations.ts";
+import { totalInvoiceDue, calculateOverdueDays } from "../../../utils/invoiceCalculations.ts";
 import { card, th, rowCls, Badge, SearchBox, Stat, type Toast } from "../common.tsx";
 
-const invTone = (s: Invoice["status"], late?: number) =>
-  s === "Đã thu" ? "success" : s === "Chờ xác nhận" ? "brand" : late ? "danger" : "warning";
+
+const invTone = (s: Invoice["status"], lateDays: number) =>
+  s === "Đã thu" ? "success" : s === "Chờ xác nhận" ? "brand" : lateDays > 0 ? "danger" : "warning";
 
 export function InvoicesPage({
   records,
@@ -37,6 +41,9 @@ export function InvoicesPage({
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [cashInvoice, setCashInvoice] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
+  const currentToday = dormService.getBusinessDate();
+  const isLate = (i: Invoice) => calculateOverdueDays(i.due, i.status, currentToday) > 0;
+  const lateDays = (i: Invoice) => calculateOverdueDays(i.due, i.status, currentToday);
   const person = (id: string | undefined) => tenants.find((tenant) => tenant.id === id);
 
   const rows = records.filter(
@@ -75,6 +82,49 @@ export function InvoicesPage({
       setSaving(false);
     }
   };
+  const exportExcel = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Danh sách hóa đơn");
+      sheet.columns = [
+        { header: "Mã hóa đơn", key: "id", width: 18 },
+        { header: "Kỳ hóa đơn", key: "billingPeriod", width: 14 },
+        { header: "Khách thuê", key: "tenant", width: 24 },
+        { header: "Phòng · Giường", key: "roomBed", width: 16 },
+        { header: "Số tiền", key: "amount", width: 16 },
+        { header: "Hạn thanh toán", key: "due", width: 16 },
+        { header: "Trạng thái", key: "status", width: 16 },
+        { header: "Ngày thanh toán", key: "paidAt", width: 22 },
+        { header: "Phương thức", key: "method", width: 16 },
+        { header: "Người xác nhận", key: "confirmedBy", width: 20 },
+      ];
+      rows.forEach((inv) => {
+        sheet.addRow({
+          id: inv.id,
+          billingPeriod: inv.billingPeriod,
+          tenant: inv.tenant,
+          roomBed: `${inv.room} · ${inv.bed}`,
+          amount: inv.amount,
+          due: inv.due,
+          status: inv.status,
+          paidAt: inv.payment?.paidAt ?? "",
+          method: inv.payment?.method ?? "",
+          confirmedBy: inv.payment?.confirmedBy ?? "",
+        });
+      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `danh-sach-hoa-don-${currentToday}.xlsx`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast("Đã xuất danh sách hóa đơn ra file Excel.");
+    } catch {
+      showToast("Không thể xuất file Excel.");
+    }
+  };
 
   return (
     <>
@@ -83,15 +133,39 @@ export function InvoicesPage({
         title="Hóa đơn tiền phòng & dịch vụ"
         description="Hóa đơn phát hành tự động hằng tháng vào ngày 25, hạn thanh toán cố định ngày 05."
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               label="Xuất Excel"
-              className="h-10 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
-              onClick={() => showToast("Đã xuất danh sách hóa đơn tháng 10")}
+              className="flex h-10 items-center gap-1.5 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
+              onClick={() => void exportExcel()}
             >
+              <Icon name="file" className="size-4 text-slate-500" />
               Xuất Excel
             </Button>
-          </>
+            {env.USE_MOCK && (
+              <Button
+                label="Chạy batch hóa đơn ngày 25"
+                className="flex h-10 items-center gap-1.5 rounded-sm bg-brand-500 px-3.5 text-xs font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
+                onClick={async () => {
+                  const [y, m] = currentToday.split("-").map(Number);
+                  const nextMonth = `${y + (m === 12 ? 1 : 0)}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
+                  try {
+                    const issued = await dormService.issueInvoices(nextMonth);
+                    if (issued.length > 0) {
+                      showToast(`Đã phát hành ${issued.length} hóa đơn mới kỳ ${nextMonth.slice(0, 7)}`);
+                    } else {
+                      showToast(`Kỳ ${nextMonth.slice(0, 7)}: Tất cả hợp đồng đã có hóa đơn (không tạo trùng).`);
+                    }
+                  } catch (err) {
+                    showToast(err instanceof Error ? err.message : "Không thể phát hành hóa đơn.");
+                  }
+                }}
+              >
+                <Icon name="refresh" className="size-3.5" />
+                Chạy batch ngày 25
+              </Button>
+            )}
+          </div>
         }
       />
       <div className="mb-6 grid gap-4 md:grid-cols-3">
@@ -108,10 +182,10 @@ export function InvoicesPage({
           label="Nợ trong hạn"
           value={money(
             records
-              .filter((i) => i.status === "Nợ" && !i.late)
+              .filter((i) => i.status === "Nợ" && !isLate(i))
               .reduce((t, i) => t + i.amount, 0),
           )}
-          hint={`${records.filter((i) => i.status === "Nợ" && !i.late).length} hóa đơn`}
+          hint={`${records.filter((i) => i.status === "Nợ" && !isLate(i)).length} hóa đơn`}
         />
         <Stat
           icon="alert"
@@ -119,10 +193,10 @@ export function InvoicesPage({
           label="Nợ quá hạn"
           value={money(
             records
-              .filter((i) => i.status === "Nợ" && i.late)
+              .filter((i) => i.status === "Nợ" && isLate(i))
               .reduce((t, i) => t + i.amount, 0),
           )}
-          hint={`${records.filter((i) => i.status === "Nợ" && i.late).length} hóa đơn`}
+          hint={`${records.filter((i) => i.status === "Nợ" && isLate(i)).length} hóa đơn (tính động theo hạn)`}
         />
       </div>
 
@@ -177,9 +251,9 @@ export function InvoicesPage({
                     {money(i.amount)}
                   </td>
                   <td className="px-6 py-4">
-                    <Badge tone={invTone(i.status, i.late)}>
+                    <Badge tone={invTone(i.status, lateDays(i))}>
                       {i.status}
-                      {i.late ? ` · trễ ${i.late} ngày` : ""}
+                      {lateDays(i) > 0 ? ` · trễ ${lateDays(i)} ngày` : ""}
                     </Badge>
                   </td>
                   <td
@@ -232,7 +306,7 @@ export function InvoicesPage({
           onClose={() => setSelected(null)}
         >
           <div className="flex items-center justify-between">
-            <Badge tone={invTone(selected.status, selected.late)}>{selected.status}</Badge>
+            <Badge tone={invTone(selected.status, lateDays(selected))}>{selected.status}</Badge>
             <span className="text-sm text-slate-500">
               Hạn chót {selected.due}
             </span>
