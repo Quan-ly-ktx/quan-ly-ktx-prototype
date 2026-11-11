@@ -14,6 +14,19 @@ function bedIds(room: RoomRecord): RoomRecord {
     return [code, { id: bed?.id ?? crypto.randomUUID(), roomId: room.id, status: bed?.status ?? "AVAILABLE" }];
   })) };
 }
+function isRoomCodeProtected(code: string, state: MockSnapshot, exceptRoomId?: string): boolean {
+  const norm = code.trim().toUpperCase();
+  if (state.rooms.some((r) => r.id !== exceptRoomId && r.code.trim().toUpperCase() === norm)) {
+    return true;
+  }
+  if (state.contracts.some((c) => c.roomId !== exceptRoomId && c.room.trim().toUpperCase() === norm)) {
+    return true;
+  }
+  if (state.tickets.some((t) => t.roomId !== exceptRoomId && t.room.trim().toUpperCase() === norm)) {
+    return true;
+  }
+  return false;
+}
 
 function validateNewTicket(ticket: Omit<Ticket, "id">, state: MockSnapshot): void {
   const tenant = state.tenants.find((item) => item.id === ticket.reporterTenantId);
@@ -205,7 +218,7 @@ class MockDormServiceImpl implements DormService {
   async checkoutContract(id: string, status: "AVAILABLE" | "MAINTENANCE") { this.commit({ ...this.state, ...checkout(this.state, id, status) }); }
   async createRoom(room: RoomRecord) {
     const code = room.code.trim().toUpperCase();
-    if (!code || this.state.rooms.some((item) => item.code.toUpperCase() === code)) throw new Error("Mã phòng đã được sử dụng");
+    if (!code || isRoomCodeProtected(code, this.state)) throw new Error("Mã phòng đã được sử dụng hoặc gắn với lịch sử nghiệp vụ phải bảo vệ");
     const created = bedIds({ ...room, code, id: crypto.randomUUID(), bedOverrides: {} });
     this.commit({ ...this.state, rooms: [created, ...this.state.rooms] }); return created;
   }
@@ -215,7 +228,7 @@ class MockDormServiceImpl implements DormService {
     if (room.floor !== original.floor || room.total !== original.total || room.type !== original.type) throw new Error("Không thể thay đổi tầng hoặc sức chứa của phòng");
     if ((room.code !== original.code || room.gender !== original.gender) && this.state.contracts.some((contract) => contract.roomId === original.id && contract.status !== "Đã thanh lý")) throw new Error("Không thể đổi mã phòng hoặc giới tính khi còn người cư trú");
     const code = room.code.trim().toUpperCase();
-    if (!code || this.state.rooms.some((item) => item.id !== id && item.code.toUpperCase() === code)) throw new Error("Mã phòng đã được sử dụng");
+    if (!code || isRoomCodeProtected(code, this.state, id)) throw new Error("Mã phòng đã được sử dụng hoặc gắn với lịch sử nghiệp vụ phải bảo vệ");
     const updated = { ...original, ...room, code, id, bedOverrides: original.bedOverrides };
     this.commit({ ...this.state, rooms: this.state.rooms.map((item) => item.id === id ? updated : item) }); return updated;
   }
@@ -241,8 +254,8 @@ class MockDormServiceImpl implements DormService {
   async restoreRoom(id: string): Promise<RoomRecord> {
     const room = this.state.rooms.find((r) => r.id === id);
     if (!room || !room.deletedAt) throw new Error("Không tìm thấy phòng trong danh sách lưu trữ.");
-    if (this.state.rooms.some((r) => r.id !== id && !r.deletedAt && r.code.toUpperCase() === room.code.toUpperCase())) {
-      throw new Error("Mã phòng đang bị trùng với một phòng đang hoạt động.");
+    if (isRoomCodeProtected(room.code, this.state, id)) {
+      throw new Error("Mã phòng đang bị trùng với một phòng đang hoạt động hoặc lịch sử nghiệp vụ.");
     }
     const restored: RoomRecord = { ...room, deletedAt: undefined };
     this.commit({ ...this.state, rooms: this.state.rooms.map((r) => r.id === id ? restored : r) });
