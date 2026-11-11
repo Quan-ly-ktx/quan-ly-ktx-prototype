@@ -45,7 +45,7 @@ export type TenantInvoice = {
   proof?: { name: string; time: string };
 };
 
-export type FacilityExpenseCategory = "Điện EVN" | "Nước" | "Internet" | "Khác";
+export type FacilityExpenseCategory = "Điện EVN" | "Nước" | "Internet" | "Lương nhân viên" | "Khác";
 
 export type FacilityExpense = {
   id: string;

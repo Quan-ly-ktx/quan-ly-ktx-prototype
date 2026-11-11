@@ -12,6 +12,7 @@ const categoryTones: Record<FacilityExpenseCategory, "brand" | "warning" | "slat
   "Điện EVN": "warning",
   "Nước": "brand",
   "Internet": "brand",
+  "Lương nhân viên": "brand",
   "Khác": "slate",
 };
 
@@ -61,8 +62,8 @@ export function FinancialPage({
   );
   const report = reportForPeriod(records, tickets, expenses, period);
   const categories = periodExpenses.reduce(
-    (totals, expense) => ({ ...totals, [expense.category]: totals[expense.category] + expense.amount }),
-    { "Điện EVN": 0, "Nước": 0, "Internet": 0, "Khác": 0 } satisfies Record<FacilityExpenseCategory, number>,
+    (totals, expense) => ({ ...totals, [expense.category]: (totals[expense.category] ?? 0) + expense.amount }),
+    { "Điện EVN": 0, "Nước": 0, "Internet": 0, "Lương nhân viên": 0, "Khác": 0 } satisfies Record<FacilityExpenseCategory, number>,
   );
   const paid = records.filter((invoice) => invoice.status === "Đã thu" && invoice.billingPeriod === `${period}-01`);
   const repairs = tickets.filter((ticket) => ticket.status === "Hoàn thành" && completionMonth(ticket.completedAt) === period);
@@ -138,7 +139,7 @@ export function FinancialPage({
       <PageHeader
         eyebrow="Tài chính"
         title="Báo cáo thu – chi ghi nhận"
-        description="Chênh lệch thu – chi ghi nhận không phải lợi nhuận ròng kế toán."
+        description="Báo cáo thu – chi ghi nhận và lợi nhuận ròng ước tính (FR-14)."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button label="Xuất XLSX" className="h-10 rounded-sm border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700" onClick={() => void exportReport("xlsx")}>
@@ -168,9 +169,11 @@ export function FinancialPage({
         <Stat icon="wallet" tone="success" label="Doanh thu theo kỳ" value={report ? money(report.revenue) : "Chưa đủ dữ liệu"} hint={`Theo kỳ hóa đơn ${period}`} />
         <Stat icon="tools" tone="warning" label="Chi phí sửa chữa theo kỳ" value={report ? money(report.repairs) : "Chưa đủ dữ liệu"} hint="Phiếu hoàn thành theo giờ Việt Nam" />
         <Stat icon="invoice" tone="danger" label="Chi phí cơ sở theo kỳ" value={report ? money(report.facility) : "Chưa đủ dữ liệu"} hint={`${periodExpenses.length} khoản trong kỳ`} />
-        <Stat icon="trend" tone="brand" label="Chênh lệch thu – chi ghi nhận" value={report ? money(report.difference) : "Chưa đủ dữ liệu"} hint="Không phải lợi nhuận ròng" />
+        <Stat icon="trend" tone="brand" label="Lợi nhuận ròng (ước tính)" value={report ? money(report.difference) : "Chưa đủ dữ liệu"} hint="Ước tính thu – chi ghi nhận; chưa gồm thuế, khấu hao" />
       </div>
-
+      <p className="mb-6 -mt-3 text-[11px] text-slate-500 italic">
+        * Lợi nhuận ròng (ước tính): Ước tính dựa trên các khoản thu và chi đã được ghi nhận; có thể chưa bao gồm đầy đủ chi phí, thuế, khấu hao và nghĩa vụ khác.
+      </p>
       {/* Facility Expenses Table */}
       <section className={`${card} mb-6 overflow-hidden`}>
         <div className="flex flex-col gap-3 border-b border-slate-200 p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -205,6 +208,7 @@ export function FinancialPage({
                 <option>Điện EVN</option>
                 <option>Nước</option>
                 <option>Internet</option>
+                <option>Lương nhân viên</option>
                 <option>Khác</option>
               </select>
             </label>
@@ -377,7 +381,8 @@ export function FinancialPage({
                   <option value="Điện EVN">Điện EVN (Điện lực)</option>
                   <option value="Nước">Nước (Cấp nước sinh hoạt)</option>
                   <option value="Internet">Internet cáp quang tòa nhà</option>
-                  <option value="Khác">Khác (Vệ sinh, rác thải)</option>
+                  <option value="Lương nhân viên">Lương nhân viên (Tổng tháng)</option>
+                  <option value="Khác">Khác (Vệ sinh, rác thải, v.v.)</option>
                 </select>
               </label>
 

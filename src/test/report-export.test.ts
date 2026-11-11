@@ -4,7 +4,7 @@ import ExcelJS from "exceljs";
 import { createReportSpreadsheet } from "../utils/reportExport.ts";
 
 test("spreadsheet contains the selected period and the recorded income and cost totals", async () => {
-  const bytes = await createReportSpreadsheet({ period: "2026-10", revenue: 1500000, repairs: 100000, facility: 200000, difference: 1200000, categories: { "Điện EVN": 0, "Nước": 200000, "Internet": 0, "Khác": 0 } });
+  const bytes = await createReportSpreadsheet({ period: "2026-10", revenue: 1500000, repairs: 100000, facility: 200000, difference: 1200000, categories: { "Điện EVN": 0, "Nước": 200000, "Internet": 0, "Lương nhân viên": 0, "Khác": 0 } });
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes);
   const sheet = workbook.getWorksheet("Thu chi");
