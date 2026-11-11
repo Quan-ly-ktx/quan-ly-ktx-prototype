@@ -24,7 +24,7 @@ import { TenantInvoicesPage } from "./TenantInvoicesPage.tsx";
 import { TenantVehiclesPage } from "./TenantVehiclesPage.tsx";
 import { ReportPage } from "./ReportPage.tsx";
 import { RequestModal } from "./RequestModal.tsx";
-
+import { TenantViolationsPage } from "./TenantViolationsPage.tsx";
 export function TenantPortal({
   tenant,
   tenants,
@@ -160,6 +160,12 @@ export function TenantPortal({
       icon: "tools",
       badge: openCount || undefined,
     },
+    {
+      id: "violations",
+      label: "Vi phạm nội quy",
+      icon: "alert",
+      badge: violations.length || undefined,
+    },
   ];
   const pageTitle =
     page === "room"
@@ -168,8 +174,9 @@ export function TenantPortal({
         ? "Hóa đơn"
         : page === "vehicles"
           ? "Phương tiện"
-          : "Báo hỏng vật tư";
-
+          : page === "report"
+            ? "Báo hỏng vật tư"
+            : "Vi phạm nội quy";
   return (
     <TenantCtx.Provider value={TENANT}>
       <div className="min-h-[100dvh] bg-slate-50 text-slate-900">
@@ -255,7 +262,7 @@ export function TenantPortal({
             </div>
             <div className="flex items-center gap-2">
               <Button
-                label="Thông báo và Kỷ luật"
+                label="Thông báo hệ thống"
                 className="relative grid size-9 place-items-center rounded-sm text-slate-600 hover:bg-slate-100"
                 onClick={() => setNotificationsOpen(true)}
               >
@@ -357,37 +364,45 @@ export function TenantPortal({
                 showToast={showToast}
               />
             )}
+            {page === "violations" && (
+              <TenantViolationsPage violations={violations} />
+            )}
           </main>
         </div>
-
         <nav
-          className="fixed inset-x-0 bottom-0 z-sticky grid grid-cols-4 border-t border-slate-200 bg-white p-2 lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-sticky grid grid-cols-5 border-t border-slate-200 bg-white p-1.5 lg:hidden"
           aria-label="Điều hướng người thuê trên di động"
         >
           {nav.map((item) => (
             <Button
               key={item.id}
-              className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-sm text-xs font-semibold ${
+              className={`relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-sm px-1 py-1 text-[11px] font-semibold ${
                 page === item.id
                   ? "bg-brand-50 text-brand-700"
                   : "text-slate-500"
               }`}
               onClick={() => setPage(item.id)}
             >
-              <Icon name={item.icon} className="size-5" />
-              <span>
+              <Icon name={item.icon} className="size-4.5" />
+              <span className="truncate max-w-full">
                 {item.id === "room"
                   ? "Phòng"
                   : item.id === "invoices"
                     ? "Hóa đơn"
                     : item.id === "vehicles"
                       ? "Xe"
-                      : "Sự cố"}
+                      : item.id === "report"
+                        ? "Báo hỏng"
+                        : "Vi phạm"}
               </span>
+              {item.badge ? (
+                <span className="absolute top-1 right-1.5 grid size-3.5 place-items-center rounded-full bg-brand-500 font-mono text-[9px] font-bold text-white">
+                  {item.badge}
+                </span>
+              ) : null}
             </Button>
           ))}
         </nav>
-
         {request && (
           <RequestModal
             kind={request}

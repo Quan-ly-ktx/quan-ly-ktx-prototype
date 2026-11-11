@@ -4,7 +4,7 @@ import type { TicketStatus } from "../../types/incident.ts";
 import type { TenantVehicle } from "../../types/tenant.ts";
 export type { TenantVehicle };
 
-export type Page = "room" | "invoices" | "vehicles" | "report";
+export type Page = "room" | "invoices" | "vehicles" | "report" | "violations";
 export type RequestKind = "extend" | "checkout";
 
 const ME = person("Nguyễn Hoàng Nam");

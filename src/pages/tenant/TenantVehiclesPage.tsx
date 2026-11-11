@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Icon, Modal } from "../../components/common/index.ts";
+import { Button, Drawer, Icon, Modal } from "../../components/common/index.ts";
 import type { TenantVehicle } from "./tenantConstants.tsx";
 
 export function TenantVehiclesPage({
@@ -16,6 +16,8 @@ export function TenantVehiclesPage({
   canRegister: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<TenantVehicle | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<{ url: string; title: string } | null>(null);
   const [plate, setPlate] = useState("");
   const [type, setType] = useState<TenantVehicle["type"]>("Xe tay ga");
   const [brand, setBrand] = useState("");
@@ -133,8 +135,9 @@ export function TenantVehiclesPage({
       <div className="grid gap-6 lg:grid-cols-2">
         {vehicles.map((vehicle) => (
           <article
-            className="rounded-sm border border-slate-200 bg-white p-5 shadow-xs"
+            className="rounded-sm border border-slate-200 bg-white p-5 shadow-xs hover:border-brand-500 transition-colors cursor-pointer"
             key={vehicle.id}
+            onClick={() => setSelectedVehicle(vehicle)}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="rounded-sm border border-slate-800 bg-white px-3 py-1 font-mono text-lg font-bold tracking-wide text-slate-900">
@@ -179,10 +182,13 @@ export function TenantVehiclesPage({
                 </dd>
               </div>
             </dl>
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-brand-600 font-medium">
+              <span>Bấm xem chi tiết & giấy tờ xe</span>
+              <Icon name="chevron" className="size-4" />
+            </div>
           </article>
         ))}
       </div>
-
       {open && (
         <Modal
           title="Khai báo phương tiện mới"
@@ -306,6 +312,189 @@ export function TenantVehiclesPage({
                 onClick={submit}
               >
                 Gửi thông tin đăng ký xe
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {/* Vehicle Detail Drawer */}
+      {selectedVehicle && (
+        <Drawer
+          title={selectedVehicle.plate ? `Xe ${selectedVehicle.plate}` : `Phương tiện ${selectedVehicle.type}`}
+          subtitle={`${selectedVehicle.brand} · Màu ${selectedVehicle.color}`}
+          onClose={() => setSelectedVehicle(null)}
+        >
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span
+              className={`status-label ${
+                selectedVehicle.cardStatus === "Đã cấp thẻ"
+                  ? "status-label-success"
+                  : selectedVehicle.cardStatus === "Đã thu hồi"
+                    ? "status-label-slate"
+                    : "status-label-warning"
+              }`}
+            >
+              {selectedVehicle.cardStatus}
+            </span>
+            <span className="status-label status-label-brand">{selectedVehicle.type}</span>
+          </div>
+
+          {/* Physical card status */}
+          <div className="rounded-sm border border-slate-200 bg-slate-50 p-4 mb-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+              Thẻ giữ xe vật lý
+            </h4>
+            {selectedVehicle.cardStatus === "Đã cấp thẻ" && selectedVehicle.cardCode ? (
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs text-slate-600">Mã thẻ gửi xe đã kích hoạt:</span>
+                <span className="rounded-sm bg-success-50 border border-success-200 px-2.5 py-1 font-mono text-sm font-bold text-success-800">
+                  {selectedVehicle.cardCode}
+                </span>
+              </div>
+            ) : selectedVehicle.cardStatus === "Đã thu hồi" ? (
+              <div className="mt-1 text-xs text-slate-600">
+                <p>Thẻ xe vật lý đã được thu hồi và vô hiệu hóa.</p>
+                {selectedVehicle.cardCode && (
+                  <p className="mt-1 font-mono text-[11px] text-slate-500">
+                    Mã thẻ cũ đã lưu: {selectedVehicle.cardCode}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-warning-700 font-medium">
+                Hồ sơ đang chờ Ban Quản lý duyệt và bàn giao thẻ gửi xe vật lý.
+              </p>
+            )}
+          </div>
+
+          {/* Specifications DL */}
+          <dl className="divide-y divide-slate-100 rounded-sm border border-slate-200 text-xs mb-4">
+            {[
+              ["Biển số xe", selectedVehicle.plate || "Không có biển số"],
+              ["Loại phương tiện", selectedVehicle.type],
+              ["Hãng & dòng xe", selectedVehicle.brand],
+              ["Màu sơn", selectedVehicle.color],
+              ["Tình trạng hồ sơ", selectedVehicle.status || (selectedVehicle.cardStatus === "Đã cấp thẻ" ? "Đã duyệt cấp thẻ" : "Chờ duyệt")],
+              ...(selectedVehicle.registeredAt ? [["Thời gian khai báo", selectedVehicle.registeredAt]] : []),
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-4 px-3 py-2.5">
+                <dt className="text-slate-500">{k}</dt>
+                <dd className="font-semibold text-slate-900">{v}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {/* Registration Papers Photos */}
+          <div className="rounded-sm border border-slate-200 bg-white p-4 shadow-xs mb-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              Ảnh giấy đăng ký xe (Cà vẹt)
+            </h4>
+            {selectedVehicle.type === "Xe đạp" || selectedVehicle.type === "Xe đạp điện" ? (
+              <p className="text-xs text-slate-500 italic">
+                Loại xe này không yêu cầu cung cấp giấy đăng ký xe theo quy định.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-600 mb-1">Mặt trước</p>
+                  {selectedVehicle.registrationFront ? (
+                    <button
+                      type="button"
+                      className="group relative block w-full overflow-hidden rounded-sm border border-slate-200 bg-slate-100 hover:border-brand-500"
+                      onClick={() =>
+                        setPreviewPhoto({
+                          url: selectedVehicle.registrationFront!,
+                          title: `Cà vẹt xe mặt trước (${selectedVehicle.plate || selectedVehicle.brand})`,
+                        })
+                      }
+                    >
+                      <img
+                        src={selectedVehicle.registrationFront}
+                        alt="Mặt trước cà vẹt"
+                        className="h-28 w-full object-contain mx-auto"
+                      />
+                      <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold">
+                        Xem ảnh
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="h-28 rounded-sm border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-[11px] text-slate-400 p-2 text-center">
+                      Chưa có ảnh
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-600 mb-1">Mặt sau</p>
+                  {selectedVehicle.registrationBack ? (
+                    <button
+                      type="button"
+                      className="group relative block w-full overflow-hidden rounded-sm border border-slate-200 bg-slate-100 hover:border-brand-500"
+                      onClick={() =>
+                        setPreviewPhoto({
+                          url: selectedVehicle.registrationBack!,
+                          title: `Cà vẹt xe mặt sau (${selectedVehicle.plate || selectedVehicle.brand})`,
+                        })
+                      }
+                    >
+                      <img
+                        src={selectedVehicle.registrationBack}
+                        alt="Mặt sau cà vẹt"
+                        className="h-28 w-full object-contain mx-auto"
+                      />
+                      <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold">
+                        Xem ảnh
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="h-28 rounded-sm border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-[11px] text-slate-400 p-2 text-center">
+                      Chưa có ảnh
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* History info & Rules */}
+          <div className="rounded-sm bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 space-y-1 mb-4">
+            <p className="font-semibold text-slate-800">Quy định gửi xe:</p>
+            <p>• Xe đã cấp thẻ không được tự ý sửa đổi thông tin trực tiếp (FR-08).</p>
+            <p>• Dữ liệu xe đã thu hồi được bảo lưu để đối soát lịch sử ra vào hầm.</p>
+          </div>
+
+          {/* Action slot reserved for Group C (Vehicle Change Request) */}
+          <div className="mt-4 flex flex-col gap-2">
+            <Button
+              label="Đóng chi tiết"
+              className="h-10 w-full rounded-sm border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
+              onClick={() => setSelectedVehicle(null)}
+            >
+              Đóng chi tiết
+            </Button>
+          </div>
+        </Drawer>
+      )}
+
+      {/* Large Image Preview Modal */}
+      {previewPhoto && (
+        <Modal
+          title={previewPhoto.title}
+          onClose={() => setPreviewPhoto(null)}
+          wide
+        >
+          <div className="p-6 text-center">
+            <img
+              src={previewPhoto.url}
+              alt={previewPhoto.title}
+              className="max-h-[70vh] mx-auto rounded-sm border border-slate-200 object-contain shadow-xs"
+            />
+            <div className="mt-4 flex justify-center">
+              <Button
+                className="h-9 rounded-sm border border-slate-200 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:translate-y-[1px]"
+                onClick={() => setPreviewPhoto(null)}
+              >
+                Đóng xem ảnh
               </Button>
             </div>
           </div>
