@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import ExcelJS from "exceljs";
+import { PDFDocument } from "pdf-lib";
 import { mockDormService } from "../services/mock/mockDormService.ts";
 import { calculateOverdueDays } from "../utils/invoiceCalculations.ts";
 import { getIncidentNotifications } from "../services/mock/incidentStore.ts";
-import { getMockSnapshot } from "../services/mock/mockStore.ts";
+import { getMockSnapshot, updateMockSnapshot } from "../services/mock/mockStore.ts";
 import type { RoomRecord } from "../types/room.ts";
 
 // A3 Tests
@@ -158,7 +159,7 @@ test("A8: Automatic notifications generated for invoice issuance, rejection, and
   assert.ok(tenant);
 
   // 1. Batch issue invoice -> generates notification
-  const issued = await mockDormService.issueInvoices("2026-12-01");
+  const issued = await mockDormService.issueInvoices("2026-12-01", "2026-11-25");
   assert.ok(issued.length > 0);
   const tenantInv = issued.find((inv) => inv.tenantId === tenant.id);
   assert.ok(tenantInv);
@@ -197,6 +198,48 @@ test("A8: Automatic notifications generated for invoice issuance, rejection, and
   await mockDormService.resetMockData();
 });
 
+test("A8 Regression: Due reminders are not created early and remain idempotent", async () => {
+  const original = getMockSnapshot();
+  const tenant = original.tenants.find((t) => t.id === "NT-0187")!;
+  const contract = original.contracts.find((c) => c.tenantId === tenant.id)!;
+  const invoice = {
+    id: "INV-DUE-REMINDER-TEST",
+    tenantId: tenant.id,
+    contractId: contract.id,
+    billingPeriod: "2026-12-01",
+    tenant: tenant.name,
+    room: contract.room,
+    bed: contract.bed,
+    amount: 1500000,
+    due: "05/12/2026",
+    status: "Nợ" as const,
+  };
+
+  try {
+    updateMockSnapshot((state) => ({
+      ...state,
+      invoices: [invoice],
+      notifications: [],
+    }));
+
+    // Before the due date, do not remind the tenant early.
+    assert.equal(await mockDormService.checkDueReminders("2026-11-25"), 0);
+    assert.equal(getIncidentNotifications(tenant.id).length, 0);
+
+    // Notify on the exact due date once, and never duplicate on retry.
+    assert.equal(await mockDormService.checkDueReminders("2026-12-05"), 1);
+    assert.equal(await mockDormService.checkDueReminders("2026-12-05"), 0);
+    assert.equal(getIncidentNotifications(tenant.id).length, 1);
+
+    // Overdue event is emitted once, separately from the due-day reminder.
+    assert.equal(await mockDormService.checkDueReminders("2026-12-10"), 1);
+    assert.equal(await mockDormService.checkDueReminders("2026-12-10"), 0);
+    assert.equal(getIncidentNotifications(tenant.id).length, 2);
+  } finally {
+    updateMockSnapshot(() => original);
+  }
+});
+
 // A1 & A10 Tests
 test("A1 & A10: Checked-out tenant has readable contract documents and business date simulation works", async () => {
   const state = getMockSnapshot();
@@ -219,4 +262,93 @@ test("A1 & A10: Checked-out tenant has readable contract documents and business 
   // Restore
   mockDormService.setBusinessDate(undefined);
   assert.equal(mockDormService.getBusinessDate(), realDate);
+});
+
+test("A3 Regression: Historical room code remains protected even after renaming room", async () => {
+  const roomsBefore = await mockDormService.getRooms();
+  const state = getMockSnapshot();
+  // Find room P.302 which has historical contract c0000000-0000-4000-8000-000000000002
+  const room302 = state.rooms.find((r) => r.code === "P.302")!;
+  assert.ok(room302);
+
+  // Liquidate contracts in P.302 so it can be renamed
+  const contracts302 = state.contracts.filter((c) => c.roomId === room302.id && c.status !== "Đã thanh lý");
+  for (const c of contracts302) {
+    await mockDormService.checkoutContract(c.id, "AVAILABLE");
+  }
+
+  // Rename P.302 to P.302-RENAMED
+  await mockDormService.updateRoom(room302.id, {
+    ...room302,
+    code: "P.302-RENAMED",
+  });
+
+  // Attempting to create a NEW room with old code P.302 must be REJECTED because P.302 has historical contracts!
+  await assert.rejects(
+    mockDormService.createRoom({
+      id: "RM-NEW-302",
+      code: "P.302",
+      floor: 3,
+      type: "4 giường",
+      gender: "Nam",
+      total: 4,
+      basePrice: 1500000,
+      amenities: [],
+    }),
+    /lịch sử nghiệp vụ phải bảo vệ/
+  );
+
+  // Clean up
+  await mockDormService.saveRooms(roomsBefore);
+  await mockDormService.resetMockData();
+});
+
+test("A1 Regression: Former tenant contract PDF is a fully valid, parsable PDF-1.7 document", async () => {
+  const state = getMockSnapshot();
+  const former = state.tenants.find((t) => t.status === "Đã trả phòng")!;
+  const formerContract = state.contracts.find((c) => c.tenantId === former.id)!;
+  assert.ok(formerContract.documents && formerContract.documents.length > 0);
+
+  const dataUrl = formerContract.documents![0].content;
+  assert.ok(dataUrl && dataUrl.startsWith("data:application/pdf;base64,"));
+  const b64 = dataUrl.replace("data:application/pdf;base64,", "");
+  const pdfBytes = Buffer.from(b64, "base64");
+  assert.ok(pdfBytes.length > 1000, "PDF size must be realistic (> 1000 bytes)");
+
+  // Parse with pdf-lib to ensure valid PDF structure
+  const loadedDoc = await PDFDocument.load(pdfBytes);
+  assert.equal(loadedDoc.getPageCount(), 1);
+  const page = loadedDoc.getPage(0);
+  assert.ok(page.getWidth() > 500 && page.getHeight() > 800);
+});
+
+test("A6 Regression: Early future invoice issuance is rejected; scheduled day-25 batch is idempotent", async () => {
+  // Simulated date: 2026-11-10 (day 10)
+  // 1. Attempting to issue for 2027-02-01 (distant future) must fail
+  await assert.rejects(
+    mockDormService.issueInvoices("2027-02-01", "2026-11-10"),
+    /Không thể phát hành hóa đơn sớm cho kỳ tương lai xa/
+  );
+
+  // 2. Attempting to issue next month (2026-12-01) before day 25 must fail
+  await assert.rejects(
+    mockDormService.issueInvoices("2026-12-01", "2026-11-10"),
+    /Kỳ hóa đơn tháng sau chỉ được phát hành định kỳ từ ngày 25/
+  );
+
+  // 3. On day 25 (2026-11-25), issuing for next month (2026-12-01) succeeds
+  const issued = await mockDormService.issueInvoices("2026-12-01", "2026-11-25");
+  assert.ok(issued.length > 0);
+
+  // 4. Retrying is idempotent (returns 0 new invoices, does not duplicate)
+  const retried = await mockDormService.issueInvoices("2026-12-01", "2026-11-25");
+  assert.equal(retried.length, 0);
+
+  // 5. Backfilling past eligible period (2026-11-01) issues missing invoices, then retrying returns 0
+  const pastBackfilled = await mockDormService.issueInvoices("2026-11-01", "2026-11-25");
+  assert.ok(pastBackfilled.length > 0);
+  const pastRetried = await mockDormService.issueInvoices("2026-11-01", "2026-11-25");
+  assert.equal(pastRetried.length, 0);
+
+  await mockDormService.resetMockData();
 });

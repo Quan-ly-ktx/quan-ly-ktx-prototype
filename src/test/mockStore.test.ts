@@ -23,9 +23,9 @@ test("a rejected transaction leaves the snapshot unchanged", () => {
 });
 
 test("invoice issuance retry never duplicates a contract period", async () => {
-  const first = await mockDormService.issueInvoices("2027-03-01");
+  const first = await mockDormService.issueInvoices("2027-03-01", "2027-02-25");
   assert.ok(first.length > 0);
-  assert.deepEqual(await mockDormService.issueInvoices("2027-03-01"), []);
+  assert.deepEqual(await mockDormService.issueInvoices("2027-03-01", "2027-02-25"), []);
   const issued = (await mockDormService.getInvoices()).filter((invoice) => invoice.billingPeriod === "2027-03-01");
   assert.equal(new Set(issued.map((invoice) => invoice.contractId)).size, issued.length);
 });
