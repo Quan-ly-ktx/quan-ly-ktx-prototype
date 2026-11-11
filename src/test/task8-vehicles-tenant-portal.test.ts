@@ -17,6 +17,8 @@ test("Task 8: Vehicle lifecycle - register -> issue card -> duplicate card rejec
     type: "Xe tay ga",
     brand: "Honda Vision",
     color: "Trắng",
+    registrationFront: "front.png",
+    registrationBack: "back.png",
     cardStatus: "Chưa cấp thẻ",
   });
   assert.equal(vehicle.cardStatus, "Chưa cấp thẻ");
@@ -50,6 +52,8 @@ test("Task 8: Vehicle lifecycle - register -> issue card -> duplicate card rejec
     type: "Xe tay ga",
     brand: "Yamaha",
     color: "Đen",
+    registrationFront: "front2.png",
+    registrationBack: "back2.png",
     cardStatus: "Chưa cấp thẻ",
   });
   await assert.rejects(
