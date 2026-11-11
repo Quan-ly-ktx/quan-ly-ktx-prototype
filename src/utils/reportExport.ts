@@ -9,7 +9,7 @@ const rows = (report: ReportExport): [string, string | number][] => [
   ["Kỳ hóa đơn", report.period],
   ["Tiền thuê đã thu", report.revenue],
   ["Chi phí sửa chữa (vật tư)", report.repairs],
-  ["Chi phí cơ sở", report.facility],
+  ["Chi phí vận hành", report.facility],
   ["Lợi nhuận ròng (ước tính)", report.difference],
   ["Điện", report.categories["Điện EVN"] ?? 0],
   ["Nước", report.categories["Nước"] ?? 0],

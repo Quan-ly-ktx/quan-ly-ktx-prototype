@@ -168,7 +168,7 @@ export function FinancialPage({
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icon="wallet" tone="success" label="Doanh thu theo kỳ" value={report ? money(report.revenue) : "Chưa đủ dữ liệu"} hint={`Theo kỳ hóa đơn ${period}`} />
         <Stat icon="tools" tone="warning" label="Chi phí sửa chữa theo kỳ" value={report ? money(report.repairs) : "Chưa đủ dữ liệu"} hint="Phiếu hoàn thành theo giờ Việt Nam" />
-        <Stat icon="invoice" tone="danger" label="Chi phí cơ sở theo kỳ" value={report ? money(report.facility) : "Chưa đủ dữ liệu"} hint={`${periodExpenses.length} khoản trong kỳ`} />
+        <Stat icon="invoice" tone="danger" label="Chi phí vận hành theo kỳ" value={report ? money(report.facility) : "Chưa đủ dữ liệu"} hint={`${periodExpenses.length} khoản trong kỳ`} />
         <Stat icon="trend" tone="brand" label="Lợi nhuận ròng (ước tính)" value={report ? money(report.difference) : "Chưa đủ dữ liệu"} hint="Ước tính thu – chi ghi nhận; chưa gồm thuế, khấu hao" />
       </div>
       <p className="mb-6 -mt-3 text-[11px] text-slate-500 italic">
