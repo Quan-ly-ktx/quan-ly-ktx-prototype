@@ -1,7 +1,7 @@
 import type { Role } from "../../types/auth.ts";
 import type { Invoice, FacilityExpense } from "../../types/invoice.ts";
 import type { RoomRecord } from "../../types/room.ts";
-import type { TenantRecord, ContractRecord, TenantVehicle } from "../../types/tenant.ts";
+import type { TenantRecord, ContractRecord, TenantVehicle, VehicleChangeRequest } from "../../types/tenant.ts";
 import type { Ticket } from "../../types/incident.ts";
 import type { TechnicianResponse } from "../../types/api/endpoints.ts";
 import type { IncidentViolation, IncidentNotification } from "./incidentStore.ts";
@@ -9,7 +9,7 @@ import { initialRooms, initialTenants, initialInvoices, initialTickets, initialV
 
 export type MockAccount = { id: string; identifier: string; role: Role; name: string; password: string; tenantId?: string; staffId?: string; email?: string; status?: string };
 export type MockStaff = TechnicianResponse & { userId: string; role?: "manager" | "technician" };
-export type MockSnapshot = { rooms: RoomRecord[]; tenants: TenantRecord[]; invoices: Invoice[]; contracts: ContractRecord[]; vehicles: TenantVehicle[]; accounts: MockAccount[]; staff: MockStaff[]; tickets: Ticket[]; violations: IncidentViolation[]; notifications: IncidentNotification[]; expenses: FacilityExpense[]; legacySnapshot?: unknown };
+export type MockSnapshot = { rooms: RoomRecord[]; tenants: TenantRecord[]; invoices: Invoice[]; contracts: ContractRecord[]; vehicles: TenantVehicle[]; vehicleChangeRequests?: VehicleChangeRequest[]; accounts: MockAccount[]; staff: MockStaff[]; tickets: Ticket[]; violations: IncidentViolation[]; notifications: IncidentNotification[]; expenses: FacilityExpense[]; legacySnapshot?: unknown };
 const KEY = "dorm_mock_snapshot_v2";
 const SAMPLE_VALID_PDF_DATA_URL = "data:application/pdf;base64,JVBERi0xLjcKJYGBgYEKCjcgMCBvYmoKPDwKL0ZpbHRlciAvRmxhdGVEZWNvZGUKL0xlbmd0aCA1ODMKPj4Kc3RyZWFtCniclZTfitQwFMbv+xS5FnZNTs6fBERwph288EboC4juirIiK+Lz+5203XaYjoyENmlPmv7Od77kuTuMXbxPYbl+fe1ev394+vPw+9vnT3eHn09f7izWwiVaqSHlMD52xGH80GE+WgpJY7Ca7hEef3RvOPOJBzaKXDBKFKX4vT1V9JmLCHrMwbvaZih6EW5vE/dvw/i9G191w9h97J4nRArLdY5YjUkLiZaQ0iUdJQlm+YWO9aSZoh41WaRIPf7OBh5FZHrmokkHrBktajHRvMMDEsYf9/SiGGOJUosG/HxHLxDlVS/oIiBhXnQTdoUYTDKpNql5kOoxRPKk6f+o1MCqYUHFKrYrFeqomzr2ispo0ZPr5OpAE8vvWiWZ+kw54lKMYmuYTYi0eiID1HFgaMhHcNddBdHOKU2MJGd15eI+oK6ApKID0Hw+SmfciiUNY44BpjZkchyAJcjXRg3LRWVxSBecboMsLDGVmFzFK5B8AbkLRzPcQd1x2R0HnUV7Twej5N8Ztb5VwiswezS3xv593m97/thLR+FUS8XK1XToJR3ZYCwpOQIMPOTshpjxTGG2jWUMsezJb1fgAWn3t5oDdWJVyvk6aFxBuf2mNgenbQVmxRKd5vvi40l7zEQiUzSv0t0H+L8u+k2F+2e8mU/d141eFv51+9Tdv9z+3L3f/766/3p3+Pv27wfvLh+L3v1D4y7kG9eYmRkmZW5kc3RyZWFtCmVuZG9iago2IDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMyAwIFIKL1Jlc291cmNlcyA8PAovRm9udCA8PAovRjEgMSAwIFIKL0YyIDIgMCBSCj4+Cj4+Ci9NZWRpYUJveCBbMCAwIDU5NS4yOCA4NDEuODldCi9Db250ZW50cyA3IDAgUgo+PgplbmRvYmoKMSAwIG9iago8PAovVHlwZSAvRm9udAovU3VidHlwZSAvVHlwZTEKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZAovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwo+PgplbmRvYmoKMiAwIG9iago8PAovVHlwZSAvRm9udAovU3VidHlwZSAvVHlwZTEKL0Jhc2VGb250IC9IZWx2ZXRpY2EKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFs2IDAgUl0KL0NvdW50IDEKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDMgMCBSCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9Qcm9kdWNlciAocGRmLWxpYiAxfCAxLjExLjEpCi9Nb2REYXRlIChEOjIwMjYxMTExMjIwOTQzWikKL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MTExMTIyMDk0M1opCj4+CmVuZG9iagp4cmVmCjAgOAowMDAwMDAwMDAwIDY1NTM1IGYKMDAwMDAwMDkxMCAwMDAwMCBuCjAwMDAwMDEwMTMgMDAwMDAgbgowMDAwMDAxMTEwIDAwMDAwIG4KMDAwMDAwMTE2OSAwMDAwMCBuCjAwMDAwMDEyMTkgMDAwMDAgbgowMDAwMDAwNzI1IDAwMDAwIG4KMDAwMDAwMDAxNSAwMDAwMCBuCnRyYWlsZXIKPDwKL1NpemUgOAovUm9vdCA0IDAgUgovSW5mbyA1IDAgUgo+PgpzdGFydHhyZWYKMTM1NQolJUVPRgo=";
 const listeners = new Set<() => void>();
@@ -63,7 +63,7 @@ function seed(): MockSnapshot {
   invoices.push({ id: "e0000000-0000-4000-8000-000000000001", tenantId: former.id, contractId: contracts.find((contract) => contract.tenantId === former.id)!.id, billingPeriod: "2026-03-01", tenant: former.name, room: former.room, bed: former.bed, amount: former.monthlyRent, due: "05/03/2026", status: "Nợ" });
   const accounts = [...defaults, ...tenants.filter((tenant) => tenant.userId !== "demo-tenant").map((tenant) => ({ id: tenant.userId, tenantId: tenant.id, identifier: tenant.cccd, role: "tenant" as const, name: tenant.name, email: tenant.email, password: "Demo1234!" })), { id: "tech-2", identifier: "huy.lq@ktxhub.vn", role: "technician" as const, name: "Lâm Quốc Huy", password: "Demo1234!", staffId: "tech-2" }];
   const tickets = [initialTickets[2], initialTickets[3]].map((ticket, index) => { const tenant = tenants[index]; const room = rooms.find((item) => item.code === tenant.room)!; return { ...ticket, reporterTenantId: tenant.id, reporter: tenant.name, phone: tenant.phone, roomId: room.id, room: room.code, bed: tenant.bed, bedId: room.bedOverrides![tenant.bed].id, ...(ticket.assignee ? { assigneeStaffId: "tech-1" } : {}) }; });
-  return { rooms, tenants, contracts, invoices, accounts, staff: defaultStaff, tickets, vehicles: [...initialVehicles, { id: "a0000000-0000-4000-8000-000000000001", tenantId: former.id, plate: "DEMO-001", type: "Xe đạp", brand: "Demo", color: "Xám", cardStatus: "Đã thu hồi" }], violations: [], notifications: [], expenses: initialFacilityExpenses };
+  return { rooms, tenants, contracts, invoices, accounts, staff: defaultStaff, tickets, vehicles: [...initialVehicles, { id: "a0000000-0000-4000-8000-000000000001", tenantId: former.id, plate: "DEMO-001", type: "Xe đạp", brand: "Demo", color: "Xám", cardStatus: "Đã thu hồi" }], vehicleChangeRequests: [], violations: [], notifications: [], expenses: initialFacilityExpenses };
 }
 function unique<T>(items: T[], label: string): T {
   if (items.length !== 1) throw new Error(`Không thể chuyển dữ liệu cũ: ${label} (${items.length} kết quả). Dữ liệu gốc được giữ nguyên.`);
@@ -135,12 +135,15 @@ function migrate(old: Partial<MockSnapshot>, legacyAccounts?: MockAccount[], leg
   const violations = mergeById(old.violations ?? [], events?.violations ?? [], "vi phạm");
   const notifications = mergeById(old.notifications ?? [], events?.notifications ?? [], "thông báo");
   for (const item of [...vehicles, ...violations, ...notifications]) unique(tenants.filter((tenant) => tenant.id === item.tenantId), `người thuê bản ghi ${item.id}`);
-  return { ...base, ...old, legacySnapshot: Object.keys(old).length ? old : undefined, rooms, tenants, accounts, staff, contracts, invoices, tickets, vehicles, violations, notifications, expenses: old.expenses && expenses ? mergeById(old.expenses, expenses, "chi phí") : old.expenses ?? expenses ?? base.expenses };
+  return { ...base, ...old, legacySnapshot: Object.keys(old).length ? old : undefined, rooms, tenants, accounts, staff, contracts, invoices, tickets, vehicles, vehicleChangeRequests: old.vehicleChangeRequests ?? [], violations, notifications, expenses: old.expenses && expenses ? mergeById(old.expenses, expenses, "chi phí") : old.expenses ?? expenses ?? base.expenses };
 }
 function load(): MockSnapshot {
   if (typeof localStorage === "undefined") return seed();
   const old = readLegacy<Partial<MockSnapshot>>(KEY);
   if (old && Array.isArray(old.staff) && Array.isArray(old.violations) && Array.isArray(old.notifications) && Array.isArray(old.expenses)) {
+    if (!Array.isArray(old.vehicleChangeRequests)) {
+      old.vehicleChangeRequests = [];
+    }
     const formerId = "f5000000-0000-4000-8000-000000000001";
     const formerContract = old.contracts?.find((c) => c.tenantId === formerId);
     if (formerContract && (!formerContract.documents || formerContract.documents.length === 0)) {

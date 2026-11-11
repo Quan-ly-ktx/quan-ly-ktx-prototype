@@ -6,7 +6,7 @@ import type {
   Ticket,
   BedStatus,
 } from "../../types/index.ts";
-import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle } from "../../types/tenant.ts";
+import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle, VehicleChangeRequest } from "../../types/tenant.ts";
 import type { FacilityExpense, PaymentProof } from "../../types/invoice.ts";
 import { httpClient } from "../httpClient.ts";
 import type {
@@ -32,6 +32,11 @@ class ApiDormServiceImpl implements DormService {
   async registerVehicle(_vehicle: TenantVehicle): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
   async issueVehicleCard(_id: string, _cardCode: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
   async revokeVehicle(_id: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async rejectVehicle(_id: string, _reason: string, _actorStaffId?: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async getVehicleChangeRequests(_tenantId?: string): Promise<VehicleChangeRequest[]> { throw new Error("API đổi phương tiện chưa được thống nhất."); }
+  async requestVehicleChange(_input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }): Promise<VehicleChangeRequest> { throw new Error("API đổi phương tiện chưa được thống nhất."); }
+  async approveVehicleChangeRequest(_requestId: string, _actorStaffId?: string): Promise<{ request: VehicleChangeRequest; oldVehicle: TenantVehicle; newVehicle: TenantVehicle }> { throw new Error("API đổi phương tiện chưa được thống nhất."); }
+  async rejectVehicleChangeRequest(_requestId: string, _reason: string, _actorStaffId?: string): Promise<VehicleChangeRequest> { throw new Error("API đổi phương tiện chưa được thống nhất."); }
   async resetMockData(): Promise<void> { throw new Error("Không thể reset dữ liệu demo trong chế độ API."); }
   async onboard(_input: OnboardingInput): Promise<OnboardingResult> { throw new Error("API tiếp nhận chưa được thống nhất."); }
   async renewContract(_id: string, _endDate: string): Promise<void> { throw new Error("API gia hạn chưa được thống nhất."); }

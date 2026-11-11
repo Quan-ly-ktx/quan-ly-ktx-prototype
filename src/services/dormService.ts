@@ -5,7 +5,7 @@ import type {
   Invoice,
   Ticket,
 } from "../types/index.ts";
-import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle } from "../types/tenant.ts";
+import type { ContractDocumentRecord, ContractRecord, OnboardingInput, OnboardingResult, TenantVehicle, VehicleChangeRequest } from "../types/tenant.ts";
 import type { FacilityExpense, PaymentProof } from "../types/invoice.ts";
 import { env } from "../config/env.ts";
 import { mockDormService } from "./mock/mockDormService.ts";
@@ -32,6 +32,11 @@ export interface DormService {
   registerVehicle(vehicle: TenantVehicle): Promise<TenantVehicle>;
   issueVehicleCard(id: string, cardCode: string): Promise<TenantVehicle>;
   revokeVehicle(id: string): Promise<TenantVehicle>;
+  rejectVehicle(id: string, reason: string, actorStaffId?: string): Promise<TenantVehicle>;
+  getVehicleChangeRequests(tenantId?: string): Promise<VehicleChangeRequest[]>;
+  requestVehicleChange(input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }): Promise<VehicleChangeRequest>;
+  approveVehicleChangeRequest(requestId: string, actorStaffId?: string): Promise<{ request: VehicleChangeRequest; oldVehicle: TenantVehicle; newVehicle: TenantVehicle }>;
+  rejectVehicleChangeRequest(requestId: string, reason: string, actorStaffId?: string): Promise<VehicleChangeRequest>;
   resetMockData(): Promise<void>;
   onboard(input: OnboardingInput): Promise<OnboardingResult>;
   renewContract(id: string, endDate: string): Promise<void>;
