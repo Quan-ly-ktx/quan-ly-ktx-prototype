@@ -1,11 +1,12 @@
 import type { DormService } from "../dormService.ts";
 import type { RoomRecord, BedStatus, TenantRecord, Invoice, Ticket } from "../../types/index.ts";
-import type { ContractDocumentRecord, ContractRecord, OnboardingInput, TenantVehicle } from "../../types/tenant.ts";
+import { normalizeVehicleStatus, type ContractDocumentRecord, type ContractRecord, type OnboardingInput, type TenantVehicle, type VehicleChangeRequest } from "../../types/tenant.ts";
 import type { FacilityExpense, PaymentProof } from "../../types/invoice.ts";
 import { onboard, renew, checkout, getDemoDate, setDemoDate } from "./contractLifecycle.ts";
 import { demoEmailAvailable } from "./mockAuth.ts";
 import { getMockSnapshot, updateMockSnapshot, resetMockSnapshot, type MockSnapshot } from "./mockStore.ts";
 import { calculateOverdueDays, parseDueDate } from "../../utils/invoiceCalculations.ts";
+import { expenseMonth } from "../../utils/reportForPeriod.ts";
 
 function bedIds(room: RoomRecord): RoomRecord {
   return { ...room, bedOverrides: Object.fromEntries(Array.from({ length: room.total }, (_, index) => {
@@ -52,7 +53,7 @@ function managerFor(state: MockSnapshot, staffId: string) {
   return staff;
 }
 function validateExpense(expense: FacilityExpense): void {
-  if (!expense.id || !expense.title.trim() || !expense.expenseDate || !Number.isSafeInteger(expense.amount) || expense.amount <= 0 || !["Điện EVN", "Nước", "Internet", "Khác"].includes(expense.category)) throw new Error("Thông tin chi phí không hợp lệ.");
+  if (!expense.id || !expense.title.trim() || !expense.expenseDate || !Number.isSafeInteger(expense.amount) || expense.amount <= 0 || !["Điện EVN", "Nước", "Internet", "Lương nhân viên", "Khác"].includes(expense.category)) throw new Error("Thông tin chi phí không hợp lệ.");
 }
 
 class MockDormServiceImpl implements DormService {
@@ -65,12 +66,26 @@ class MockDormServiceImpl implements DormService {
   async createExpense(expense: FacilityExpense): Promise<FacilityExpense> {
     validateExpense(expense);
     if (this.state.expenses.some((item) => item.id === expense.id)) throw new Error("Mã chi phí đã tồn tại.");
+    if (expense.category === "Lương nhân viên") {
+      const month = expenseMonth(expense.expenseDate);
+      if (!month) throw new Error("Ngày chi phí không hợp lệ.");
+      if (this.state.expenses.some((e) => e.category === "Lương nhân viên" && expenseMonth(e.expenseDate) === month)) {
+        throw new Error(`Đã có khoản chi phí Lương nhân viên trong tháng ${month}. Vui lòng chỉnh sửa bản ghi hiện có.`);
+      }
+    }
     this.commit({ ...this.state, expenses: [expense, ...this.state.expenses] });
     return expense;
   }
   async updateExpense(id: string, expense: FacilityExpense): Promise<FacilityExpense> {
     validateExpense(expense);
     if (expense.id !== id || !this.state.expenses.some((item) => item.id === id)) throw new Error("Không tìm thấy chi phí.");
+    if (expense.category === "Lương nhân viên") {
+      const month = expenseMonth(expense.expenseDate);
+      if (!month) throw new Error("Ngày chi phí không hợp lệ.");
+      if (this.state.expenses.some((e) => e.id !== id && e.category === "Lương nhân viên" && expenseMonth(e.expenseDate) === month)) {
+        throw new Error(`Đã có khoản chi phí Lương nhân viên trong tháng ${month}. Vui lòng chỉnh sửa bản ghi hiện có.`);
+      }
+    }
     this.commit({ ...this.state, expenses: this.state.expenses.map((item) => item.id === id ? expense : item) });
     return expense;
   }
@@ -151,7 +166,7 @@ class MockDormServiceImpl implements DormService {
     if (!tenant || tenant.status === "Đã trả phòng") throw new Error("Người thuê không còn cư trú.");
     if (!vehicle.id || vehicle.cardStatus !== "Chưa cấp thẻ" || vehicle.cardCode) throw new Error("Phương tiện mới phải ở trạng thái chờ cấp thẻ.");
     if (this.state.vehicles.some((item) => item.id === vehicle.id)) throw new Error("Mã phương tiện đã tồn tại.");
-    if (this.state.vehicles.some((item) => item.tenantId === tenant.id && item.cardStatus !== "Đã thu hồi")) throw new Error("Người thuê đã có phương tiện chưa thu hồi.");
+    if (this.state.vehicles.some((item) => item.tenantId === tenant.id && (normalizeVehicleStatus(item) === "PENDING_CARD" || normalizeVehicleStatus(item) === "ISSUED"))) throw new Error("Người thuê đã có phương tiện chưa thu hồi.");
     if (!vehicle.brand?.trim() || !vehicle.color?.trim()) throw new Error("Hãng xe và màu sắc là bắt buộc.");
     const requiresRegistration = vehicle.type !== "Xe đạp" && vehicle.type !== "Xe đạp điện";
     if (requiresRegistration) {
@@ -178,20 +193,231 @@ class MockDormServiceImpl implements DormService {
     if (!current) throw new Error("Không tìm thấy phương tiện.");
     if ((patch.id && patch.id !== id) || (patch.tenantId && patch.tenantId !== current.tenantId)) throw new Error("Không thể đổi chủ phương tiện.");
     const updated = { ...current, ...patch, id };
-    if (updated.cardStatus !== "Đã thu hồi" && this.state.vehicles.some((item) => item.id !== id && item.tenantId === updated.tenantId && item.cardStatus !== "Đã thu hồi")) throw new Error("Người thuê đã có phương tiện chưa thu hồi.");
-    if (updated.cardCode && updated.cardStatus !== "Đã thu hồi" && this.state.vehicles.some((item) => item.id !== id && item.cardStatus !== "Đã thu hồi" && item.cardCode === updated.cardCode)) throw new Error("Mã thẻ đã được sử dụng.");
+    const isActive = (v: TenantVehicle) => normalizeVehicleStatus(v) === "PENDING_CARD" || normalizeVehicleStatus(v) === "ISSUED";
+    const isCardIssued = (v: TenantVehicle) => normalizeVehicleStatus(v) === "ISSUED";
+    if (isActive(updated) && this.state.vehicles.some((item) => item.id !== id && item.tenantId === updated.tenantId && isActive(item))) throw new Error("Người thuê đã có phương tiện chưa thu hồi.");
+    if (updated.cardCode && isCardIssued(updated) && this.state.vehicles.some((item) => item.id !== id && isCardIssued(item) && item.cardCode === updated.cardCode)) throw new Error("Mã thẻ đã được sử dụng.");
     this.commit({ ...this.state, vehicles: this.state.vehicles.map((vehicle) => vehicle.id === id ? updated : vehicle) });
     return updated;
   }
   async issueVehicleCard(id: string, cardCode: string) {
     const vehicle = this.state.vehicles.find((item) => item.id === id);
-    if (!vehicle || vehicle.cardStatus !== "Chưa cấp thẻ" || !cardCode.trim()) throw new Error("Phương tiện hoặc mã thẻ không hợp lệ.");
-    return this.updateVehicle(id, { cardStatus: "Đã cấp thẻ", status: "Đã cấp thẻ xe", cardCode: cardCode.trim() });
+    if (!vehicle || normalizeVehicleStatus(vehicle) !== "PENDING_CARD" || !cardCode.trim()) throw new Error("Phương tiện hoặc mã thẻ không hợp lệ.");
+    return this.updateVehicle(id, { cardStatus: "Đã cấp thẻ", status: "Đã cấp thẻ xe", vehicleStatus: "ISSUED", cardCode: cardCode.trim() });
   }
   async revokeVehicle(id: string) {
     const vehicle = this.state.vehicles.find((item) => item.id === id);
-    if (!vehicle || vehicle.cardStatus === "Đã thu hồi") throw new Error("Phương tiện không tồn tại hoặc đã thu hồi.");
-    return this.updateVehicle(id, { cardStatus: "Đã thu hồi" });
+    if (!vehicle || normalizeVehicleStatus(vehicle) === "REVOKED") throw new Error("Phương tiện không tồn tại hoặc đã thu hồi.");
+    return this.updateVehicle(id, { cardStatus: "Đã thu hồi", status: "Đã thu hồi", vehicleStatus: "REVOKED", revokedAt: new Date().toISOString() });
+  }
+  async rejectVehicle(id: string, reason: string, actorStaffId?: string): Promise<TenantVehicle> {
+    const vehicle = this.state.vehicles.find((item) => item.id === id);
+    if (!vehicle) throw new Error("Không tìm thấy phương tiện.");
+    if (normalizeVehicleStatus(vehicle) !== "PENDING_CARD") {
+      throw new Error("Chỉ có thể từ chối phương tiện đang ở trạng thái chờ cấp thẻ.");
+    }
+    if (!reason?.trim()) {
+      throw new Error("Vui lòng nhập lý do từ chối đăng ký phương tiện.");
+    }
+    const cleanReason = reason.trim();
+    const manager = actorStaffId ? managerFor(this.state, actorStaffId) : undefined;
+    const updated: TenantVehicle = {
+      ...vehicle,
+      cardStatus: "Bị từ chối",
+      status: "Bị từ chối",
+      vehicleStatus: "REJECTED",
+      rejectionReason: cleanReason,
+      rejectedAt: new Date().toISOString(),
+      rejectedBy: manager ? manager.id : (actorStaffId || "demo-manager"),
+    };
+    const noti = {
+      id: `NOTI-${crypto.randomUUID()}`,
+      tenantId: vehicle.tenantId,
+      title: "Đăng ký cấp thẻ xe bị từ chối",
+      body: `Hồ sơ đăng ký phương tiện ${vehicle.plate || vehicle.brand} đã bị Ban Quản lý từ chối. Lý do: ${cleanReason}. Bạn có thể kiểm tra lại thông tin và nộp lại hồ sơ đăng ký mới.`,
+      time: new Date().toISOString(),
+      read: false,
+      type: "general" as const,
+    };
+    this.commit({
+      ...this.state,
+      vehicles: this.state.vehicles.map((item) => item.id === id ? updated : item),
+      notifications: [noti, ...this.state.notifications],
+    });
+    return updated;
+  }
+  async getVehicleChangeRequests(tenantId?: string): Promise<VehicleChangeRequest[]> {
+    const items = this.state.vehicleChangeRequests ?? [];
+    return tenantId ? items.filter((req) => req.tenantId === tenantId) : [...items];
+  }
+  async requestVehicleChange(input: {
+    tenantId: string;
+    currentVehicleId: string;
+    newVehicle: {
+      plate: string;
+      type: TenantVehicle["type"];
+      brand: string;
+      color: string;
+      registrationFront?: string;
+      registrationBack?: string;
+    };
+  }): Promise<VehicleChangeRequest> {
+    const tenant = this.state.tenants.find((t) => t.id === input.tenantId);
+    if (!tenant || tenant.status === "Đã trả phòng") {
+      throw new Error("Người thuê không còn cư trú hoặc đã trả phòng.");
+    }
+    const currentVehicle = this.state.vehicles.find((v) => v.id === input.currentVehicleId);
+    if (!currentVehicle || currentVehicle.tenantId !== input.tenantId) {
+      throw new Error("Phương tiện hiện tại không tồn tại hoặc không thuộc người thuê.");
+    }
+    if (normalizeVehicleStatus(currentVehicle) !== "ISSUED") {
+      throw new Error("Chỉ có thể yêu cầu đổi xe cho phương tiện đang có thẻ giữ xe hiệu lực (ISSUED).");
+    }
+    const pendingReq = (this.state.vehicleChangeRequests ?? []).find(
+      (r) => r.tenantId === input.tenantId && r.status === "PENDING"
+    );
+    if (pendingReq) {
+      throw new Error("Bạn đang có một yêu cầu đổi xe đang chờ xử lý. Không thể gửi yêu cầu trùng.");
+    }
+    const { newVehicle } = input;
+    if (!newVehicle.brand?.trim() || !newVehicle.color?.trim()) {
+      throw new Error("Hãng xe và màu sắc là bắt buộc.");
+    }
+    const requiresRegistration = newVehicle.type !== "Xe đạp" && newVehicle.type !== "Xe đạp điện";
+    if (requiresRegistration) {
+      if (!newVehicle.plate?.trim() || !/^[0-9A-Z .-]{6,14}$/.test(newVehicle.plate.trim().toUpperCase())) {
+        throw new Error("Biển số xe là bắt buộc đối với loại xe có đăng ký.");
+      }
+      if (!newVehicle.registrationFront || !newVehicle.registrationBack) {
+        throw new Error("Bắt buộc phải có đủ 2 mặt ảnh giấy đăng ký xe.");
+      }
+    } else if (newVehicle.plate?.trim() && !/^[0-9A-Z .-]{6,14}$/.test(newVehicle.plate.trim().toUpperCase())) {
+      throw new Error("Biển số xe không hợp lệ.");
+    }
+    const request: VehicleChangeRequest = {
+      id: `VCR-${crypto.randomUUID()}`,
+      tenantId: input.tenantId,
+      currentVehicleId: input.currentVehicleId,
+      newVehicle: {
+        ...newVehicle,
+        plate: newVehicle.plate?.trim().toUpperCase() || "",
+        brand: newVehicle.brand.trim(),
+        color: newVehicle.color.trim(),
+      },
+      createdAt: new Date().toISOString(),
+      status: "PENDING",
+    };
+    this.commit({
+      ...this.state,
+      vehicleChangeRequests: [request, ...(this.state.vehicleChangeRequests ?? [])],
+    });
+    return request;
+  }
+  async approveVehicleChangeRequest(
+    requestId: string,
+    actorStaffId?: string
+  ): Promise<{ request: VehicleChangeRequest; oldVehicle: TenantVehicle; newVehicle: TenantVehicle }> {
+    const request = (this.state.vehicleChangeRequests ?? []).find((r) => r.id === requestId);
+    if (!request || request.status !== "PENDING") {
+      throw new Error("Yêu cầu đổi xe không tồn tại hoặc đã được xử lý.");
+    }
+    const tenant = this.state.tenants.find((t) => t.id === request.tenantId);
+    if (!tenant || tenant.status === "Đã trả phòng") {
+      throw new Error("Khách thuê không còn cư trú tại KTX.");
+    }
+    const oldVehicle = this.state.vehicles.find((v) => v.id === request.currentVehicleId);
+    if (!oldVehicle || oldVehicle.tenantId !== request.tenantId || normalizeVehicleStatus(oldVehicle) !== "ISSUED") {
+      throw new Error("Phương tiện cũ không còn hiệu lực hoặc không hợp lệ để đổi xe.");
+    }
+    const manager = actorStaffId ? managerFor(this.state, actorStaffId) : undefined;
+    const now = new Date().toISOString();
+    const newVehicleId = `XE-${crypto.randomUUID()}`;
+    const cardCode = oldVehicle.cardCode;
+    const updatedOldVehicle: TenantVehicle = {
+      ...oldVehicle,
+      cardStatus: "Đã thay thế",
+      status: "Đã thay thế",
+      vehicleStatus: "REPLACED",
+      replacedByVehicleId: newVehicleId,
+    };
+    const newVehicle: TenantVehicle = {
+      id: newVehicleId,
+      tenantId: request.tenantId,
+      plate: request.newVehicle.plate,
+      type: request.newVehicle.type,
+      brand: request.newVehicle.brand,
+      color: request.newVehicle.color,
+      registration: request.newVehicle.registrationFront && request.newVehicle.registrationBack ? "Đủ 2 mặt" : "Chưa có",
+      registrationFront: request.newVehicle.registrationFront,
+      registrationBack: request.newVehicle.registrationBack,
+      cardStatus: "Đã cấp thẻ",
+      status: "Đã cấp thẻ xe",
+      vehicleStatus: "ISSUED",
+      cardCode,
+      registeredAt: now,
+      replacedVehicleId: oldVehicle.id,
+    };
+    const updatedRequest: VehicleChangeRequest = {
+      ...request,
+      status: "APPROVED",
+      processedAt: now,
+      processedBy: manager ? manager.id : (actorStaffId || "demo-manager"),
+      createdVehicleId: newVehicleId,
+    };
+    const noti = {
+      id: `NOTI-${crypto.randomUUID()}`,
+      tenantId: request.tenantId,
+      title: "Yêu cầu đổi xe đã được duyệt",
+      body: `Yêu cầu đổi sang phương tiện ${newVehicle.plate || newVehicle.brand} đã được duyệt. Bạn tiếp tục sử dụng thẻ giữ xe hiện tại (Mã thẻ: ${cardCode}).`,
+      time: now,
+      read: false,
+      type: "general" as const,
+    };
+    this.commit({
+      ...this.state,
+      vehicles: [newVehicle, ...this.state.vehicles.map((v) => v.id === oldVehicle.id ? updatedOldVehicle : v)],
+      vehicleChangeRequests: (this.state.vehicleChangeRequests ?? []).map((r) => r.id === requestId ? updatedRequest : r),
+      notifications: [noti, ...this.state.notifications],
+    });
+    return { request: updatedRequest, oldVehicle: updatedOldVehicle, newVehicle };
+  }
+  async rejectVehicleChangeRequest(
+    requestId: string,
+    reason: string,
+    actorStaffId?: string
+  ): Promise<VehicleChangeRequest> {
+    const request = (this.state.vehicleChangeRequests ?? []).find((r) => r.id === requestId);
+    if (!request || request.status !== "PENDING") {
+      throw new Error("Yêu cầu đổi xe không tồn tại hoặc đã được xử lý.");
+    }
+    if (!reason?.trim()) {
+      throw new Error("Vui lòng nhập lý do từ chối yêu cầu đổi xe.");
+    }
+    const now = new Date().toISOString();
+    const cleanReason = reason.trim();
+    const manager = actorStaffId ? managerFor(this.state, actorStaffId) : undefined;
+    const updatedRequest: VehicleChangeRequest = {
+      ...request,
+      status: "REJECTED",
+      rejectionReason: cleanReason,
+      processedAt: now,
+      processedBy: manager ? manager.id : (actorStaffId || "demo-manager"),
+    };
+    const noti = {
+      id: `NOTI-${crypto.randomUUID()}`,
+      tenantId: request.tenantId,
+      title: "Yêu cầu đổi xe bị từ chối",
+      body: `Yêu cầu đổi xe sang phương tiện ${request.newVehicle.plate || request.newVehicle.brand} đã bị từ chối. Lý do: ${cleanReason}. Xe hiện tại của bạn vẫn giữ nguyên thẻ giữ xe hợp lệ.`,
+      time: now,
+      read: false,
+      type: "general" as const,
+    };
+    this.commit({
+      ...this.state,
+      vehicleChangeRequests: (this.state.vehicleChangeRequests ?? []).map((r) => r.id === requestId ? updatedRequest : r),
+      notifications: [noti, ...this.state.notifications],
+    });
+    return updatedRequest;
   }
   async resetMockData() { resetMockSnapshot(); }
   async onboard(input: OnboardingInput, asOfDate?: string) {
