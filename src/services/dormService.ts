@@ -30,8 +30,8 @@ export interface DormService {
   getContracts(): Promise<ContractRecord[]>;
   getVehicles(): Promise<TenantVehicle[]>;
   registerVehicle(vehicle: TenantVehicle): Promise<TenantVehicle>;
-  issueVehicleCard(id: string, cardCode: string): Promise<TenantVehicle>;
-  revokeVehicle(id: string, actorStaffId?: string): Promise<TenantVehicle>;
+  issueVehicleCard(id: string, cardCode: string, actorStaffId: string): Promise<TenantVehicle>;
+  revokeVehicle(id: string, actorStaffId: string): Promise<TenantVehicle>;
   rejectVehicle(id: string, reason: string, actorStaffId?: string): Promise<TenantVehicle>;
   getVehicleChangeRequests(tenantId?: string): Promise<VehicleChangeRequest[]>;
   requestVehicleChange(input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }): Promise<VehicleChangeRequest>;

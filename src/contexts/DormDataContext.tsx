@@ -25,8 +25,8 @@ export type DormDataContextType = {
   onUpdateExpense: (id: string, expense: FacilityExpense) => Promise<void>;
   onDeleteExpense: (id: string) => Promise<void>;
   onRegisterVehicle: (vehicle: TenantVehicle) => Promise<void>;
-  onIssueVehicleCard: (id: string, cardCode: string) => Promise<void>;
-  onRevokeVehicle: (id: string, actorStaffId?: string) => Promise<void>;
+  onIssueVehicleCard: (id: string, cardCode: string, actorStaffId: string) => Promise<void>;
+  onRevokeVehicle: (id: string, actorStaffId: string) => Promise<void>;
   onRejectVehicle: (id: string, reason: string, actorStaffId?: string) => Promise<void>;
   onRequestVehicleChange: (input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }) => Promise<void>;
   onApproveVehicleChangeRequest: (requestId: string, actorStaffId?: string) => Promise<void>;
@@ -233,11 +233,11 @@ export function DormDataProvider({ children }: { children: ReactNode }) {
     const created = await dormService.registerVehicle(vehicle);
     setVehicles((current) => [...current, created]);
   };
-  const onIssueVehicleCard = async (id: string, cardCode: string) => {
-    const updated = await dormService.issueVehicleCard(id, cardCode);
+  const onIssueVehicleCard = async (id: string, cardCode: string, actorStaffId: string) => {
+    const updated = await dormService.issueVehicleCard(id, cardCode, actorStaffId);
     setVehicles((current) => current.map((vehicle) => vehicle.id === id ? updated : vehicle));
   };
-  const onRevokeVehicle = async (id: string, actorStaffId?: string) => {
+  const onRevokeVehicle = async (id: string, actorStaffId: string) => {
     const updated = await dormService.revokeVehicle(id, actorStaffId);
     setVehicles((current) => current.map((vehicle) => vehicle.id === id ? updated : vehicle));
     setVehicleChangeRequests(await dormService.getVehicleChangeRequests());

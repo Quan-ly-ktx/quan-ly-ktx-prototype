@@ -202,19 +202,19 @@ class MockDormServiceImpl implements DormService {
     const isActive = (v: TenantVehicle) => normalizeVehicleStatus(v) === "PENDING_CARD" || normalizeVehicleStatus(v) === "ISSUED";
     const isCardIssued = (v: TenantVehicle) => normalizeVehicleStatus(v) === "ISSUED";
     if (isActive(updated) && this.state.vehicles.some((item) => item.id !== id && item.tenantId === updated.tenantId && isActive(item))) throw new Error("Người thuê đã có phương tiện chưa thu hồi.");
-    if (updated.cardCode && isCardIssued(updated) && this.state.vehicles.some((item) => item.id !== id && isCardIssued(item) && item.cardCode === updated.cardCode)) throw new Error("Mã thẻ đã được sử dụng.");
+    const normalizedCardCode = updated.cardCode?.trim().toUpperCase();
+    if (normalizedCardCode && isCardIssued(updated) && this.state.vehicles.some((item) => item.id !== id && isCardIssued(item) && item.cardCode?.trim().toUpperCase() === normalizedCardCode)) throw new Error("Mã thẻ đã được sử dụng.");
     this.commit({ ...this.state, vehicles: this.state.vehicles.map((vehicle) => vehicle.id === id ? updated : vehicle) });
     return updated;
   }
-  async issueVehicleCard(id: string, cardCode: string) {
+  async issueVehicleCard(id: string, cardCode: string, actorStaffId: string) {
+    requireActiveManager(this.state, actorStaffId);
     const vehicle = this.state.vehicles.find((item) => item.id === id);
     if (!vehicle || normalizeVehicleStatus(vehicle) !== "PENDING_CARD" || !cardCode.trim()) throw new Error("Phương tiện hoặc mã thẻ không hợp lệ.");
     return this.updateVehicle(id, { cardStatus: "Đã cấp thẻ", status: "Đã cấp thẻ xe", vehicleStatus: "ISSUED", cardCode: cardCode.trim() });
   }
-  async revokeVehicle(id: string, actorStaffId?: string) {
-    if (actorStaffId) {
-      managerFor(this.state, actorStaffId);
-    }
+  async revokeVehicle(id: string, actorStaffId: string) {
+    const manager = requireActiveManager(this.state, actorStaffId);
     const vehicle = this.state.vehicles.find((item) => item.id === id);
     if (!vehicle) throw new Error("Không tìm thấy phương tiện.");
     const currentStatus = normalizeVehicleStatus(vehicle);
@@ -224,7 +224,7 @@ class MockDormServiceImpl implements DormService {
     const now = new Date().toISOString();
     const updatedRequests = (this.state.vehicleChangeRequests ?? []).map((req) => {
       if (req.currentVehicleId === id && req.status === "PENDING") {
-        return { ...req, status: "CANCELLED" as const, processedAt: now, processedBy: actorStaffId || "manager" };
+        return { ...req, status: "CANCELLED" as const, processedAt: now, processedBy: manager.id };
       }
       return req;
     });

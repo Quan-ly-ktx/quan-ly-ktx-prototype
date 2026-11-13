@@ -37,8 +37,15 @@ test("Task 8: Vehicle lifecycle - register -> issue card -> duplicate card rejec
     /Người thuê đã có phương tiện chưa thu hồi/
   );
 
-  // 3. Issue card
-  const issued = await mockDormService.issueVehicleCard(vehicle.id, "CARD-001");
+  await assert.rejects(
+    mockDormService.issueVehicleCard(vehicle.id, "CARD-001", undefined!),
+    /Thao tác quản trị yêu cầu quyền Quản lý đang hoạt động/
+  );
+  await assert.rejects(
+    mockDormService.issueVehicleCard(vehicle.id, "CARD-001", "tech-1"),
+    /Không tìm thấy quản lý đang hoạt động/
+  );
+  const issued = await mockDormService.issueVehicleCard(vehicle.id, "CARD-001", "demo-manager-staff");
   assert.equal(issued.cardStatus, "Đã cấp thẻ");
   assert.equal(issued.cardCode, "CARD-001");
 
@@ -57,19 +64,30 @@ test("Task 8: Vehicle lifecycle - register -> issue card -> duplicate card rejec
     cardStatus: "Chưa cấp thẻ",
   });
   await assert.rejects(
-    mockDormService.issueVehicleCard(otherVehicle.id, "CARD-001"),
+    mockDormService.issueVehicleCard(otherVehicle.id, "card-001", "demo-manager-staff"),
+    /Mã thẻ đã được sử dụng/
+  );
+  await assert.rejects(
+    mockDormService.issueVehicleCard(otherVehicle.id, "CARD-001", "demo-manager-staff"),
     /Mã thẻ đã được sử dụng/
   );
 
-  // 5. Revoke first vehicle card
-  const revoked = await mockDormService.revokeVehicle(vehicle.id);
+  // 5. Revocation also requires an active manager.
+  await assert.rejects(
+    mockDormService.revokeVehicle(vehicle.id, undefined!),
+    /Thao tác quản trị yêu cầu quyền Quản lý đang hoạt động/
+  );
+  await assert.rejects(
+    mockDormService.revokeVehicle(vehicle.id, "tech-1"),
+    /Không tìm thấy quản lý đang hoạt động/
+  );
+  const revoked = await mockDormService.revokeVehicle(vehicle.id, "demo-manager-staff");
   assert.equal(revoked.cardStatus, "Đã thu hồi");
 
-  // 6. Now CARD-001 can be reused for otherVehicle
-  const otherIssued = await mockDormService.issueVehicleCard(otherVehicle.id, "CARD-001");
+  // 6. The normalized card code is reusable after revocation.
+  const otherIssued = await mockDormService.issueVehicleCard(otherVehicle.id, "card-001", "demo-manager-staff");
   assert.equal(otherIssued.cardStatus, "Đã cấp thẻ");
-  assert.equal(otherIssued.cardCode, "CARD-001");
-
+  assert.equal(otherIssued.cardCode, "card-001");
   await mockDormService.resetMockData();
 });
 

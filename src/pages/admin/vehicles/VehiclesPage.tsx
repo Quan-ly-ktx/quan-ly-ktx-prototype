@@ -208,8 +208,8 @@ export function VehiclesPage({
   tenants: TenantRecord[];
   vehicles?: TenantVehicle[];
   vehicleChangeRequests?: VehicleChangeRequest[];
-  onIssueVehicleCard: (id: string, cardCode: string) => Promise<void>;
-  onRevokeVehicle: (id: string, actorStaffId?: string) => Promise<void>;
+  onIssueVehicleCard: (id: string, cardCode: string, actorStaffId: string) => Promise<void>;
+  onRevokeVehicle: (id: string, actorStaffId: string) => Promise<void>;
   onRejectVehicle?: (id: string, reason: string, actorStaffId?: string) => Promise<void>;
   onApproveVehicleChangeRequest?: (requestId: string, actorStaffId?: string) => Promise<void>;
   onRejectVehicleChangeRequest?: (requestId: string, reason: string, actorStaffId?: string) => Promise<void>;
@@ -494,9 +494,16 @@ export function VehiclesPage({
                             <Button
                               className="h-8 rounded-sm border border-warning-200 bg-white px-2 text-xs font-semibold text-warning-700 hover:bg-warning-50"
                               onClick={async () => {
-                                if (confirm(`Thu hồi thẻ từ ${vehicle.cardCode} của xe ${vehicle.plate}?`)) {
+                                if (!managerStaffId) {
+                                  showToast("Thao tác quản trị yêu cầu quyền Quản lý đang hoạt động.");
+                                  return;
+                                }
+                                if (!confirm(`Thu hồi thẻ từ ${vehicle.cardCode} của xe ${vehicle.plate}?`)) return;
+                                try {
                                   await onRevokeVehicle(vehicle.id, managerStaffId);
                                   showToast(`Đã thu hồi thẻ xe ${vehicle.plate}`);
+                                } catch (error) {
+                                  showToast(error instanceof Error ? error.message : "Không thể thu hồi thẻ");
                                 }
                               }}
                             >
@@ -586,6 +593,10 @@ export function VehiclesPage({
               <Button
                 className="h-10 rounded-sm bg-brand-500 px-5 text-xs font-semibold text-white hover:bg-brand-600 active:translate-y-[1px]"
                 onClick={async () => {
+                  if (!managerStaffId) {
+                    showToast("Thao tác quản trị yêu cầu quyền Quản lý đang hoạt động.");
+                    return;
+                  }
                   const code = cardCodeInput.trim().toUpperCase();
                   if (!code) {
                     showToast("Vui lòng nhập mã thẻ từ");
@@ -617,7 +628,7 @@ export function VehiclesPage({
                     return;
                   }
                   try {
-                    await onIssueVehicleCard(issuingVehicle.id, code);
+                    await onIssueVehicleCard(issuingVehicle.id, code, managerStaffId);
                   } catch (error) {
                     showToast(error instanceof Error ? error.message : "Không thể cấp thẻ");
                     return;

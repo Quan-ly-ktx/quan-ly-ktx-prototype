@@ -30,8 +30,8 @@ class ApiDormServiceImpl implements DormService {
   async deleteExpense(_id: string): Promise<void> { throw new Error("API chi phí chưa được thống nhất."); }
   async getVehicles(): Promise<TenantVehicle[]> { throw new Error("API phương tiện chưa được thống nhất."); }
   async registerVehicle(_vehicle: TenantVehicle): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
-  async issueVehicleCard(_id: string, _cardCode: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
-  async revokeVehicle(_id: string, _actorStaffId?: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async issueVehicleCard(_id: string, _cardCode: string, _actorStaffId: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
+  async revokeVehicle(_id: string, _actorStaffId: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
   async rejectVehicle(_id: string, _reason: string, _actorStaffId?: string): Promise<TenantVehicle> { throw new Error("API phương tiện chưa được thống nhất."); }
   async getVehicleChangeRequests(_tenantId?: string): Promise<VehicleChangeRequest[]> { throw new Error("API đổi phương tiện chưa được thống nhất."); }
   async requestVehicleChange(_input: { tenantId: string; currentVehicleId: string; newVehicle: { plate: string; type: TenantVehicle["type"]; brand: string; color: string; registrationFront?: string; registrationBack?: string } }): Promise<VehicleChangeRequest> { throw new Error("API đổi phương tiện chưa được thống nhất."); }
