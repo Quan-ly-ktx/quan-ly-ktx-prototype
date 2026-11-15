@@ -440,25 +440,25 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 #### 3.4.1. `maintenance_tickets` — Phiếu báo hỏng
 
 
-| Cột                         | Type          | Null  | Khóa / ràng buộc                         | Ý nghĩa                                                        |
-| --------------------------- | ------------- | :-----: | ---------------------------------------- | -------------------------------------------------------------- |
-| `id`                        | `uuid`        | Không | PK                                       | ID phiếu                                                       |
-| `ticket_code`               | `text`        | Không | UK                                       | Mã ticket                                                      |
-| `reporter_tenant_id`        | `uuid`        | Không | FK → `tenants.id`                        | Tenant đang cư trú khi tạo                                     |
-| `room_id`                   | `uuid`        | Không | FK → `rooms.id`                          | Phòng xảy ra sự cố                                             |
-| `bed_id`                    | `uuid`        | Có    | FK → `beds.id`; composite FK nếu gắn Bed | Giường liên quan **không bắt buộc**                            |
-| `assignee_staff_id`         | `uuid`        | Có    | FK → `staff_profiles.id`                 | Technician hiện tại; **NULL khi chưa phân công**               |
-| `title`                     | `text`        | Không | —                                        | Tiêu đề                                                        |
-| `description`               | `text`        | Không | —                                        | Mô tả hiện trường                                              |
-| `category`                  | `text`        | Không | Sáu giá trị bên dưới                     | Nhóm sự cố                                                     |
-| `priority`                  | `text`        | Không | `URGENT`, `HIGH`, `NORMAL`               | Mức ưu tiên hiện tại                                           |
-| `status`                    | `text`        | Không | Bốn giá trị bên dưới                     | Trạng thái xử lý                                               |
-| `report_image_file_key`     | `text`        | Có    | —                                        | Ảnh hiện trường; việc bắt buộc ảnh xác minh tại tầng nghiệp vụ |
-| `deadline_at`               | `timestamptz` | Có    | —                                        | Hạn hoàn thành Manager đặt                                     |
-| `resolution_notes`          | `text`        | Có    | —                                        | Kết quả xử lý                                                  |
-| `resolution_image_file_key` | `text`        | Có    | —                                        | Ảnh nghiệm thu khi hoàn thành                                  |
-| `resolved_at`               | `timestamptz` | Có    | —                                        | Ngày Technician hoàn thành                                     |
-| `created_at`                | `timestamptz` | Không | Default `now()`                          | Ngày báo hỏng                                                  |
+| Cột                         | Type          | Null  | Khóa / ràng buộc                                                 | Ý nghĩa                                                        |
+| --------------------------- | ------------- | :-----: | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `id`                        | `uuid`        | Không | PK                                                               | ID phiếu                                                       |
+| `ticket_code`               | `text`        | Không | UK                                                               | Mã ticket                                                      |
+| `reporter_tenant_id`        | `uuid`        | Không | FK → `tenants.id`                                                | Tenant đang cư trú khi tạo                                     |
+| `room_id`                   | `uuid`        | Không | FK → `rooms.id`                                                  | Phòng xảy ra sự cố                                             |
+| `bed_id`                    | `uuid`        | Có    | FK → `beds.id`; composite FK nếu gắn Bed                         | Giường liên quan **không bắt buộc**                            |
+| `assignee_staff_id`         | `uuid`        | Có    | FK → `staff_profiles.id`                                         | Technician hiện tại; **NULL khi chưa phân công**               |
+| `title`                     | `text`        | Không | —                                                                | Tiêu đề                                                        |
+| `description`               | `text`        | Không | —                                                                | Mô tả hiện trường                                              |
+| `category`                  | `text`        | Không | `ELECTRIC`, `WATER`, `INTERNET`, `FURNITURE`, `AMENITY`, `OTHER` | Nhóm sự cố                                                     |
+| `priority`                  | `text`        | Không | `URGENT`, `HIGH`, `NORMAL`                                       | Mức ưu tiên hiện tại                                           |
+| `status`                    | `text`        | Không | `UNASSIGNED`, `ASSIGNED,` `IN_PROGRESS,` `COMPLETED`             | Trạng thái xử lý                                               |
+| `report_image_file_key`     | `text`        | Có    | —                                                                | Ảnh hiện trường; việc bắt buộc ảnh xác minh tại tầng nghiệp vụ |
+| `deadline_at`               | `timestamptz` | Có    | —                                                                | Hạn hoàn thành Manager đặt                                     |
+| `resolution_notes`          | `text`        | Có    | —                                                                | Kết quả xử lý                                                  |
+| `resolution_image_file_key` | `text`        | Có    | —                                                                | Ảnh nghiệm thu khi hoàn thành                                  |
+| `resolved_at`               | `timestamptz` | Có    | —                                                                | Ngày Technician hoàn thành                                     |
+| `created_at`                | `timestamptz` | Không | Default `now()`                                                  | Ngày báo hỏng                                                  |
 
 
 **Danh mục `category`:** `ELECTRIC`, `WATER`, `INTERNET`, `FURNITURE`, `AMENITY`, `OTHER`, tương ứng `Điện`, `Nước`, `Internet`, `Nội thất`, `Tiện ích`, `Khác`.
@@ -485,18 +485,18 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 #### 3.4.3. `violations` — Biên bản vi phạm
 
 
-| Cột                  | Type            | Null  | Khóa / ràng buộc              | Ý nghĩa                         |
-| -------------------- | --------------- | :-----: | ----------------------------- | ------------------------------- |
-| `id`                 | `uuid`          | Không | PK                            | ID vi phạm                      |
-| `violation_code`     | `text`          | Không | UK                            | Mã biên bản                     |
-| `tenant_id`          | `uuid`          | Không | FK → `tenants.id`             | Khách vi phạm                   |
-| `issued_by_staff_id` | `uuid`          | Không | FK → `staff_profiles.id`      | Manager lập                     |
-| `occurred_on`        | `date`          | Không | —                             | Ngày xảy ra                     |
-| `violation_type`     | `text`          | Không | Sáu nhóm dưới đây             | Loại vi phạm                    |
-| `level`              | `text`          | Không | `REMINDER`, `WARNING`, `FINE` | Nhắc nhở / Cảnh cáo / Phạt tiền |
-| `fine_amount`        | `numeric(14,0)` | Không | `>= 0`, default `0`           | Chỉ có giá trị dương khi `FINE` |
-| `note`               | `text`          | Có    | —                             | Diễn biến, nội dung biên bản    |
-| `created_at`         | `timestamptz`   | Không | Default `now()`               | Ngày lập                        |
+| Cột                  | Type            | Null  | Khóa / ràng buộc                                                       | Ý nghĩa                         |
+| -------------------- | --------------- | :-----: | ---------------------------------------------------------------------- | ------------------------------- |
+| `id`                 | `uuid`          | Không | PK                                                                     | ID vi phạm                      |
+| `violation_code`     | `text`          | Không | UK                                                                     | Mã biên bản                     |
+| `tenant_id`          | `uuid`          | Không | FK → `tenants.id`                                                      | Khách vi phạm                   |
+| `issued_by_staff_id` | `uuid`          | Không | FK → `staff_profiles.id`                                               | Manager lập                     |
+| `occurred_on`        | `date`          | Không | —                                                                      | Ngày xảy ra                     |
+| `violation_type`     | `text`          | Không | `LATE_RETURN`, `NOISE`, `HYGIENE`, `OUTSIDER`, `SMOKING_FIRE`, `OTHER` | Loại vi phạm                    |
+| `level`              | `text`          | Không | `REMINDER`, `WARNING`, `FINE`                                          | Nhắc nhở / Cảnh cáo / Phạt tiền |
+| `fine_amount`        | `numeric(14,0)` | Không | `>= 0`, default `0`                                                    | Chỉ có giá trị dương khi `FINE` |
+| `note`               | `text`          | Có    | —                                                                      | Diễn biến, nội dung biên bản    |
+| `created_at`         | `timestamptz`   | Không | Default `now()`                                                        | Ngày lập                        |
 
 
 **`violation_type`:** `LATE_RETURN`, `NOISE`, `HYGIENE`, `OUTSIDER`, `SMOKING_FIRE`, `OTHER` → `Về muộn`, `Gây ồn`, `Vệ sinh`, `Khách ngoài`, `Hút thuốc / cháy nổ`, `Khác`. `level != FINE` thì `fine_amount=0`; `FINE` thì `fine_amount>0`. Người được lập biên bản phải đang cư trú tại thời điểm lập; không bắt buộc `room_id`. Tiền phạt **không có FK đến Invoice/Payment**, không đưa vào doanh thu tiền thuê.
@@ -504,28 +504,28 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 #### 3.4.4. `vehicles` — Phương tiện, mã thẻ vật lý và lịch sử thay xe
 
 
-| Cột                           | Type          | Null  | Khóa / ràng buộc                                                         | Ý nghĩa                                                     |
-| ----------------------------- | ------------- | :-----: | ------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| `id`                          | `uuid`        | Không | PK                                                                       | ID bất biến của từng hồ sơ xe                               |
-| `tenant_id`                   | `uuid`        | Không | FK → `tenants.id`                                                        | Người đăng ký/được quyền sử dụng xe                         |
-| `vehicle_type`                | `text`        | Không | Danh mục năm loại bên dưới                                               | Loại xe                                                     |
-| `license_plate`               | `text`        | Có    | Conditional required                                                     | Biển số; NULL với loại không có đăng ký                     |
-| `brand`                       | `text`        | Không | Không rỗng                                                               | Hãng/dòng xe                                                |
-| `color`                       | `text`        | Không | Không rỗng                                                               | Màu xe                                                      |
-| `registration_front_file_key` | `text`        | Có    | Conditional required                                                     | OCI private key ảnh cà vẹt mặt trước                        |
-| `registration_back_file_key`  | `text`        | Có    | Conditional required                                                     | OCI private key ảnh mặt sau                                 |
-| `card_code`                   | `text`        | Có    | Unique canonical **chỉ khi status = ISSUED**                             | Mã thẻ vật lý; giữ trên xe lịch sử `REPLACED`/`REVOKED`     |
-| `status`                      | `text`        | Không | `PENDING_CARD`, `ISSUED`, `REJECTED`, `REVOKED`, `REPLACED`, `CANCELLED` | Sáu trạng thái hồ sơ xe, **khác** trạng thái yêu cầu đổi xe |
-| `created_at`                  | `timestamptz` | Không | Default `now()`                                                          | Thời điểm tạo đăng ký; giữ tương thích cột cũ               |
-| `issued_at`                   | `timestamptz` | Có    | —                                                                        | Manager bàn giao thẻ vật lý lần đầu                         |
-| `rejected_by_staff_id`        | `uuid`        | Có    | FK → `staff_profiles.id`                                                 | Manager từ chối hồ sơ đăng ký lần đầu                       |
-| `rejection_reason`            | `text`        | Có    | Bắt buộc nếu `REJECTED`                                                  | Lý do từ chối bằng văn bản; không có file minh chứng        |
-| `rejected_at`                 | `timestamptz` | Có    | —                                                                        | Thời điểm từ chối hồ sơ đăng ký                             |
-| `revoked_at`                  | `timestamptz` | Có    | —                                                                        | Thời điểm nhận lại/thu hồi thẻ vật lý                       |
-| `cancelled_at`                | `timestamptz` | Có    | —                                                                        | Đăng ký chưa cấp thẻ bị hủy, ví dụ checkout                 |
-| `replaced_at`                 | `timestamptz` | Có    | —                                                                        | Thời điểm hồ sơ cũ được thay thế sau khi Manager duyệt      |
-| `replaced_by_vehicle_id`      | `uuid`        | Có    | FK self → `vehicles.id`                                                  | Xe mới đã thay thế hồ sơ cũ (`REPLACED`)                    |
-| `replaced_vehicle_id`         | `uuid`        | Có    | FK self → `vehicles.id`                                                  | Xe cũ mà hồ sơ mới kế thừa mã thẻ (`ISSUED`)                |
+| Cột                           | Type          | Null  | Khóa / ràng buộc                                                                    | Ý nghĩa                                                     |
+| ----------------------------- | ------------- | :-----: | ----------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `id`                          | `uuid`        | Không | PK                                                                                  | ID bất biến của từng hồ sơ xe                               |
+| `tenant_id`                   | `uuid`        | Không | FK → `tenants.id`                                                                   | Người đăng ký/được quyền sử dụng xe                         |
+| `vehicle_type`                | `text`        | Không | `SCOOTER`, `MANUAL_MOTORCYCLE`, `ELECTRIC_MOTORBIKE`, `ELECTRIC_BICYCLE`, `BICYCLE` | Loại xe                                                     |
+| `license_plate`               | `text`        | Có    | Conditional required                                                                | Biển số; NULL với loại không có đăng ký                     |
+| `brand`                       | `text`        | Không | Không rỗng                                                                          | Hãng/dòng xe                                                |
+| `color`                       | `text`        | Không | Không rỗng                                                                          | Màu xe                                                      |
+| `registration_front_file_key` | `text`        | Có    | Conditional required                                                                | OCI private key ảnh cà vẹt mặt trước                        |
+| `registration_back_file_key`  | `text`        | Có    | Conditional required                                                                | OCI private key ảnh mặt sau                                 |
+| `card_code`                   | `text`        | Có    | Unique canonical **chỉ khi status = ISSUED**                                        | Mã thẻ vật lý; giữ trên xe lịch sử `REPLACED`/`REVOKED`     |
+| `status`                      | `text`        | Không | `PENDING_CARD`, `ISSUED`, `REJECTED`, `REVOKED`, `REPLACED`, `CANCELLED`            | Sáu trạng thái hồ sơ xe, **khác** trạng thái yêu cầu đổi xe |
+| `created_at`                  | `timestamptz` | Không | Default `now()`                                                                     | Thời điểm tạo đăng ký; giữ tương thích cột cũ               |
+| `issued_at`                   | `timestamptz` | Có    | —                                                                                   | Manager bàn giao thẻ vật lý lần đầu                         |
+| `rejected_by_staff_id`        | `uuid`        | Có    | FK → `staff_profiles.id`                                                            | Manager từ chối hồ sơ đăng ký lần đầu                       |
+| `rejection_reason`            | `text`        | Có    | Bắt buộc nếu `REJECTED`                                                             | Lý do từ chối bằng văn bản; không có file minh chứng        |
+| `rejected_at`                 | `timestamptz` | Có    | —                                                                                   | Thời điểm từ chối hồ sơ đăng ký                             |
+| `revoked_at`                  | `timestamptz` | Có    | —                                                                                   | Thời điểm nhận lại/thu hồi thẻ vật lý                       |
+| `cancelled_at`                | `timestamptz` | Có    | —                                                                                   | Đăng ký chưa cấp thẻ bị hủy, ví dụ checkout                 |
+| `replaced_at`                 | `timestamptz` | Có    | —                                                                                   | Thời điểm hồ sơ cũ được thay thế sau khi Manager duyệt      |
+| `replaced_by_vehicle_id`      | `uuid`        | Có    | FK self → `vehicles.id`                                                             | Xe mới đã thay thế hồ sơ cũ (`REPLACED`)                    |
+| `replaced_vehicle_id`         | `uuid`        | Có    | FK self → `vehicles.id`                                                             | Xe cũ mà hồ sơ mới kế thừa mã thẻ (`ISSUED`)                |
 
 
 **Loại xe:** `SCOOTER`, `MANUAL_MOTORCYCLE`, `ELECTRIC_MOTORBIKE`, `ELECTRIC_BICYCLE`, `BICYCLE`. Xe tay ga, xe số, xe máy điện có đăng ký **phải** có biển và hai OCI key của ảnh giấy đăng ký; xe đạp và xe đạp điện không có đăng ký có thể để `NULL`. Validate ở Backend và khi thích hợp bằng `CHECK` cùng hàng, không chỉ UI.
