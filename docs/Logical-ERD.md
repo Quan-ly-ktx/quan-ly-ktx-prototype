@@ -47,7 +47,7 @@
 | Xóa dữ liệu        | Chỉ xóa vật lý dữ liệu cấu hình/tệp nhập nhầm khi an toàn; lịch sử hợp đồng, hóa đơn, phiếu thu, sự cố, vi phạm được giữ                                    |
 
 
-**Giới hạn của `CHECK`/`FK`:** Một `CHECK` không thể so sánh dữ liệu của hai bảng hay kiểm tra trạng thái của nhiều hợp đồng cùng lúc. Những bất biến này cần **transaction**, `UNIQUE`/partial index và/hoặc trigger/logic Backend (nêu rõ ở §6–§7), không được mô tả sai là một `CHECK` đơn giản.
+**Giới hạn của `CHECK`/`FK`:** Một `CHECK` không thể so sánh dữ liệu của hai bảng hay kiểm tra trạng thái của nhiều hợp đồng cùng lúc. Những bất biến này cần **transaction**, `UNIQUE`/ràng buộc duy nhất có điều kiện và/hoặc trigger/logic Backend (nêu rõ ở §5–§6), không được mô tả sai là một `CHECK` đơn giản.
 
 ---
 
@@ -183,6 +183,17 @@ erDiagram
 | `created_at`    | `timestamptz`   | Không | Default `now()`         | Thời điểm tạo phòng                              |
 | `updated_at`    | `timestamptz`   | Không | —                       | Lần cập nhật gần nhất                            |
 
+**Vòng đời Room (`archived_at`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> DANG_KHAI_THAC: Tạo Room
+    state "Đang khai thác" as DANG_KHAI_THAC
+    state "Đã lưu trữ" as DA_LUU_TRU
+    DANG_KHAI_THAC --> DA_LUU_TRU: Archive khi phòng đủ điều kiện
+    DA_LUU_TRU --> DANG_KHAI_THAC: Restore
+```
+
 
 **Ràng buộc:** `room_number` không trùng với phòng khác, kể cả Archive; đồng thời phải kiểm tra `room_code_registry` để cấm sử dụng mã đã có lịch sử. Trường `archived_at` **khác** `deleted_at`: phòng Archive vẫn còn dữ liệu và có thể Restore. **Không có cột `rooms.occupied_beds`** trong schema đích; số giường có người **tính trực tiếp** bằng `COUNT(*)` trên Bed `OCCUPIED` của Room, không duy trì counter cộng/trừ.
 
@@ -198,6 +209,18 @@ erDiagram
 | `status`     | `text`        | Không | `AVAILABLE`, `OCCUPIED`, `MAINTENANCE` | Trạng thái giường                       |
 | `created_at` | `timestamptz` | Không | Default `now()`                        | Ngày tạo                                |
 
+**State machine (`beds.status`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> AVAILABLE: Tạo Bed
+    AVAILABLE --> MAINTENANCE: Manager đánh dấu bảo trì
+    MAINTENANCE --> AVAILABLE: Manager xác nhận sẵn sàng
+    AVAILABLE --> OCCUPIED: Onboarding
+    OCCUPIED --> AVAILABLE: Checkout (sẵn sàng)
+    OCCUPIED --> MAINTENANCE: Checkout  (cần bảo trì)
+```
+
 
 **Ràng buộc:** Room phải có chính xác `total_beds` Bed sau khi tạo; toàn bộ thao tác tạo Room–Bed atomic. Không cho Backend/UI tùy ý cập nhật `OCCUPIED`: chỉ qua onboarding/checkout. Không tạo cột `beds.price` độc lập: **giá niêm yết của Bed đọc từ `rooms.base_price`**, nên Manager đổi giá phòng sẽ hiển thị đúng trên tất cả Bed mà không có hai giá lệch nhau. Giá hợp đồng/hóa đơn lịch sử là snapshot riêng. Khi Room Code thay đổi, phải cập nhật **mọi `slot_key`** trong cùng transaction. Có thể tạo `UNIQUE (id, room_id)` để hỗ trợ FK phức hợp trên Ticket (§3.4.1).
 
@@ -209,7 +232,6 @@ erDiagram
 | `id`       | `uuid` | Không | PK               | ID tiện nghi               |
 | `code`     | `text` | Không | UK               | Mã loại tiện nghi          |
 | `name`     | `text` | Không | —                | Tên tiện nghi              |
-| `category` | `text` | Có    | —                | Phân nhóm hiển thị khi cần |
 
 
 #### 3.1.4. `room_amenities` — Bảng nối Room–Amenity
@@ -236,7 +258,7 @@ erDiagram
 | `created_at`       | `timestamptz` | Không | Default `now()`              | Thời điểm cấp mã                                        |
 
 
-**Bất biến registry:** Mỗi Room có **đúng một** mã `is_current=true` (partial unique index cho một mã hiện hành/Room). Mã cũ không còn hiện hành **chỉ được giữ** khi `used_in_business=true`; nếu mã chưa từng dùng trong nghiệp vụ thì **xóa hàng registry** để cho phép tái sử dụng. Không được chuyển `used_in_business` từ `true` về `false`. Mã đang dùng bởi Room còn tồn tại/Archive không được cấp cho Room khác. Khi xóa phòng tạo nhầm chưa có lịch sử, xóa registry chưa bảo vệ trước khi xóa Room; khi Archive giữ nguyên registry. `rooms.room_number` và bản ghi registry hiện hành phải đồng bộ trong cùng transaction.
+**Bất biến registry:** Mỗi Room có **đúng một** mã `is_current=true` (ràng buộc duy nhất có điều kiện cho một mã hiện hành/Room). Mã cũ không còn hiện hành **chỉ được giữ** khi `used_in_business=true`; nếu mã chưa từng dùng trong nghiệp vụ thì **xóa hàng registry** để cho phép tái sử dụng. Không được chuyển `used_in_business` từ `true` về `false`. Mã đang dùng bởi Room còn tồn tại/Archive không được cấp cho Room khác. Khi xóa phòng tạo nhầm chưa có lịch sử, xóa registry chưa bảo vệ trước khi xóa Room; khi Archive giữ nguyên registry. `rooms.room_number` và bản ghi registry hiện hành phải đồng bộ trong cùng transaction.
 
 **Ví dụ:** `P.302` vừa tạo và nhập sai tầng, chưa từng có Contract/Ticket → được Delete an toàn, xóa dòng registry `P.302` → có thể tạo lại `P.302`. Nếu `P.302` từng xuất hiện trong lịch sử rồi đổi thành `P.303` → giữ `P.302` với `used_in_business=true`, `is_current=false`; **cấm** cấp `P.302` cho Room khác.
 
@@ -253,12 +275,22 @@ erDiagram
 | `email`         | `text`        | Không | **UNIQUE chuẩn hóa `lower(btrim(email))`** | Email liên kết với **một** User, kênh OTP; nhân sự dùng đăng nhập |
 | `password_hash` | `text`        | Không | —                                          | Chỉ lưu mật khẩu băm                                              |
 | `role`          | `text`        | Không | `MANAGER`, `TENANT`, `TECHNICIAN`          | Vai trò cố định                                                   |
-| `status`        | `text`        | Không | `ACTIVE`, `INACTIVE`, `LOCKED`             | Trạng thái tài khoản; khóa Technician ngăn truy cập               |
+| `status`        | `text`        | Không | `ACTIVE`, `LOCKED`                         | Trạng thái tài khoản; khóa Technician ngăn truy cập               |
 | `created_at`    | `timestamptz` | Không | Default `now()`                            | Tạo tài khoản                                                     |
 | `updated_at`    | `timestamptz` | Không | Default `now()`                            | Cập nhật                                                          |
 
+**State machine (`users.status`):**
 
-**Không có cột `username` và `phone` ở `users`** trong schema đích: Tenant đăng nhập bằng `tenants.id_card_number`, nhân sự qua `users.email` cùng điều kiện role `MANAGER`/`TECHNICIAN`. Không cho email của Tenant dùng để đăng nhập dù email là UNIQUE. Cập nhật email của Tenant hoặc Technician sau khi Manager xác minh phải kiểm tra trùng **toàn User**; email Manager cố định theo chức năng Phase 1. `LOCKED`/`INACTIVE` bị từ chối dù JWT còn hạn; Redis kiểm soát thu hồi token/OTP và giới hạn đăng nhập tạm thời. User phải được tạo cùng profile đúng role; không cho tồn tại hai nhánh hồ sơ khi transaction hoàn tất.
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE: Tạo tài khoản
+    ACTIVE --> LOCKED: Manager khóa tài khoản
+    LOCKED --> ACTIVE: Manager kích hoạt lại
+
+```
+
+
+**Không có cột `username` và `phone` ở `users`** trong schema đích: Tenant đăng nhập bằng `tenants.id_card_number`, nhân sự qua `users.email` cùng điều kiện role `MANAGER`/`TECHNICIAN`. Không cho email của Tenant dùng để đăng nhập dù email là UNIQUE. Cập nhật email của Tenant hoặc Technician sau khi Manager xác minh phải kiểm tra trùng **toàn User**; email Manager cố định theo chức năng Phase 1. `LOCKED` bị từ chối dù JWT còn hạn; Redis kiểm soát thu hồi token/OTP và giới hạn đăng nhập tạm thời. User phải được tạo cùng profile đúng role; không cho tồn tại hai nhánh hồ sơ khi transaction hoàn tất.
 
 #### 3.2.2. `tenants` — Hồ sơ khách thuê
 
@@ -279,6 +311,15 @@ erDiagram
 | `resident_status`         | `text`        | Không | `ACTIVE`, `CHECKED_OUT` | Cư trú hiện hành hoặc đã checkout  |
 | `created_at`              | `timestamptz` | Không | Default `now()`         | Tạo hồ sơ                          |
 | `updated_at`              | `timestamptz` | Không | Default `now()`         | Cập nhật                           |
+
+**State machine (`tenants.resident_status`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE: Onboarding
+    ACTIVE --> CHECKED_OUT: Manager xác nhận checkout
+    CHECKED_OUT --> ACTIVE: Onboarding lại khi đủ điều kiện
+```
 
 
 **Quy tắc:** Email Tenant lấy **duy nhất từ `users.email`**, không lưu thêm `tenants.email` để tránh lệch đồng bộ; khi trả DTO có thể JOIN qua `user_id`. CCCD 12 số là unique nghiệp vụ và để tìm khách cũ; không làm PK. Tenant chỉ tự cập nhật phone, permanent address, emergency contacts; Manager được hiệu chỉnh thông tin định danh và email sau xác minh. `ACTIVE`/`CHECKED_OUT` đi theo onboarding/checkout, không tự xóa User sau checkout. Không tạo Tenant riêng trước hợp đồng ngày 01.
@@ -315,23 +356,29 @@ erDiagram
 | `bed_id`                | `uuid`          | Không | FK → `beds.id`                 | Giường gắn với hợp đồng, **không đổi trong Phase 1**       |
 | `room_code_snapshot`    | `text`          | Không | —                              | Mã phòng ở thời điểm ký                                    |
 | `bed_code_snapshot`     | `text`          | Không | —                              | Mã giường ở thời điểm ký                                   |
-| `slot_key_snapshot`     | `text`          | Không | —                              | Mã vị trí ở thời điểm ký, không đổi khi Room Code thay đổi |
-| `signed_on`             | `date`          | Không | —                              | Ngày ký giấy/ghi nhận lúc onboarding                       |
 | `start_on`              | `date`          | Không | Ngày 01                        | Ngày bắt đầu cư trú của hợp đồng gốc                       |
 | `original_end_on`       | `date`          | Không | Ngày cuối tháng, `>= start_on` | Ngày kết thúc ban đầu của hợp đồng                         |
 | `original_monthly_rent` | `numeric(14,0)` | Không | `> 0`                          | Giá thuê trọn tháng lúc ký hợp đồng gốc                    |
 | `deposit_amount`        | `numeric(14,0)` | Không | `>= 0`                         | Tiền cọc theo giấy tờ, **không phải thu nhập**             |
 | `status`                | `text`          | Không | `ACTIVE`, `LIQUIDATED`         | Hợp đồng hiện còn chiếm chỗ hay đã checkout                |
 | `checked_out_at`        | `timestamptz`   | Có    | —                              | Thời điểm Manager xác nhận checkout                        |
-| `checkout_bed_status`   | `text`          | Có    | `AVAILABLE`, `MAINTENANCE`     | Trạng thái Bed Manager đã chọn khi checkout                |
 | `created_at`            | `timestamptz`   | Không | Default `now()`                | Thời điểm tạo                                              |
 
+**State machine (`contracts.status`):**
 
-**Ràng buộc liên bảng:** Chỉ được tạo Contract qua onboarding ngày 01; người thuê và giường cùng đủ điều kiện; ngày kết thúc vào ngày cuối tháng; ngày **onboarding/tạo Contract mới** trùng ngày bắt đầu cư trú; văn bản giấy có thể được ký trước hoặc trong ngày này (`signed_on <= start_on`). `status='LIQUIDATED'` yêu cầu có `checked_out_at` và `checkout_bed_status`, `ACTIVE` không có chúng. Sau khi checkout, lịch sử vẫn giữ và tài khoản Tenant vẫn đăng nhập được.
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE: Onboarding ngày 01
+    ACTIVE --> LIQUIDATED: Manager xác nhận checkout
+    LIQUIDATED --> [*]
+```
 
-**Không lưu giá/`end_on` hiện hành bằng cách ghi đè dữ liệu gốc.** `current_end_on` được xác định bằng `new_end_on` của Renewal có `sequence_no` lớn nhất, nếu không có Renewal thì bằng `original_end_on`. Để UI truy vấn thuận tiện có thể tạo View `v_contract_current_terms` (§7.1). `ACTIVE` là quan hệ chiếm chỗ chưa checkout; **không tự chuyển thành `LIQUIDATED` chỉ vì đồng hồ đã qua ngày hết hạn**, tránh giải phóng giường sai khi Manager chưa xác nhận bàn giao.
 
-**Chống chiếm chỗ đồng thời:** Một Tenant và một Bed có tối đa một Contract `ACTIVE`; dùng **partial unique index** trên `(tenant_id)` và `(bed_id)` với điều kiện `status='ACTIVE'` (§6). Không tạo Contract mới để gia hạn.
+**Ràng buộc liên bảng:** Chỉ được tạo Contract qua onboarding ngày 01; người thuê và giường cùng đủ điều kiện; ngày kết thúc vào ngày cuối tháng; ngày **onboarding/tạo Contract mới** trùng ngày bắt đầu cư trú. `status='LIQUIDATED'` yêu cầu có `checked_out_at`; `ACTIVE` phải có `checked_out_at=NULL`. Khi checkout, Manager chọn trạng thái mới và cập nhật trực tiếp `beds.status`, không lưu trạng thái giường lúc bàn giao trong Contract. Sau khi checkout, lịch sử vẫn giữ và tài khoản Tenant vẫn đăng nhập được.
+
+**Không lưu giá/`end_on` hiện hành bằng cách ghi đè dữ liệu gốc.** `current_end_on` được xác định bằng `new_end_on` của Renewal có `sequence_no` lớn nhất, nếu không có Renewal thì bằng `original_end_on`. Khi hiển thị, `slot_key` lịch sử được ghép từ `room_code_snapshot` và `bed_code_snapshot`. `ACTIVE` là quan hệ chiếm chỗ chưa checkout; **không tự chuyển thành `LIQUIDATED` chỉ vì đồng hồ đã qua ngày hết hạn**, tránh giải phóng giường sai khi Manager chưa xác nhận bàn giao.
+
+**Chống chiếm chỗ đồng thời:** Một Tenant và một Bed có tối đa một Contract `ACTIVE`; phải bảo đảm **tính duy nhất có điều kiện** theo `(tenant_id)` và `(bed_id)` khi `status='ACTIVE'` (§5.2, §6). Không tạo Contract mới để gia hạn.
 
 #### 3.3.2. `contract_renewals` — Phụ lục/lần gia hạn
 
@@ -363,11 +410,12 @@ erDiagram
 | `renewal_id`        | `uuid`        | Có    | FK → `contract_renewals.id`                                        | Phụ lục nếu loại `RENEWAL_ANNEX`      |
 | `document_type`     | `text`        | Không | `ORIGINAL_CONTRACT`, `RENEWAL_ANNEX`, `CHECKOUT_HANDOVER`, `OTHER` | Loại văn bản                          |
 | `original_filename` | `text`        | Không | —                                                                  | Tên gốc                               |
-| `mime_type`         | `text`        | Không | Whitelist theo SRS                                                 | MIME đã kiểm tra                      |
-| `size_bytes`        | `bigint`      | Không | `0 < size_bytes <= 10485760`                                       | Tối đa 10 MB/tệp                      |
+| `mime_type`         | `text`        | Không | Whitelist 6 MIME theo SRS                                           | MIME đã kiểm tra                      |
 | `storage_file_key`  | `text`        | Không | UK                                                                 | Vị trí lưu trong storage bảo vệ quyền |
 | `uploaded_at`       | `timestamptz` | Không | Default `now()`                                                    | Ngày upload                           |
 
+
+**Ràng buộc MIME:** Chỉ chấp nhận `.jpg`/`.jpeg` → `image/jpeg`, `.png` → `image/png`, `.webp` → `image/webp`, `.pdf` → `application/pdf`, `.doc` → `application/msword`, `.docx` → `application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Backend xác minh cả phần mở rộng, MIME và nội dung tệp thực tế; **giới hạn tối đa 10 MB/tệp khi upload** theo FR-10, nhưng không lưu `size_bytes` trong DB.
 
 **Bảo vệ tệp:** `storage_file_key` là khóa object **private** của OCI; không lưu đường dẫn public/presigned URL. Sau khi xác minh quyền Manager hoặc Tenant sở hữu Contract, Backend cấp URL có chữ ký **tối đa 15 phút** để xem/tải tệp. Credential OCI chỉ đặt ở cấu hình secrets ngoài repository.
 
@@ -389,6 +437,18 @@ erDiagram
 | `proof_submitted_at` | `timestamptz`   | Có    | —                                           | Lúc gửi minh chứng hiện tại                          |
 | `issued_at`          | `timestamptz`   | Không | Default `now()`                             | Ngày tạo hóa đơn                                     |
 
+**State machine (`invoices.status`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> DEBT: Phát hành hóa đơn
+    DEBT --> PENDING_CONFIRMATION: Tenant gửi minh chứng VietQR
+    PENDING_CONFIRMATION --> DEBT: Manager từ chối minh chứng
+    PENDING_CONFIRMATION --> PAID: Manager xác nhận chuyển khoản
+    DEBT --> PAID: Manager xác nhận thu tiền mặt
+    PAID --> [*]
+```
+
 
 **Ánh xạ UI:** `DEBT` = `Nợ`; `PENDING_CONFIRMATION` = `Chờ xác nhận`; `PAID` = `Đã thu`. `Overdue` không phải enum: tính `status='DEBT' AND due_on < current_local_date`. `PENDING_CONFIRMATION` **không** tính vào công nợ quá hạn. `proof_file_key` được lưu trực tiếp tại Invoice để tồn tại ngay khi khách gửi ảnh; **không gắn vào `payment_transactions` vốn chưa được tạo**. Khi Manager từ chối minh chứng: chuyển `PENDING_CONFIRMATION→DEBT`, cho phép bỏ/thay thế ảnh minh chứng hiện tại; không cần lưu lịch sử phiên bản ảnh trong Phase 1.
 
@@ -406,7 +466,6 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 | `payment_method`        | `text`          | Không | `CASH`, `VIETQR_TRANSFER` | Tiền mặt / Chuyển khoản VietQR                                  |
 | `confirmed_by_staff_id` | `uuid`          | Không | FK → `staff_profiles.id`  | Manager xác nhận, **cho cả hai phương thức**                    |
 | `confirmed_at`          | `timestamptz`   | Không | Default `now()`           | Lúc Manager xác nhận đã nhận tiền                               |
-| `bank_reference`        | `text`          | Có    | —                         | Mã tham chiếu đối soát thủ công nếu có; `NULL` đối với tiền mặt |
 
 
 **Ý nghĩa rất quan trọng:** Đây **không phải** lệnh hoặc bản ghi sao kê giao dịch của ngân hàng. Phiếu thu chỉ được thêm khi Manager xác nhận KTX đã nhận đủ tiền. `payment_transactions.amount` phải bằng `invoices.amount` (Backend/trigger kiểm tra liên bảng); insert phiếu thu và update Invoice sang `PAID` phải **atomic**. Không tạo phiếu thu khi Tenant mới upload ảnh. Không xử lý trả từng phần, trả dư, hoàn tiền. Không tạo phiếu thu thứ hai cho Invoice `PAID`.
@@ -431,7 +490,7 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 | `updated_at`           | `timestamptz`   | Không | —                                                         | Lúc sửa                                                                                   |
 
 
-**Ràng buộc BR-03/FR-14:** `SALARY` đại diện **một khoản tổng lương mỗi tháng dương lịch** theo `expense_date`, **không** lưu lương từng Technician hoặc bảng payroll. Đề xuất **partial unique expression index** chỉ cho `expense_type = SALARY` theo năm/tháng (§5.2); khi sửa ngày/kỳ phải kiểm tra trùng. Manager được **sửa/xóa** khoản nhập nhầm; nếu có soft-delete thì phải loại bản ghi đã xóa khỏi chỉ số và uniqueness thích hợp. Vật tư Ticket `COMPLETED` chỉ tính qua `ticket_replacement_parts`, **không nhập trùng** ở Facility Expense. Chỉ số từ khoản thu/chi đã ghi nhận phải có nhãn **“Lợi nhuận ròng (ước tính)”** cùng lời giải thích giới hạn; không phải kế toán đầy đủ.
+**Ràng buộc BR-03/FR-14:** `SALARY` đại diện **một khoản tổng lương mỗi tháng dương lịch** theo `expense_date`, **không** lưu lương từng Technician hoặc bảng payroll. Yêu cầu **duy nhất một khoản `SALARY`/năm/tháng** theo `expense_date` (§5.2); khi sửa ngày/kỳ phải kiểm tra trùng. Manager được **sửa/xóa** khoản nhập nhầm; nếu có soft-delete thì phải loại bản ghi đã xóa khỏi chỉ số và uniqueness thích hợp. Vật tư Ticket `COMPLETED` chỉ tính qua `ticket_replacement_parts`, **không nhập trùng** ở Facility Expense. Chỉ số từ khoản thu/chi đã ghi nhận phải có nhãn **“Lợi nhuận ròng (ước tính)”** cùng lời giải thích giới hạn; không phải kế toán đầy đủ.
 
 ---
 
@@ -452,13 +511,24 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 | `description`               | `text`        | Không | —                                                                | Mô tả hiện trường                                              |
 | `category`                  | `text`        | Không | `ELECTRIC`, `WATER`, `INTERNET`, `FURNITURE`, `AMENITY`, `OTHER` | Nhóm sự cố                                                     |
 | `priority`                  | `text`        | Không | `URGENT`, `HIGH`, `NORMAL`                                       | Mức ưu tiên hiện tại                                           |
-| `status`                    | `text`        | Không | `UNASSIGNED`, `ASSIGNED,` `IN_PROGRESS,` `COMPLETED`             | Trạng thái xử lý                                               |
+| `status`                    | `text`        | Không | `UNASSIGNED`, `ASSIGNED`, `IN_PROGRESS`, `COMPLETED`             | Trạng thái xử lý                                               |
 | `report_image_file_key`     | `text`        | Có    | —                                                                | Ảnh hiện trường; việc bắt buộc ảnh xác minh tại tầng nghiệp vụ |
 | `deadline_at`               | `timestamptz` | Có    | —                                                                | Hạn hoàn thành Manager đặt                                     |
 | `resolution_notes`          | `text`        | Có    | —                                                                | Kết quả xử lý                                                  |
 | `resolution_image_file_key` | `text`        | Có    | —                                                                | Ảnh nghiệm thu khi hoàn thành                                  |
 | `resolved_at`               | `timestamptz` | Có    | —                                                                | Ngày Technician hoàn thành                                     |
 | `created_at`                | `timestamptz` | Không | Default `now()`                                                  | Ngày báo hỏng                                                  |
+
+**State machine (`maintenance_tickets.status`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> UNASSIGNED: Tenant báo hỏng
+    UNASSIGNED --> ASSIGNED: Manager phân công Technician
+    ASSIGNED --> IN_PROGRESS: Technician bắt đầu xử lý
+    IN_PROGRESS --> COMPLETED: Technician nộp kết quả và ảnh
+    COMPLETED --> [*]
+```
 
 
 **Danh mục `category`:** `ELECTRIC`, `WATER`, `INTERNET`, `FURNITURE`, `AMENITY`, `OTHER`, tương ứng `Điện`, `Nước`, `Internet`, `Nội thất`, `Tiện ích`, `Khác`.
@@ -477,10 +547,9 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 | `part_name`  | `text`          | Không | —                                 | Tên linh kiện          |
 | `quantity`   | `integer`       | Không | `> 0`                             | Số lượng               |
 | `unit_cost`  | `numeric(14,0)` | Không | `>= 0`                            | Đơn giá VND            |
-| `total_cost` | `numeric(14,0)` | Không | Generated: `quantity * unit_cost` | Thành tiền, DB tự tính |
 
 
-**Tổng chi phí Ticket** = `COALESCE(SUM(parts.total_cost),0)`; chỉ tính vào báo cáo FR-14 nếu ticket `COMPLETED`, theo tháng `resolved_at` tại `Asia/Ho_Chi_Minh`. Không cần ghi `ticket.total_cost` thứ hai, không nhập tiền công, không dùng vật tư thì không cần dòng Part và tổng = 0. Nếu hệ DB không dùng generated column, tính bằng query từ `quantity × unit_cost`, không cho người dùng nhập `total_cost`.
+**Tổng chi phí Ticket** = `COALESCE(SUM(parts.quantity * parts.unit_cost),0)`; chỉ tính vào báo cáo FR-14 nếu ticket `COMPLETED`, theo tháng `resolved_at` tại `Asia/Ho_Chi_Minh`. Không lưu `total_cost` trong Part hoặc Ticket, không nhập tiền công; nếu không dùng vật tư thì không có dòng Part và tổng = 0. Thành tiền được tính từ `quantity × unit_cost` khi truy vấn.
 
 #### 3.4.3. `violations` — Biên bản vi phạm
 
@@ -527,6 +596,18 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 | `replaced_by_vehicle_id`      | `uuid`        | Có    | FK self → `vehicles.id`                                                             | Xe mới đã thay thế hồ sơ cũ (`REPLACED`)                    |
 | `replaced_vehicle_id`         | `uuid`        | Có    | FK self → `vehicles.id`                                                             | Xe cũ mà hồ sơ mới kế thừa mã thẻ (`ISSUED`)                |
 
+**State machine (`vehicles.status`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING_CARD: Tenant đăng ký xe
+    PENDING_CARD --> ISSUED: Manager cấp thẻ
+    PENDING_CARD --> REJECTED: Manager từ chối
+    PENDING_CARD --> CANCELLED: Checkout trước khi cấp thẻ
+    ISSUED --> REVOKED: Thu hồi thẻ / checkout
+    ISSUED --> REPLACED: Duyệt yêu cầu đổi xe
+```
+
 
 **Loại xe:** `SCOOTER`, `MANUAL_MOTORCYCLE`, `ELECTRIC_MOTORBIKE`, `ELECTRIC_BICYCLE`, `BICYCLE`. Xe tay ga, xe số, xe máy điện có đăng ký **phải** có biển và hai OCI key của ảnh giấy đăng ký; xe đạp và xe đạp điện không có đăng ký có thể để `NULL`. Validate ở Backend và khi thích hợp bằng `CHECK` cùng hàng, không chỉ UI.
 
@@ -561,10 +642,20 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 | `new_vehicle_id`                       | `uuid`        | Có    | FK → `vehicles.id`, UNIQUE khi khác NULL                          | ID hồ sơ xe mới **chỉ sau khi APPROVED**                              |
 | `created_at`                           | `timestamptz` | Không | Default `now()`                                                   | Thời điểm Tenant gửi yêu cầu                                          |
 
+**State machine (`vehicle_change_requests.status`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Tenant gửi yêu cầu đổi xe
+    PENDING --> APPROVED: Manager duyệt / tạo xe mới
+    PENDING --> REJECTED: Manager từ chối kèm lý do
+    PENDING --> CANCELLED: Checkout hoặc thu hồi xe hiện tại
+```
+
 
 **Trạng thái và tính hợp lệ:**
 
-1. Khi Tenant tạo yêu cầu, phải xác thực **Tenant là chủ xe `current_vehicle_id`**, còn cư trú và xe đó ở `ISSUED`; yêu cầu là `PENDING`, **không tạo hồ sơ xe mới**. Một Tenant có tối đa **một** `PENDING` Request; dùng partial unique index trên `tenant_id`.
+1. Khi Tenant tạo yêu cầu, phải xác thực **Tenant là chủ xe `current_vehicle_id`**, còn cư trú và xe đó ở `ISSUED`; yêu cầu là `PENDING`, **không tạo hồ sơ xe mới**. Một Tenant có tối đa **một** `PENDING` Request; phải bảo đảm ràng buộc duy nhất có điều kiện theo `tenant_id`.
 2. Kiểm tra proposed fields và hai ảnh theo loại xe. Các giá trị trong yêu cầu là **snapshot đề nghị**, không cập nhật `vehicles` khi pending.
 3. Khi `APPROVED`: `new_vehicle_id` **bắt buộc**, `processed_by_staff_id` và `processed_at` bắt buộc; xe cũ → `REPLACED`, xe mới → `ISSUED`, giữ **đúng mã thẻ cũ** trong một transaction. Liên kết ID hai xe và Request; notification một lần.
 4. Khi `REJECTED`: Manager, thời điểm và lý do bắt buộc; `new_vehicle_id=NULL`; xe hiện tại vẫn `ISSUED`, thẻ vật lý không thay đổi; thông báo kèm lý do.
@@ -578,19 +669,26 @@ Chỉ có **một loại hóa đơn tiền thuê** trong phạm vi Phase 1; khô
 | --------------------- | ------------- | :-----: | ----------------- | ------------------------------------------ |
 | `id`                  | `uuid`        | Không | PK                | ID thông báo                               |
 | `tenant_id`           | `uuid`        | Không | FK → `tenants.id` | Người nhận                                 |
-| `event_type`          | `text`        | Không | Enum nghiệp vụ    | Loại sự kiện tự sinh                       |
+| `event_type`          | `text`        | Không | Tập mã tại §5.3   | Loại sự kiện tự sinh                       |
 | `title`               | `text`        | Không | —                 | Tiêu đề hiển thị                           |
 | `body`                | `text`        | Không | —                 | Nội dung hiển thị                          |
-| `related_entity_type` | `text`        | Có    | —                 | Ví dụ `INVOICE`, `VIOLATION`               |
-| `related_entity_id`   | `uuid`        | Có    | —                 | ID nghiệp vụ tương ứng, chỉ dùng dẫn hướng |
 | `dedupe_key`          | `text`        | Có    | Unique nếu có     | Tránh tạo trùng khi task chạy lại          |
 | `read_at`             | `timestamptz` | Có    | —                 | Đã đọc nếu khác `NULL`                     |
 | `created_at`          | `timestamptz` | Không | Default `now()`   | Ngày sinh                                  |
 
+**Trạng thái đọc (`notifications.read_at`):**
+
+```mermaid
+stateDiagram-v2
+    [*] --> CHUA_DOC: read_at = NULL
+    state "Chưa đọc" as CHUA_DOC
+    state "Đã đọc" as DA_DOC
+    CHUA_DOC --> DA_DOC: Tenant đánh dấu đã đọc / gán read_at
+```
+
 
 **Nguồn tạo:** Chỉ các sự kiện nghiệp vụ: ví dụ `INVOICE_ISSUED`, `INVOICE_DUE`, `INVOICE_OVERDUE`, `PAYMENT_CONFIRMED`, `PAYMENT_PROOF_REJECTED`, `VIOLATION_CREATED`, **`VEHICLE_REGISTRATION_REJECTED`, `VEHICLE_CHANGE_APPROVED`, `VEHICLE_CHANGE_REJECTED`**. Khi một workflow đã xử lý xong, không phát thông báo trùng; cân nhắc `dedupe_key` gắn mã yêu cầu + sự kiện. **Không có `created_by_manager`, `broadcast_message`, mẫu thông báo hoặc API Manager soạn và gửi thông báo chung.** Tenant chỉ đọc thông báo của mình qua **chuông header**; lịch sử vi phạm xem ở **tab Vi phạm riêng**, không tăng bảng. Sau checkout, hệ thống có thể tiếp tục tạo thông báo về nợ cũ nhưng không tạo thông báo sinh hoạt mới; dữ liệu thông báo lịch sử vẫn được xem.
 
-`related_entity_type` và `related_entity_id` là liên kết hiển thị tùy chọn (polymorphic pointer), **không giả vờ đây là FK đơn chuẩn đến nhiều bảng**. Để tránh phức tạp, Backend xác minh nguồn sự kiện khi tạo và kiểm tra quyền chủ sở hữu khi mở liên kết.
 
 ---
 
@@ -677,107 +775,53 @@ Các bảng nghiệp vụ có quan hệ lịch sử phải tránh cascade deleti
 
 **28 quan hệ nghiệp vụ** theo Conceptual ERD v3.5; các quan hệ bảng nối/registry (Room–RoomAmenity, Room–Registry) là hỗ trợ kỹ thuật, không phát sinh use case mới. **JWT/OTP Redis không nằm trong ERD.**
 
-### 5.2. Ví dụ câu lệnh PostgreSQL cho các uniqueness quan trọng
+### 5.2. Các ràng buộc duy nhất phải bảo toàn
 
-Đây là **đoạn minh họa cho thiết kế**, không phải script migration chạy trực tiếp (cần tạo bảng và dọn dữ liệu cũ trước). Các index dùng **chỉ một mẫu tên/cột thống nhất với Data Dictionary**.
+Các quy tắc dưới đây là **yêu cầu toàn vẹn dữ liệu**, không phải đề xuất tối ưu truy vấn. Cách hiện thực cụ thể được quyết định khi triển khai PostgreSQL/Flyway; kiểm tra ở Backend phải an toàn trước các yêu cầu đồng thời.
 
-```sql
--- Một Bed và một Tenant chỉ có một hợp đồng chiếm chỗ hiện hành.
-CREATE UNIQUE INDEX uq_contract_active_bed
-    ON contracts (bed_id) WHERE status = 'ACTIVE';
-CREATE UNIQUE INDEX uq_contract_active_tenant
-    ON contracts (tenant_id) WHERE status = 'ACTIVE';
+| Bảng / Phạm vi | Quy tắc duy nhất |
+| --- | --- |
+| `contracts` | Mỗi Bed và mỗi Tenant có tối đa một Contract `ACTIVE` |
+| `vehicles` | Mỗi Tenant có tối đa một xe thuộc `PENDING_CARD` hoặc `ISSUED` |
+| `vehicles.card_code` | Chỉ duy nhất giữa các xe `ISSUED`, so sánh theo `upper(btrim(card_code))`; giữ mã lịch sử của `REPLACED`/`REVOKED` |
+| `vehicle_change_requests` | Mỗi Tenant có tối đa một yêu cầu `PENDING`; một `new_vehicle_id` khác NULL không thuộc hai yêu cầu |
+| `facility_expenses` | Mỗi năm/tháng có tối đa một khoản `SALARY` theo `expense_date`; các loại khác không bị giới hạn như vậy |
+| `users.email`, `tenants.id_card_number` | Email duy nhất sau `lower(btrim(email))`; CCCD duy nhất toàn hệ thống |
+| `rooms.room_number`, `room_code_registry.code` | Mã duy nhất sau chuẩn hóa; mã đã dùng trong lịch sử nghiệp vụ không được cấp lại |
+| `room_code_registry` | Mỗi Room có đúng một mã `is_current=true` |
+| `beds` | `(room_id, bed_code)` và `slot_key` chuẩn hóa không trùng |
+| `invoices` | Mỗi `(contract_id, billing_period)` chỉ có một hóa đơn; `billing_period` là ngày 01 |
+| `payment_transactions` | Mỗi `invoice_id` có tối đa một phiếu thu đã xác nhận |
 
--- Một Tenant có tối đa một xe PENDING_CARD hoặc ISSUED (không gồm các hồ sơ lịch sử).
-CREATE UNIQUE INDEX uq_vehicle_active_tenant
-    ON vehicles (tenant_id)
-    WHERE status IN ('PENDING_CARD', 'ISSUED');
-
--- Mã thẻ vật lý chỉ được sử dụng bởi một xe ISSUED ở một thời điểm.
--- REPLACED/REVOKED được giữ trùng card_code để lưu lịch sử đổi xe.
-CREATE UNIQUE INDEX uq_vehicle_issued_card
-    ON vehicles (upper(btrim(card_code)))
-    WHERE status = 'ISSUED';
-
--- Một yêu cầu đổi xe đang chờ mỗi Tenant.
-CREATE UNIQUE INDEX uq_vehicle_change_pending_tenant
-    ON vehicle_change_requests (tenant_id)
-    WHERE status = 'PENDING';
-
--- Xe mới của một yêu cầu APPROVED không được là kết quả của yêu cầu thứ hai.
-CREATE UNIQUE INDEX uq_vehicle_change_new_vehicle
-    ON vehicle_change_requests (new_vehicle_id)
-    WHERE new_vehicle_id IS NOT NULL;
-
--- Một khoản tổng lương duy nhất mỗi năm/tháng, không khóa các khoản chi khác.
-CREATE UNIQUE INDEX uq_expense_salary_month
-    ON facility_expenses ((EXTRACT(YEAR FROM expense_date)),
-                          (EXTRACT(MONTH FROM expense_date)))
-    WHERE expense_type = 'SALARY';
-
--- CHECK đơn hàng cho trạng thái: cần được kiểm tra cùng transaction Backend.
-ALTER TABLE vehicles ADD CONSTRAINT ck_vehicle_card_status
-    CHECK ((status = 'PENDING_CARD' AND card_code IS NULL)
-        OR (status IN ('ISSUED', 'REPLACED', 'REVOKED') AND card_code IS NOT NULL AND btrim(card_code) <> '')
-        OR (status IN ('REJECTED', 'CANCELLED') AND card_code IS NULL));
-
-ALTER TABLE vehicle_change_requests ADD CONSTRAINT ck_change_request_outcome
-    CHECK ((status = 'PENDING' AND processed_at IS NULL AND new_vehicle_id IS NULL)
-        OR (status = 'APPROVED' AND new_vehicle_id IS NOT NULL AND processed_by_staff_id IS NOT NULL AND processed_at IS NOT NULL)
-        OR (status = 'REJECTED' AND new_vehicle_id IS NULL AND processed_by_staff_id IS NOT NULL AND processed_at IS NOT NULL AND rejection_reason IS NOT NULL AND btrim(rejection_reason) <> '')
-        OR (status = 'CANCELLED' AND new_vehicle_id IS NULL AND processed_at IS NOT NULL));
-
--- CCCD và email theo User đều duy nhất; email Tenant không dùng đăng nhập.
-ALTER TABLE tenants
-    ADD CONSTRAINT uq_tenant_cccd UNIQUE (id_card_number);
-CREATE UNIQUE INDEX uq_users_email_canonical
-    ON users (lower(btrim(email)));
-
--- Kỳ hóa đơn lưu là ngày 01 và không trùng trên cùng hợp đồng.
-ALTER TABLE invoices
-    ADD CONSTRAINT ck_billing_period_first_day
-    CHECK (EXTRACT(DAY FROM billing_period) = 1);
-ALTER TABLE invoices
-    ADD CONSTRAINT uq_invoice_contract_period
-    UNIQUE (contract_id, billing_period);
-
--- Mỗi invoice có tối đa một phiếu thu hoàn tất.
-ALTER TABLE payment_transactions
-    ADD CONSTRAINT uq_receipt_invoice UNIQUE (invoice_id);
-
--- Mã phòng không trùng giữa các phòng hoặc các mã đã bị khóa lịch sử.
-CREATE UNIQUE INDEX uq_room_number_canonical
-    ON rooms (upper(btrim(room_number)));
-CREATE UNIQUE INDEX uq_room_code_registry_canonical
-    ON room_code_registry (upper(btrim(code)));
-CREATE UNIQUE INDEX uq_room_one_current_code
-    ON room_code_registry (room_id) WHERE is_current = true;
-CREATE UNIQUE INDEX uq_bed_current_slot_key
-    ON beds (upper(btrim(slot_key)));
-```
-
-**Không được hiểu** index Room như việc chỉ cần cấm trùng `rooms.room_number`: trước khi dùng một mã mới, Backend còn phải kiểm tra `room_code_registry` và bảo đảm cập nhật dưới cùng transaction/khóa thích hợp. SQL ví dụ không tự thực hiện quy tắc lịch sử mã phòng.
+**Ràng buộc trạng thái:** `vehicles` chỉ có `card_code` khi thuộc `ISSUED`/`REPLACED`/`REVOKED`; yêu cầu đổi xe chỉ có `new_vehicle_id` khi `APPROVED`, có Manager/ngày xử lý khi `APPROVED`/`REJECTED` và lý do bắt buộc khi `REJECTED`. Các điều kiện liên bảng phải kiểm tra trong transaction, không thay thế bằng `CHECK` trên một hàng.
 
 ### 5.3. Ràng buộc thuộc tính và các trạng thái
 
 
-| Bảng / Trường                           | Giá trị hợp lệ (DB)                                                      | Hiển thị/ý nghĩa                                               |
-| --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| `rooms.gender_policy`, `tenants.gender` | `MALE`, `FEMALE`                                                         | Nam, Nữ                                                        |
-| `beds.status`                           | `AVAILABLE`, `OCCUPIED`, `MAINTENANCE`                                   | Sẵn sàng, Đang thuê, Bảo trì                                   |
-| `users.role`                            | `MANAGER`, `TENANT`, `TECHNICIAN`                                        | Ba role cố định                                                |
-| `users.status`                          | `ACTIVE`, `INACTIVE`, `LOCKED`                                           | Hoạt động / Ngưng hoạt động / Bị khóa                          |
-| `tenants.resident_status`               | `ACTIVE`, `CHECKED_OUT`                                                  | Đang thuê / Đã trả phòng                                       |
-| `contracts.status`                      | `ACTIVE`, `LIQUIDATED`                                                   | Hiệu lực / Đã thanh lý                                         |
-| `invoices.status`                       | `DEBT`, `PENDING_CONFIRMATION`, `PAID`                                   | Nợ / Chờ xác nhận / Đã thu                                     |
-| `payment_transactions.payment_method`   | `CASH`, `VIETQR_TRANSFER`                                                | Tiền mặt / Chuyển khoản VietQR                                 |
-| `facility_expenses.expense_type`        | `ELECTRICITY`, `WATER`, `INTERNET`, **`SALARY`**, `OTHER`                | Điện / Nước / Internet / **Tổng lương nhân viên/tháng** / Khác |
-| `maintenance_tickets.category`          | `ELECTRIC`, `WATER`, `INTERNET`, `FURNITURE`, `AMENITY`, `OTHER`         | Điện / Nước / Internet / Nội thất / Tiện ích / Khác            |
-| `maintenance_tickets.priority`          | `URGENT`, `HIGH`, `NORMAL`                                               | Khẩn cấp / Cao / Bình thường                                   |
-| `maintenance_tickets.status`            | `UNASSIGNED`, `ASSIGNED`, `IN_PROGRESS`, `COMPLETED`                     | Chưa phân công / Mới giao / Đang xử lý / Hoàn thành            |
-| `vehicles.status`                       | `PENDING_CARD`, `ISSUED`, `REJECTED`, `REVOKED`, `REPLACED`, `CANCELLED` | Chờ cấp / Đã cấp / Từ chối / Thu hồi / Thay thế / Đã hủy       |
-| `vehicle_change_requests.status`        | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`                           | Chờ duyệt / Đã duyệt / Từ chối / Hủy                           |
-| `violations.level`                      | `REMINDER`, `WARNING`, `FINE`                                            | Nhắc nhở / Cảnh cáo / Phạt tiền                                |
+| Bảng / Trường                                   | Giá trị hợp lệ (DB)                                                                                                                                                                                           | Hiển thị/ý nghĩa                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `rooms.total_beds`                              | `4`, `6`, `8`                                                                                                                                                                                                 | Sức chứa cố định của phòng                                         |
+| `rooms.gender_policy`, `tenants.gender`         | `MALE`, `FEMALE`                                                                                                                                                                                              | Nam, Nữ                                                            |
+| `beds.status`                                   | `AVAILABLE`, `OCCUPIED`, `MAINTENANCE`                                                                                                                                                                        | Sẵn sàng, Đang thuê, Bảo trì                                       |
+| `users.role`                                    | `MANAGER`, `TENANT`, `TECHNICIAN`                                                                                                                                                                             | Ba role cố định                                                    |
+| `users.status`                                  | `ACTIVE`, `LOCKED`                                                                                                                                                                                            | Hoạt động / Ngưng hoạt động / Bị khóa                              |
+| `tenants.resident_status`                       | `ACTIVE`, `CHECKED_OUT`                                                                                                                                                                                       | Đang thuê / Đã trả phòng                                           |
+| `contract_documents.document_type`              | `ORIGINAL_CONTRACT`, `RENEWAL_ANNEX`, `CHECKOUT_HANDOVER`, `OTHER`                                                                                                                                            | Hợp đồng gốc / Phụ lục / Bàn giao / Khác                           |
+| `contract_documents.mime_type`                  | `image/jpeg`, `image/png`, `image/webp`, `application/pdf`, `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`                                                   | Sáu MIME hợp lệ cho bảy phần mở rộng theo FR-10                    |
+| `contracts.status`                              | `ACTIVE`, `LIQUIDATED`                                                                                                                                                                                        | Hiệu lực / Đã thanh lý                                             |
+| `invoices.status`                               | `DEBT`, `PENDING_CONFIRMATION`, `PAID`                                                                                                                                                                        | Nợ / Chờ xác nhận / Đã thu                                         |
+| `payment_transactions.payment_method`           | `CASH`, `VIETQR_TRANSFER`                                                                                                                                                                                     | Tiền mặt / Chuyển khoản VietQR                                     |
+| `facility_expenses.expense_type`                | `ELECTRICITY`, `WATER`, `INTERNET`, **`SALARY`**, `OTHER`                                                                                                                                                     | Điện / Nước / Internet / **Tổng lương nhân viên/tháng** / Khác     |
+| `maintenance_tickets.category`                  | `ELECTRIC`, `WATER`, `INTERNET`, `FURNITURE`, `AMENITY`, `OTHER`                                                                                                                                              | Điện / Nước / Internet / Nội thất / Tiện ích / Khác                |
+| `maintenance_tickets.priority`                  | `URGENT`, `HIGH`, `NORMAL`                                                                                                                                                                                    | Khẩn cấp / Cao / Bình thường                                       |
+| `maintenance_tickets.status`                    | `UNASSIGNED`, `ASSIGNED`, `IN_PROGRESS`, `COMPLETED`                                                                                                                                                          | Chưa phân công / Mới giao / Đang xử lý / Hoàn thành                |
+| `violations.violation_type`                     | `LATE_RETURN`, `NOISE`, `HYGIENE`, `OUTSIDER`, `SMOKING_FIRE`, `OTHER`                                                                                                                                        | Về muộn / Ồn ào / Vệ sinh / Khách ngoài / Hút thuốc-cháy nổ / Khác |
+| `vehicles.vehicle_type`                         | `SCOOTER`, `MANUAL_MOTORCYCLE`, `ELECTRIC_MOTORBIKE`, `ELECTRIC_BICYCLE`, `BICYCLE`                                                                                                                           | Xe tay ga / Xe số / Xe máy điện / Xe đạp điện / Xe đạp             |
+| `vehicle_change_requests.proposed_vehicle_type` | Cùng tập với `vehicles.vehicle_type`                                                                                                                                                                          | Loại xe được đề nghị thay thế                                      |
+| `vehicles.status`                               | `PENDING_CARD`, `ISSUED`, `REJECTED`, `REVOKED`, `REPLACED`, `CANCELLED`                                                                                                                                      | Chờ cấp / Đã cấp / Từ chối / Thu hồi / Thay thế / Đã hủy           |
+| `vehicle_change_requests.status`                | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`                                                                                                                                                                | Chờ duyệt / Đã duyệt / Từ chối / Hủy                               |
+| `notifications.event_type`                      | `INVOICE_ISSUED`, `INVOICE_DUE`, `INVOICE_OVERDUE`, `PAYMENT_CONFIRMED`, `PAYMENT_PROOF_REJECTED`, `VIOLATION_CREATED`, `VEHICLE_REGISTRATION_REJECTED`, `VEHICLE_CHANGE_APPROVED`, `VEHICLE_CHANGE_REJECTED` | Nhóm sự kiện tự động theo FR-27                                    |
+| `violations.level`                              | `REMINDER`, `WARNING`, `FINE`                                                                                                                                                                                 | Nhắc nhở / Cảnh cáo / Phạt tiền                                    |
 
 
 ---
@@ -827,7 +871,7 @@ CREATE UNIQUE INDEX uq_bed_current_slot_key
 ### T07 — Checkout (FR-13)
 
 - Manager xác nhận bàn giao, chọn trạng thái giường `AVAILABLE` hoặc `MAINTENANCE` (không tự chọn mặc định), thu hồi phương tiện/thẻ theo quy trình thông thường.
-- Cập nhật Contract `LIQUIDATED`, `checked_out_at`, `checkout_bed_status`, Bed status và Tenant `CHECKED_OUT`; xe `ISSUED → REVOKED` sau thu hồi thẻ vật lý, xe `PENDING_CARD → CANCELLED` (không ghi nhận thẻ chưa cấp là đã thu hồi), Request `PENDING → CANCELLED` trong **cùng transaction**. Xe `REPLACED/REJECTED/REVOKED/CANCELLED` lịch sử giữ nguyên.
+- Cập nhật Contract `LIQUIDATED`, `checked_out_at`, Bed status và Tenant `CHECKED_OUT`; xe `ISSUED → REVOKED` sau thu hồi thẻ vật lý, xe `PENDING_CARD → CANCELLED` (không ghi nhận thẻ chưa cấp là đã thu hồi), Request `PENDING → CANCELLED` trong **cùng transaction**. Xe `REPLACED/REJECTED/REVOKED/CANCELLED` lịch sử giữ nguyên.
 - Hóa đơn đang `DEBT`/`PENDING_CONFIRMATION` **giữ nguyên**; User/Tenant, Contract/Renewal, Invoice, phiếu thu, Ticket/Violation lịch sử vẫn tồn tại. Hóa đơn kỳ sau checkout không được phát hành.
 
 ### T08 — Maintenance và vật tư (FR-17/18)
@@ -848,7 +892,7 @@ CREATE UNIQUE INDEX uq_bed_current_slot_key
 - **Gửi yêu cầu:** khóa/kiểm tra xe cũ thuộc Tenant, `ISSUED`, Tenant còn ở, chưa có Request `PENDING`; insert Request với snapshot xe mới, **không tạo xe ISSUED thứ hai**. Partial unique Request `PENDING`/Tenant bảo vệ cạnh tranh.
 - **Duyệt đổi xe:** lock Request và xe cũ (ví dụ `SELECT ... FOR UPDATE`); xác minh còn `PENDING`, xe cũ `ISSUED`, cùng Tenant, mã thẻ đã cấp hợp lệ và không xung đột. Trong **một transaction**: xe cũ `REPLACED` + `replaced_by_vehicle_id`, tạo xe mới `ISSUED` với **cùng card_code**, ID xe mới, liên kết tiền nhiệm; Request `APPROVED` + `new_vehicle_id` + Manager/thời gian; tạo notification có khóa dedupe. Không revoke rồi issue để giả lập đổi xe; không mất lịch sử khi retry.
 - **Từ chối yêu cầu:** chỉ Manager hợp lệ, lý do bắt buộc, Request `PENDING → REJECTED`, không thay đổi xe cũ, lưu notification và thời điểm trong transaction. Các yêu cầu đã xử lý không được phê duyệt lần hai. Nếu xe hiện tại bị thu hồi hoặc checkout, hủy Request `PENDING` nhất quán.
-- **Kiểm tra liên bảng:** xe hiện tại và xe mới phải thuộc cùng Tenant; `processed_by_staff_id` phải trỏ Manager hợp lệ; trạng thái/`card_code` xe cũ và mới không thể chỉ chứng minh bằng CHECK một dòng. Dùng transaction + unique partial indexes, kiểm tra điều kiện cập nhật và/hoặc trigger. Không dùng claim "atomic" cho chuỗi REST request tách rời.
+- **Kiểm tra liên bảng:** xe hiện tại và xe mới phải thuộc cùng Tenant; `processed_by_staff_id` phải trỏ Manager hợp lệ; trạng thái/`card_code` xe cũ và mới không thể chỉ chứng minh bằng CHECK một dòng. Dùng transaction, ràng buộc duy nhất có điều kiện, kiểm tra điều kiện cập nhật và/hoặc trigger. Không dùng claim "atomic" cho chuỗi REST request tách rời.
 
 ---
 
@@ -877,7 +921,7 @@ CREATE UNIQUE INDEX uq_bed_current_slot_key
 | Thiếu yêu cầu đổi xe                                               | Bảng `vehicle_change_requests`, 4 trạng thái, snapshot xe mới, kiểm tra duyệt/từ chối atomic                                                       | BR-10/FR-08 v3.4                          |
 | Thiếu loại chi phí lương                                           | Thêm `SALARY`, một khoản tổng lương/tháng; báo cáo **Lợi nhuận ròng (ước tính)** có chú thích                                                      | BR-03/FR-14 v3.3+                         |
 | Thiếu Notification                                                 | Thêm `notifications` hệ thống tự sinh                                                                                                              | FR-27                                     |
-| View `net_profit`                                                  | Báo cáo **Lợi nhuận ròng (ước tính)** theo kỳ với chú thích giới hạn, **không** là số kế toán thực                                                 | BR-03, FR-14 v3.3+                        |
+| Báo cáo `net_profit`                                                  | Báo cáo **Lợi nhuận ròng (ước tính)** theo kỳ với chú thích giới hạn, **không** là số kế toán thực                                                 | BR-03, FR-14 v3.3+                        |
 
 
 **Kế hoạch Flyway đã duyệt cho đồ án:** Dữ liệu hiện tại chỉ là **seed/demo**; khi được phép bắt đầu refactor Backend, **có thể xóa migrations V1–V7 cũ, tạo lại baseline `V1__init...sql` đầy đủ + migrations seed**, reset **chỉ database development/test được xác nhận có thể xóa**, rồi tạo mới. Không thực hiện xóa hay migration vào repo/DB ở bước viết tài liệu. **Không áp dụng** chiến lược reset cho môi trường có dữ liệu người dùng thật. Giữ Spring Boot + PostgreSQL + Flyway + JWT + Redis và phần code đã đúng nghiệp vụ; không đổi tên bảng hàng loạt.
@@ -902,7 +946,7 @@ CREATE UNIQUE INDEX uq_bed_current_slot_key
 
 ---
 
-## 10. CÁC VẤN ĐỀ THUỘC PHẠM VI REVIEW KỸ THUẬT, KHÔNG TỰ SINH USE CASE
+## 9. CÁC VẤN ĐỀ THUỘC PHẠM VI REVIEW KỸ THUẬT, KHÔNG TỰ SINH USE CASE
 
 1. **Gia hạn ký sau batch ngày 25:** Nếu phụ lục được ký sau batch 25, kỳ tháng kế tiếp đủ điều kiện nhưng chưa có Invoice, Backend phải phát hành bổ sung hóa đơn ngay sau khi gia hạn thành công (cùng quy tắc giá và kỳ) hoặc qua cơ chế retry nghiệp vụ; `UNIQUE (contract_id,billing_period)` bảo đảm không tạo trùng. Đây là cách hoàn thiện đường phát hành thiếu đã được thảo luận, **không thêm loại hóa đơn hay use case mới**.
 2. **Mã phòng đã có lịch sử:** Registry cần cập nhật nguyên tử với Contract/Ticket và các lần đổi mã; có thể bổ sung trigger để đảm bảo không bị bỏ sót khi có nhiều đường ghi dữ liệu. Không cho tái sử dụng mã chỉ vì một Room đã Archive hoặc đổi tên.
